@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 
+import { AlertCircle } from "lucide-react";
+
 export default function AuthCallbackPage() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -110,7 +112,11 @@ export default function AuthCallbackPage() {
               localStorage.setItem("utsav_role", data.tenant.role);
             }
 
-            router.replace("/dashboard");
+            if (data.tenant.slug) {
+              router.replace(`/${data.tenant.slug}/dashboard`);
+            } else {
+              router.replace("/dashboard");
+            }
             return;
           }
         }
@@ -130,9 +136,7 @@ export default function AuthCallbackPage() {
       <div className="bg-puja-white min-h-screen flex items-center justify-center">
         <div className="max-w-md w-full mx-4 p-xl bg-white border border-sandstone rounded-2xl shadow-lg text-center">
           <div className="w-16 h-16 mx-auto mb-lg bg-error-container rounded-full flex items-center justify-center">
-            <span className="material-symbols-outlined text-3xl text-on-error-container">
-              error
-            </span>
+            <AlertCircle className="h-8 w-8 text-on-error-container" />
           </div>
           <h2 className="font-headline-md text-headline-md text-on-surface mb-md">
             Authentication Failed

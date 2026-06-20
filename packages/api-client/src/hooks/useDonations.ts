@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
+import { useAuthStore } from "@utsav/stores";
 
 export interface Donation {
   id: string;
@@ -53,20 +54,24 @@ export interface FinancialSummary {
 }
 
 export function useFetchDonations(params?: Record<string, string>) {
+  const { tenantId, userId } = useAuthStore();
   return useQuery({
-    queryKey: ["donations", params],
+    queryKey: ["donations", tenantId, params],
     queryFn: async () => {
       return apiClient<Donation[]>("/donations", { params });
     },
+    enabled: !!tenantId && !!userId,
   });
 }
 
 export function useFetchCampaigns() {
+  const { tenantId, userId } = useAuthStore();
   return useQuery({
-    queryKey: ["donation-campaigns"],
+    queryKey: ["donation-campaigns", tenantId],
     queryFn: async () => {
       return apiClient<DonationCampaign[]>("/donations?campaigns=true");
     },
+    enabled: !!tenantId && !!userId,
   });
 }
 
@@ -123,6 +128,7 @@ export function useCreateRazorpayOrder() {
 }
 
 export function useFinancialSummary(tenantId?: string | null) {
+  const { userId } = useAuthStore();
   return useQuery({
     queryKey: ["financial-summary", tenantId],
     queryFn: async () => {
@@ -138,7 +144,7 @@ export function useFinancialSummary(tenantId?: string | null) {
       }
       return apiClient<FinancialSummary>("/reports/financial-summary");
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!userId,
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 }

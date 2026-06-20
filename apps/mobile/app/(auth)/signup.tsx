@@ -18,7 +18,6 @@ import { router } from "expo-router";
 export default function MobileSignupScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +31,7 @@ export default function MobileSignupScreen() {
   const handleSignup = async () => {
     setErrorMsg("");
     
-    if (!firstName || !lastName || !username || !phone || !email || !password || !confirmPassword) {
+    if (!firstName || !lastName || !phone || !email || !password || !confirmPassword) {
       setErrorMsg("Please fill in all fields.");
       return;
     }
@@ -51,7 +50,6 @@ export default function MobileSignupScreen() {
       await signupMutation.mutateAsync({
         firstName,
         lastName,
-        username,
         phone,
         email,
         password,
@@ -112,18 +110,7 @@ export default function MobileSignupScreen() {
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Username</Text>
-              <TextInput
-                style={styles.input}
-                value={username}
-                onChangeText={setUsername}
-                placeholder="john_doe"
-                placeholderTextColor="#9CA3AF"
-                autoCapitalize="none"
-                editable={!isLoading}
-              />
-            </View>
+
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Phone Number</Text>

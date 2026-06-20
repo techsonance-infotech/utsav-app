@@ -4,11 +4,11 @@ import type { Event, CreateEventInput, EventRSVP } from "@utsav/types";
 import { useAuthStore } from "@utsav/stores";
 
 export function useEvents() {
-  const { tenantId } = useAuthStore();
+  const { tenantId, userId } = useAuthStore();
   return useQuery({
     queryKey: ["events", tenantId],
     queryFn: () => apiClient<Event[]>("/events"),
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!userId,
   });
 }
 

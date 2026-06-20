@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
+import { useAuthStore } from "@utsav/stores";
 
 export interface Member {
   id: string;
@@ -19,8 +20,9 @@ export interface Member {
 }
 
 export function useFetchMembers(filters?: { role?: string; status?: string; search?: string }) {
+  const { tenantId, userId } = useAuthStore();
   return useQuery({
-    queryKey: ["members", filters],
+    queryKey: ["members", tenantId, filters],
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (filters?.role) params.role = filters.role;
@@ -29,6 +31,7 @@ export function useFetchMembers(filters?: { role?: string; status?: string; sear
 
       return apiClient<Member[]>("/members", { params });
     },
+    enabled: !!tenantId && !!userId,
   });
 }
 

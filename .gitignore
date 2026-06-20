@@ -111,3 +111,9 @@ docs/
 stitch-design/
 pip_packages/
 .turbo
+
+# Model scratch test scripts
+apps/web/check_user_tenants.js
+apps/web/get_latest_otp.js
+apps/web/test_db.js
+apps/web/test_login_api.js

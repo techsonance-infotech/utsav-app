@@ -55,26 +55,71 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // 2. Wildcard Subdomain Rewriting
-  if (
-    !url.pathname.startsWith("/api") &&
-    !url.pathname.startsWith("/_next") &&
-    !url.pathname.startsWith("/static") &&
-    !url.pathname.startsWith("/auth") &&
-    !url.pathname.startsWith("/onboarding") &&
-    !url.pathname.startsWith("/join") &&
-    !url.pathname.startsWith("/dashboard") &&
-    !url.pathname.includes(".")
-  ) {
-    const parts = host.split(".");
-    if (parts.length > 2) {
-      const subdomain = parts[0];
-      if (subdomain !== "www" && subdomain !== "admin" && subdomain !== "app") {
-        url.pathname = `/public/${subdomain}${url.pathname}`;
-        const res = NextResponse.rewrite(url);
-        addSecurityHeaders(res);
-        return res;
-      }
+  // 2. Wildcard Subdomain and Path-based Slug Rewriting
+  const baseDomain = (process.env.NEXT_PUBLIC_BASE_DOMAIN || "localhost:3000").split(":")[0].toLowerCase();
+  const hostName = host.split(":")[0].toLowerCase();
+
+  let subdomain: string | null = null;
+  if (hostName.endsWith("." + baseDomain)) {
+    const sub = hostName.slice(0, -(baseDomain.length + 1));
+    if (sub && sub !== "www" && sub !== "admin" && sub !== "app") {
+      subdomain = sub;
+    }
+  }
+
+  const path = url.pathname;
+  const isInternalOrApi =
+    path.startsWith("/api") ||
+    path.startsWith("/_next") ||
+    path.startsWith("/static") ||
+    path.includes(".");
+
+  if (!isInternalOrApi) {
+    const reservedRoots = new Set([
+      "auth",
+      "onboarding",
+      "join",
+      "dashboard",
+      "members",
+      "events",
+      "news",
+      "donations",
+      "expenses",
+      "chat",
+      "vendors",
+      "gallery",
+      "settings",
+      "login",
+      "register",
+      "public",
+      "forgot-password",
+      "verify-email",
+      "privacy-policy",
+      "terms-of-service",
+      "donate",
+      "help-center",
+      "admin",
+      "assets",
+    ]);
+
+    const pathParts = path.split("/").filter(Boolean);
+    const firstSegment = pathParts[0];
+
+    // Priority 1: Subdomain-based routing (Production)
+    if (subdomain) {
+      url.pathname = `/public/${subdomain}${path}`;
+      const res = NextResponse.rewrite(url);
+      addSecurityHeaders(res);
+      return res;
+    }
+
+    // Priority 2: Path-based routing (Local development fallback)
+    if (firstSegment && !reservedRoots.has(firstSegment)) {
+      const restOfPath = path.slice(firstSegment.length + 1);
+      url.pathname = `/public/${firstSegment}${restOfPath}`;
+      const res = NextResponse.rewrite(url);
+      addSecurityHeaders(res);
+      return res;
     }
   }
 

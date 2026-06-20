@@ -2,13 +2,22 @@
 
 import React, { useState, useEffect } from "react";
 import { useSignUp, supabase } from "@utsav/api-client";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Loader2,
   AlertCircle,
   Check,
-  Flame
+  Flame,
+  Sun,
+  PartyPopper,
+  Mail,
+  User,
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound,
+  ArrowRight
 } from "lucide-react";
 
 function PasswordRequirement({ met, text }: { met: boolean; text: string }) {
@@ -22,11 +31,12 @@ function PasswordRequirement({ met, text }: { met: boolean; text: string }) {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tenantIdParam = searchParams.get("tenantId");
   const signupMutation = useSignUp();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,10 +49,9 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false);
 
   // Field validation checks
-  const isFirstNameValid = firstName.trim().length >= 2;
-  const isLastNameValid = lastName.trim().length >= 2;
-  const isUsernameValid = /^[a-zA-Z0-9_]{3,20}$/.test(username);
-  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const isFirstNameValid = firstName.trim().length >= 2 && /^[a-zA-Z]+$/.test(firstName.trim());
+  const isLastNameValid = lastName.trim().length >= 2 && /^[a-zA-Z]+$/.test(lastName.trim());
+  const isEmailValid = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
   const isPhoneValid = /^\d{10}$/.test(phone);
 
   const hasMinLength = password.length >= 8;
@@ -56,7 +65,6 @@ export default function RegisterPage() {
   const isFormValid =
     isFirstNameValid &&
     isLastNameValid &&
-    isUsernameValid &&
     isEmailValid &&
     isPhoneValid &&
     isPasswordStrong &&
@@ -86,7 +94,6 @@ export default function RegisterPage() {
     setTouched({
       firstName: true,
       lastName: true,
-      username: true,
       phone: true,
       email: true,
       password: true,
@@ -102,53 +109,56 @@ export default function RegisterPage() {
       await signupMutation.mutateAsync({
         firstName,
         lastName,
-        username,
         phone,
         email,
         password,
+        tenantId: tenantIdParam || undefined,
       });
       setSuccess(true);
     } catch (err: any) {
-      setSignUpError(err.message || "Failed to create account. Username or email might already be registered.");
+      setSignUpError(err.message || "Failed to create account. Email might already be registered.");
     }
   };
 
   return (
     <div className="bg-puja-white font-body-md text-on-background min-h-screen flex flex-col relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
       
-      {/* Hero Decorative Background */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        {/* Radial Gradient for Depth */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-primary-container/10 via-transparent to-transparent"></div>
-        {/* Floating Decorative Elements */}
-        <div className="absolute top-[10%] right-[15%] text-aarti-gold/20 select-none">
-          <span className="material-symbols-outlined text-[120px]" style={{ fontVariationSettings: "'FILL' 0" }}>brightness_high</span>
+      {/* Background Decorative Elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        {/* Top Left Garlands */}
+        <div className="absolute -top-10 -left-10 w-64 h-64 opacity-20 transform -rotate-12">
+          <img
+            className="w-full h-full object-contain"
+            alt="Traditional Indian marigold flower garland strands"
+            src="/assets/garland-login.png"
+          />
         </div>
-        <div className="absolute bottom-[10%] left-[10%] text-primary-container/10 select-none">
-          <span className="material-symbols-outlined text-[160px]">festival</span>
+        {/* Bottom Right Diya Pattern */}
+        <div className="absolute -bottom-20 -right-20 w-96 h-96 diya-watermark opacity-20">
+          <img
+            className="w-full h-full object-contain"
+            alt="Intricate traditional Indian diya lamp illustration"
+            src="/assets/diya-login.png"
+          />
         </div>
       </div>
 
-      {/* Main Navigation */}
-      <nav className="relative z-50 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-20">
-        <div className="flex items-center gap-2">
-          <div className="w-32 h-16 transition-transform duration-300 hover:scale-105">
-            <img
-              className="w-full h-full object-contain"
-              alt="Utsav logo"
-              src="/logo.png"
-            />
-          </div>
-        </div>
-        <div className="hidden md:flex items-center gap-6">
-          <Link className="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="/login">Sign In</Link>
-        </div>
-      </nav>
-
       {/* Auth Section */}
-      <main className="flex-grow flex items-center justify-center relative z-10 px-margin-mobile py-xl">
-        <div className="w-full max-w-[560px]">
+      <main className="flex-grow flex flex-col items-center justify-center relative z-10 px-margin-mobile py-xl">
+        <div className="w-full max-w-[680px]">
           
+          {/* Branding Header */}
+          <div className="flex flex-col items-center mb-xl">
+            <div className="w-48 h-24 mb-xs transition-transform duration-300 hover:scale-105">
+              <img
+                className="w-full h-full object-contain"
+                alt="Utsav logo"
+                src="/logo.png"
+              />
+            </div>
+            <p className="font-body-md text-body-md text-outline mt-xs">Empowering community celebrations</p>
+          </div>
+
           {/* Card Container */}
           <div className="glass-card border border-sandstone rounded-[24px] shadow-lg p-lg md:p-xl flex flex-col gap-xl">
             
@@ -162,17 +172,17 @@ export default function RegisterPage() {
             {success ? (
               <div className="text-center py-12 px-6 bg-orange-50/50 border border-sandstone rounded-2xl animate-in fade-in zoom-in duration-300">
                 <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-primary/20">
-                  <span className="material-symbols-outlined text-white text-3xl">mail</span>
+                  <Mail className="text-white h-8 w-8" />
                 </div>
                 <h3 className="text-2xl font-bold text-neutral-900 mb-2">Verify Your Email</h3>
                 <p className="text-neutral-600 text-sm leading-relaxed mb-6">
                   We've sent a verification link to <strong className="text-primary">{email}</strong>. Please check your inbox and click the link to activate your account and start your 14-day trial.
                 </p>
                 <Link
-                  href="/login"
+                  href={`/verify-email?email=${encodeURIComponent(email)}`}
                   className="inline-flex items-center justify-center h-12 px-6 bg-primary text-on-primary rounded-xl font-label-md hover:bg-surface-tint active:scale-98 transition-all"
                 >
-                  Go to Sign In
+                  Verify Email Now
                 </Link>
               </div>
             ) : (
@@ -194,7 +204,7 @@ export default function RegisterPage() {
                       <label className="block font-label-md text-label-md text-on-surface-variant group-focus-within:text-primary transition-colors" htmlFor="firstName">First Name</label>
                       <div className="relative saffron-glow transition-all rounded-xl">
                         <div className="absolute inset-y-0 left-0 pl-md flex items-center pointer-events-none text-outline">
-                          <span className="material-symbols-outlined text-[20px]">person</span>
+                          <User className="h-5 w-5 pointer-events-none" />
                         </div>
                         <input
                           className={getInputClass(isFirstNameValid, "firstName", firstName)}
@@ -214,7 +224,7 @@ export default function RegisterPage() {
                       <label className="block font-label-md text-label-md text-on-surface-variant group-focus-within:text-primary transition-colors" htmlFor="lastName">Last Name</label>
                       <div className="relative saffron-glow transition-all rounded-xl">
                         <div className="absolute inset-y-0 left-0 pl-md flex items-center pointer-events-none text-outline">
-                          <span className="material-symbols-outlined text-[20px]">person</span>
+                          <User className="h-5 w-5 pointer-events-none" />
                         </div>
                         <input
                           className={getInputClass(isLastNameValid, "lastName", lastName)}
@@ -231,29 +241,7 @@ export default function RegisterPage() {
                     </div>
                   </div>
 
-                  {/* Username Field */}
-                  <div className="space-y-xs group">
-                    <label className="block font-label-md text-label-md text-on-surface-variant group-focus-within:text-primary transition-colors" htmlFor="username">Username</label>
-                    <div className="relative saffron-glow transition-all rounded-xl">
-                      <div className="absolute inset-y-0 left-0 pl-md flex items-center pointer-events-none text-outline">
-                        <span className="material-symbols-outlined text-[20px]">alternate_email</span>
-                      </div>
-                      <input
-                        className={getInputClass(isUsernameValid, "username", username)}
-                        id="username"
-                        placeholder="john_doe"
-                        required
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        onBlur={() => handleBlur("username")}
-                        disabled={signupMutation.isPending}
-                      />
-                    </div>
-                    {touched.username && username && !isUsernameValid && (
-                      <p className="text-[10px] text-rose-500 ml-1">Min 3 characters, alphanumeric & underscores only</p>
-                    )}
-                  </div>
+
 
                   {/* Email & Phone Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
@@ -262,7 +250,7 @@ export default function RegisterPage() {
                       <label className="block font-label-md text-label-md text-on-surface-variant group-focus-within:text-primary transition-colors" htmlFor="email">Email Address</label>
                       <div className="relative saffron-glow transition-all rounded-xl">
                         <div className="absolute inset-y-0 left-0 pl-md flex items-center pointer-events-none text-outline">
-                          <span className="material-symbols-outlined text-[20px]">mail</span>
+                          <Mail className="h-5 w-5 pointer-events-none" />
                         </div>
                         <input
                           className={getInputClass(isEmailValid, "email", email)}
@@ -310,7 +298,7 @@ export default function RegisterPage() {
                       <label className="block font-label-md text-label-md text-on-surface-variant group-focus-within:text-primary transition-colors" htmlFor="password">Password</label>
                       <div className="relative saffron-glow transition-all rounded-xl">
                         <div className="absolute inset-y-0 left-0 pl-md flex items-center pointer-events-none text-outline">
-                          <span className="material-symbols-outlined text-[20px]">lock</span>
+                          <Lock className="h-5 w-5 pointer-events-none" />
                         </div>
                         <input
                           className={`${getInputClass(isPasswordStrong, "password", password)} pr-10`}
@@ -328,9 +316,11 @@ export default function RegisterPage() {
                           onClick={() => setShowPassword(!showPassword)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors"
                         >
-                          <span className="material-symbols-outlined text-[20px]">
-                            {showPassword ? "visibility_off" : "visibility"}
-                          </span>
+                          {showPassword ? (
+                            <EyeOff className="h-5 w-5" />
+                          ) : (
+                            <Eye className="h-5 w-5" />
+                          )}
                         </button>
                       </div>
                       {password && !isPasswordStrong && (
@@ -349,7 +339,7 @@ export default function RegisterPage() {
                       <label className="block font-label-md text-label-md text-on-surface-variant group-focus-within:text-primary transition-colors" htmlFor="confirmPassword">Confirm Password</label>
                       <div className="relative saffron-glow transition-all rounded-xl">
                         <div className="absolute inset-y-0 left-0 pl-md flex items-center pointer-events-none text-outline">
-                          <span className="material-symbols-outlined text-[20px]">lock_reset</span>
+                          <KeyRound className="h-5 w-5 pointer-events-none" />
                         </div>
                         <input
                           className={`${getInputClass(passwordsMatch, "confirmPassword", confirmPassword)} pr-10`}
@@ -367,9 +357,11 @@ export default function RegisterPage() {
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors"
                         >
-                          <span className="material-symbols-outlined text-[20px]">
-                            {showConfirmPassword ? "visibility_off" : "visibility"}
-                          </span>
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-5 w-5" />
+                          ) : (
+                            <Eye className="h-5 w-5" />
+                          )}
                         </button>
                       </div>
                       {touched.confirmPassword && confirmPassword && !passwordsMatch && (
@@ -392,7 +384,7 @@ export default function RegisterPage() {
                     ) : (
                       <>
                         Create Account
-                        <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                        <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                       </>
                     )}
                   </button>
@@ -446,18 +438,17 @@ export default function RegisterPage() {
 
 
 
+        {/* Footer Links */}
+        <footer className="mt-xl text-center flex flex-col gap-md">
+          <div className="flex justify-center items-center gap-xl text-outline font-label-sm">
+            <Link className="hover:text-on-surface transition-colors" href="/privacy-policy">Privacy Policy</Link>
+            <Link className="hover:text-on-surface transition-colors" href="/terms-of-service">Terms of Service</Link>
+            <Link className="hover:text-on-surface transition-colors" href="/help-center">Help Center</Link>
+          </div>
+          <p className="text-outline font-label-sm mt-md opacity-60">© {new Date().getFullYear()} Utsav Digital Platforms. All rights reserved.</p>
+        </footer>
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 w-full py-xl px-margin-mobile md:px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-lg border-t border-sandstone/50 bg-surface-container-low/50 backdrop-blur-sm mt-8">
-        <p className="font-body-md text-body-md text-on-surface-variant">© {new Date().getFullYear()} Utsav Digital Platforms. All rights reserved.</p>
-        <div className="flex gap-lg">
-          <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary hover:underline underline-offset-4 transition-all" href="/privacy-policy">Privacy Policy</Link>
-          <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary hover:underline underline-offset-4 transition-all" href="/terms-of-service">Terms of Service</Link>
-          <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary hover:underline underline-offset-4 transition-all" href="/help-center">Help Center</Link>
-        </div>
-      </footer>
     </div>
   );
 }

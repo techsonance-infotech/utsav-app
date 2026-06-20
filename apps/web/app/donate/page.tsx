@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 function DonateGateway() {
-  const { tenantId, tenantName } = useAuthStore();
+  const { tenantId, tenantName, tenantSlug } = useAuthStore();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -242,7 +242,13 @@ function DonateGateway() {
                 <FileText className="w-4 h-4" /> Print Receipt
               </button>
               <button
-                onClick={() => router.push("/dashboard")}
+                onClick={() => {
+                  if (tenantSlug) {
+                    router.push(`/${tenantSlug}/dashboard`);
+                  } else {
+                    router.push("/dashboard");
+                  }
+                }}
                 className="flex-1 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 text-neutral-950 font-bold rounded-xl text-sm transition-all shadow-lg"
               >
                 Back to Dashboard

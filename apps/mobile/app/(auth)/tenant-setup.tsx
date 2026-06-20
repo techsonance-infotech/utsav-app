@@ -40,6 +40,7 @@ export default function MobileTenantSetupScreen() {
         vertical: vertical,
         city: location || "Mumbai",
         state: "Maharashtra", // Default state
+        address: location ? `Mandal located in ${location}` : "Mumbai, Maharashtra",
         default_language: language,
       });
       router.replace("/(dashboard)/home");

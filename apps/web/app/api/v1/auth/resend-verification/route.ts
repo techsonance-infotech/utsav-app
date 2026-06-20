@@ -33,8 +33,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "This email address is already verified." }, { status: 400 });
     }
 
-    // Generate new token
-    const verificationToken = crypto.randomBytes(32).toString("hex");
+    // Generate new 6-digit verification code
+    const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log("DEBUG RESEND OTP FOR", email, ":", verificationToken);
 
     // Update user metadata with new token
     const { error: updateError } = await supabase.auth.admin.updateUserById(targetUser.id, {
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
     await sendEmail({
       to: email,
       subject: "Verify your Utsav account (Resend)",
-      html: getVerificationEmailTemplate(`${firstName} ${lastName}`.trim() || "User", verificationToken, origin),
+      html: getVerificationEmailTemplate(`${firstName} ${lastName}`.trim() || "User", verificationToken, email, origin),
     });
 
     return NextResponse.json({

@@ -9,7 +9,14 @@ import {
   ArrowRight,
   ArrowLeft,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2,
+  HelpCircle,
+  Globe,
+  Hourglass,
+  ChevronDown,
+  PartyPopper,
+  ShieldCheck
 } from "lucide-react";
 
 const INDIAN_STATES = [
@@ -30,6 +37,8 @@ const VERTICALS = [
   { id: "other", name: "Other Festival" },
 ];
 
+const APP_DOMAIN = "techsonance.co.in";
+
 const COLOR_PRESETS = [
   { name: "Saffron Glow", hex: "#FF9500" },
   { name: "Kumkum Red", hex: "#D92B2B" },
@@ -38,18 +47,33 @@ const COLOR_PRESETS = [
   { name: "Tulsi Green", hex: "#22C55E" },
 ];
 
+const formatDateString = (dateStr: string) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+};
+
 export default function OnboardingPage() {
   const router = useRouter();
-  const { userId, tenantId, setAuth } = useAuthStore();
+  const { userId, tenantId, tenantSlug, setAuth } = useAuthStore();
 
   // Redirect Logic
   useEffect(() => {
     if (!userId) {
       router.push("/login");
     } else if (tenantId) {
-      router.push("/dashboard");
+      if (tenantSlug) {
+        router.push(`/${tenantSlug}/dashboard`);
+      } else {
+        router.push("/dashboard");
+      }
     }
-  }, [userId, tenantId, router]);
+  }, [userId, tenantId, tenantSlug, router]);
 
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
@@ -57,6 +81,7 @@ export default function OnboardingPage() {
   const [vertical, setVertical] = useState("ganpati");
   const [city, setCity] = useState("");
   const [state, setState] = useState("Maharashtra");
+  const [address, setAddress] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#FF9500");
   const [language, setLanguage] = useState("en");
   const [startDate, setStartDate] = useState("");
@@ -82,7 +107,12 @@ export default function OnboardingPage() {
       if (!name || name.trim().length < 2) return;
       if (!slug || slug.trim().length < 2) return;
       if (!city.trim()) return;
+      if (!address.trim() || address.trim().length < 5) {
+        setErrorMsg("Address must be at least 5 characters long.");
+        return;
+      }
     }
+    setErrorMsg("");
     setStep((prev) => Math.min(prev + 1, 4));
   };
 
@@ -99,6 +129,7 @@ export default function OnboardingPage() {
         vertical,
         city,
         state,
+        address,
         primary_color: primaryColor,
         default_language: language,
         description: `${description || "No description provided."} Main Event: ${mainEventName || "Annual Festival"}. Dates: ${startDate || "TBD"} to ${endDate || "TBD"}.`,
@@ -132,21 +163,29 @@ export default function OnboardingPage() {
     return (
       <div className="bg-puja-white min-h-screen flex flex-col items-center justify-center relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
         
-        {/* Decorative Marigold Garlands */}
-        <div className="fixed inset-0 pointer-events-none z-0">
-          <div className="absolute top-0 left-0 right-0 flex justify-between px-12 md:px-24">
-            <div className="w-16 h-64 opacity-40">
-              <img className="w-full h-full object-contain" alt="Hanging marigold flower garland string" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFNO1Mqqxkrz--Rm8M099HuaGojshxX61r3K-hIaTGpP7nOnFf5bd4UiMuamq3p5zKYkJ8DgF4r-q7JTQqHJkTDv_FWqTJ55kUgNP9wdhChiJvva-QJFUzE-ebtRi69btPzdzJVYBZj2dmfjqU4mlNXgUgU0uo2CB54SuaM1NYuXEVFL4CL1I4AtAnTYqwgIUjo1X9kYUhAlOetmQKwe3F1nSI-CrkkESCEpEkA0is0rBkFugrBCHo" />
-            </div>
-            <div className="w-16 h-64 opacity-40">
-              <img className="w-full h-full object-contain" alt="Hanging marigold flower garland string" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQh0KBtV23G31DHZ8RGBpMDFQWfOtrMY478Z7NSiMrz0uquIuBJp9GYOsPPoT7wzlpsulUVbZH-hzoPjdDcYkck3iE1rsdmfn6iJEXK8yZKv1qwDv1s1hGmkv35efN6jfVjaeoKTt9oS4hgZrX4ZM9zAvb_BewWI1VfMZhXoQ2r_PcCEGuPHKoTF207hzI88NX7TV4XR9M8fpfeyW1QNz99_yyQ2NdAB17-B4OahVZ7SjwjR11bA9n" />
-            </div>
+        {/* Background Decorative Elements */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+          {/* Top Left Garlands */}
+          <div className="absolute -top-10 -left-10 w-64 h-64 opacity-20 transform -rotate-12">
+            <img
+              className="w-full h-full object-contain"
+              alt="Traditional Indian marigold flower garland strands"
+              src="/assets/garland-login.png"
+            />
+          </div>
+          {/* Bottom Right Diya Pattern */}
+          <div className="absolute -bottom-20 -right-20 w-96 h-96 diya-watermark opacity-20">
+            <img
+              className="w-full h-full object-contain"
+              alt="Intricate traditional Indian diya lamp illustration"
+              src="/assets/diya-login.png"
+            />
           </div>
         </div>
 
         <div className="relative z-10 max-w-md w-full glass-card border border-sandstone rounded-3xl p-8 md:p-10 shadow-lg text-center space-y-6 animate-in zoom-in-95 duration-500">
           <div className="w-20 h-20 bg-tulsi-green/10 text-tulsi-green rounded-full flex items-center justify-center mx-auto border border-tulsi-green/20">
-            <span className="material-symbols-outlined text-[40px]">verified</span>
+            <CheckCircle2 className="w-10 h-10" />
           </div>
           <div className="space-y-md">
             <h2 className="font-display-xl text-display-xl text-on-surface">Mandal Portal Ready!</h2>
@@ -154,15 +193,21 @@ export default function OnboardingPage() {
               Your digital portal has been launched successfully. Share this URL with volunteers, trustees, and devotees to coordinate event operations.
             </p>
             <span className="block mt-4 font-mono-data text-primary bg-cream/50 py-3 px-4 rounded-xl text-[15px] border border-sandstone font-bold tracking-tight">
-              {slug}.utsav.app
+              {slug}.{APP_DOMAIN}
             </span>
           </div>
           <button
-            onClick={() => router.push("/dashboard")}
+            onClick={() => {
+              if (slug) {
+                router.push(`/${slug}/dashboard`);
+              } else {
+                router.push("/dashboard");
+              }
+            }}
             className="w-full h-[56px] bg-primary-container text-on-primary-fixed font-headline-sm text-headline-sm rounded-xl shadow-lg hover:bg-primary-container/90 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 group"
           >
             Enter Organization Portal
-            <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+            <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </div>
@@ -179,59 +224,40 @@ export default function OnboardingPage() {
 
   return (
     <div className="bg-puja-white font-body-md text-on-surface min-h-screen flex flex-col relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
-      
-      {/* Top Header / Branding Anchor */}
-      <header className="fixed top-0 left-0 w-full z-50 px-margin-mobile md:px-margin-desktop h-16 flex justify-between items-center bg-puja-white/80 backdrop-blur-md border-b border-sandstone">
-        <div className="flex items-center gap-2">
-          <div className="w-28 h-12 transition-transform duration-300 hover:scale-105">
+      {/* Background Decorative Elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        {/* Top Left Garlands */}
+        <div className="absolute -top-10 -left-10 w-64 h-64 opacity-20 transform -rotate-12">
+          <img
+            className="w-full h-full object-contain"
+            alt="Traditional Indian marigold flower garland strands"
+            src="/assets/garland-login.png"
+          />
+        </div>
+        {/* Bottom Right Diya Pattern */}
+        <div className="absolute -bottom-20 -right-20 w-96 h-96 diya-watermark opacity-20">
+          <img
+            className="w-full h-full object-contain"
+            alt="Intricate traditional Indian diya lamp illustration"
+            src="/assets/diya-login.png"
+          />
+        </div>
+      </div>
+
+      {/* Main Content Canvas */}
+      <main className="relative z-10 py-xl px-margin-mobile flex flex-col items-center">
+        
+        {/* Branding Header */}
+        <div className="flex flex-col items-center mb-xl">
+          <div className="w-48 h-24 mb-xs transition-transform duration-300 hover:scale-105">
             <img
               className="w-full h-full object-contain"
               alt="Utsav logo"
               src="/logo.png"
             />
           </div>
+          <p className="font-body-md text-body-md text-outline mt-xs">Empowering community celebrations</p>
         </div>
-        <div className="hidden md:flex items-center gap-md">
-          <span className="font-label-md text-label-md text-on-surface-variant">Setup Assistance</span>
-          <button className="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">help_outline</button>
-        </div>
-      </header>
-
-      {/* Decorative Background Illustrations */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        {/* Top Marigold Garland */}
-        <div className="absolute top-0 left-0 right-0 flex justify-between px-12 md:px-24">
-          <div className="w-16 h-64 opacity-50">
-            <img className="w-full h-full object-contain" alt="Hanging marigold garland" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFNO1Mqqxkrz--Rm8M099HuaGojshxX61r3K-hIaTGpP7nOnFf5bd4UiMuamq3p5zKYkJ8DgF4r-q7JTQqHJkTDv_FWqTJ55kUgNP9wdhChiJvva-QJFUzE-ebtRi69btPzdzJVYBZj2dmfjqU4mlNXgUgU0uo2CB54SuaM1NYuXEVFL4CL1I4AtAnTYqwgIUjo1X9kYUhAlOetmQKwe3F1nSI-CrkkESCEpEkA0is0rBkFugrBCHo" />
-          </div>
-          <div className="w-16 h-48 opacity-30 hidden md:block">
-            <img className="w-full h-full object-contain" alt="Decorative festive marigolds" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDf3Ogia6jidRTjUNfqvMrpfThytPIRaz1kMEHsdcsqmCtZQpxHfsVm3sIbUkO90j-SoXF8Ir7s3r6PpTLvVEDkPqeuVC0voQA1QtoAd4ZyXSqSA5qeUOuqtCvfgC_ecYKPuMky4E0bg2cRogaxvVmZryPPIfQ-EL5X_-gnQVCf48Ay71YZu8xu6CtGZqvH9ZocYJ6h5sAMqRqyhNQuGOd3rzmzQKhP47ER0k90uWzpFE6vFoxxbzjf" />
-          </div>
-          <div className="w-16 h-64 opacity-50">
-            <img className="w-full h-full object-contain" alt="Hanging marigold garland" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQh0KBtV23G31DHZ8RGBpMDFQWfOtrMY478Z7NSiMrz0uquIuBJp9GYOsPPoT7wzlpsulUVbZH-hzoPjdDcYkck3iE1rsdmfn6iJEXK8yZKv1qwDv1s1hGmkv35efN6jfVjaeoKTt9oS4hgZrX4ZM9zAvb_BewWI1VfMZhXoQ2r_PcCEGuPHKoTF207hzI88NX7TV4XR9M8fpfeyW1QNz99_yyQ2NdAB17-B4OahVZ7SjwjR11bA9n" />
-          </div>
-        </div>
-        
-        {/* Decorative Arch (Asymmetric) */}
-        <div className="absolute -right-20 top-1/4 w-[400px] h-[600px] opacity-[0.06]">
-          <img className="w-full h-full object-contain" alt="Traditional Indian architectural temple arch outline decoration" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVDZZo7-qPTeVLMolGaARX5RhNGe_DZrbiUcWyTQx3DJjOShi04yW1sWzxPEtkdL7gbHZjJjmraN-odLOSQWUhOVpusQheNqqZnDG3Ul5Wto96wfHn0MG2Mw3kYGu-4Q6v76Ik0beCpZZmbeKznd2qxg16uBpLRkCA_XVr93lXBzQdX2bYPBDQOt1i_35PHEJXVQK_IZQ-fVixYgSy_ROcf5L2PWW5DHkPnEf8D_gyBqUfLO6r6mCr" />
-        </div>
-
-        {/* Floating Diyas */}
-        <div className="absolute bottom-10 left-10 animate-breathe diya-glow">
-          <div className="w-20 h-20">
-            <img className="w-full h-full object-contain" alt="Glowing traditional diya clay lamp illustration" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFB4nRD5FgPruUkJgUj08z0Ie6gondOiPzIwjEOVuZJEqkRA6742qv5d3ObKrNofMEDL_6Fh7E6K0SRtwQmWfHfjOP4UIoLVGKiu62vHKfd73KpjPaJo0Lz-3-kxq-ox8pW57l8SFI_mn84ZLtHuty4dYDuPM6GDrOokRo3s_mmpZ3tuupYEZRGFjsKsiR_5dhLJVSlRchA3vlFvu7waOK0FD8Zit7GIjs6fhHJ42uYQ4KOifOaA_F" />
-          </div>
-        </div>
-        <div className="absolute bottom-24 right-20 animate-breathe diya-glow" style={{ animationDelay: "1.5s" }}>
-          <div className="w-16 h-16">
-            <img className="w-full h-full object-contain" alt="Decorative festive diya" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXQeAyRS6_udQbf50CoEG5-uxJ_DaSF06EZO8aLArKCyAoMg4xnvfbur4wPMSmLnUL9nxXxYbKB2t98QVxUOXVw1SwJbd0jSo_WB9RFimqSpUHCcKyCktQaBvvNvb7MDLJ99Q7mfk5tw_536buirLeIk3YWh-M4NcF3IfMRsVz1twHC8-UnHa89ugBwwhLfUq5GV48YW57sVRVow99ySzD8t7Rk7cheIbPjU01TMTBiZ-6RzIRmMiz" />
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Canvas */}
-      <main className="relative z-10 pt-32 pb-xl px-margin-mobile flex flex-col items-center">
         
         {/* Step Indicator */}
         <div className="w-full max-w-2xl mb-xl">
@@ -282,7 +308,7 @@ export default function OnboardingPage() {
               {/* Subdomain Preview (Full Width Accent) */}
               <div className="col-span-1 md:col-span-2 bg-cream/50 rounded-xl p-md border border-sandstone flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">language</span>
+                  <Globe className="h-5 w-5 text-primary" />
                   <div>
                     <p className="font-label-sm text-label-sm text-on-surface-variant">Mandal Subdomain</p>
                     <p className="font-mono-data text-mono-data text-primary font-semibold">
@@ -291,15 +317,15 @@ export default function OnboardingPage() {
                           <Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying...
                         </span>
                       ) : (
-                        `${slug || "your-mandal"}.utsav.app`
+                        `${slug || "your-mandal"}.${APP_DOMAIN}`
                       )}
                     </p>
                   </div>
                 </div>
                 {slugCheck?.available && slug.trim().length >= 2 ? (
-                  <span className="material-symbols-outlined text-tulsi-green">verified</span>
+                  <CheckCircle2 className="h-5 w-5 text-tulsi-green" />
                 ) : (
-                  <span className="material-symbols-outlined text-outline">hourglass_empty</span>
+                  <Hourglass className="h-5 w-5 text-outline" />
                 )}
               </div>
 
@@ -335,7 +361,7 @@ export default function OnboardingPage() {
                       <option key={v.id} value={v.id}>{v.name}</option>
                     ))}
                   </select>
-                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant h-5 w-5" />
                 </div>
               </div>
 
@@ -353,7 +379,7 @@ export default function OnboardingPage() {
               </div>
 
               {/* State */}
-              <div className="col-span-1 md:col-span-2 space-y-2">
+              <div className="col-span-1 space-y-2">
                 <label className="block font-label-md text-label-md text-on-surface">State</label>
                 <div className="relative">
                   <select
@@ -365,8 +391,21 @@ export default function OnboardingPage() {
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
-                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant h-5 w-5" />
                 </div>
+              </div>
+
+              {/* Address */}
+              <div className="col-span-1 md:col-span-2 space-y-2">
+                <label className="block font-label-md text-label-md text-on-surface" htmlFor="address">Address / Location</label>
+                <textarea
+                  id="address"
+                  className="w-full min-h-[96px] bg-white border border-sandstone rounded-xl p-4 font-body-md text-on-surface focus:ring-2 focus:ring-primary-container focus:border-primary-container outline-none transition-all resize-none"
+                  placeholder="e.g. Opp. Railway Station, Lalbaug, Parel"
+                  required
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                />
               </div>
             </div>
           )}
@@ -496,7 +535,7 @@ export default function OnboardingPage() {
                   </div>
                   <div>
                     <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Web Subdomain</span>
-                    <span className="text-primary font-mono-data font-bold text-sm">{slug}.utsav.app</span>
+                    <span className="text-primary font-mono-data font-bold text-sm">{slug}.{APP_DOMAIN}</span>
                   </div>
                   <div>
                     <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Location</span>
@@ -504,20 +543,41 @@ export default function OnboardingPage() {
                   </div>
                   <div>
                     <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Festival Category</span>
-                    <span className="text-on-surface font-bold text-sm capitalize">{vertical}</span>
+                    <span className="text-on-surface font-bold text-sm">
+                      {VERTICALS.find(v => v.id === vertical)?.name || vertical}
+                    </span>
+                  </div>
+                  <div className="col-span-1 md:col-span-2">
+                    <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Address / Location</span>
+                    <span className="text-on-surface font-bold text-sm">{address}</span>
                   </div>
                   <div>
                     <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Branding Tone</span>
                     <div className="flex items-center gap-2 mt-1">
-                      <div className="w-4.5 h-4.5 rounded-full border border-black/5" style={{ backgroundColor: primaryColor }} />
-                      <span className="text-on-surface font-bold text-sm">{primaryColor}</span>
+                      <div className="w-6 h-6 rounded-full border border-black/5 shadow-inner" style={{ backgroundColor: primaryColor }} />
+                      <span className="text-on-surface font-bold text-sm">
+                        {COLOR_PRESETS.find(c => c.hex.toLowerCase() === primaryColor.toLowerCase())?.name || "Custom"} ({primaryColor})
+                      </span>
                     </div>
                   </div>
                   <div>
                     <span className="text-on-surface-variant block uppercase tracking-wider text-[10px]">Default Language</span>
-                    <span className="text-on-surface font-bold text-sm uppercase">{language}</span>
+                    <span className="text-on-surface font-bold text-sm">
+                      {language === "en" ? "English" : language === "hi" ? "Hindi (हिन्दी)" : "Gujarati (ગુજરાતી)"}
+                    </span>
                   </div>
                 </div>
+
+                {description && (
+                  <div className="border-t border-sandstone/50 pt-4 mt-2">
+                    <span className="text-on-surface-variant block uppercase tracking-wider text-[10px] font-bold mb-1">
+                      Mandal Bio / Description
+                    </span>
+                    <p className="text-xs text-on-surface font-bold leading-relaxed">
+                      {description}
+                    </p>
+                  </div>
+                )}
 
                 {mainEventName && (
                   <div className="border-t border-sandstone/50 pt-4 mt-2">
@@ -526,7 +586,7 @@ export default function OnboardingPage() {
                     </span>
                     <p className="text-xs text-on-surface leading-relaxed font-bold">
                       {mainEventName}{" "}
-                      {startDate && `(from ${startDate} ${endDate ? `to ${endDate}` : ""})`}
+                      {startDate && `(from ${formatDateString(startDate)} ${endDate ? `to ${formatDateString(endDate)}` : ""})`}
                     </p>
                   </div>
                 )}
@@ -544,7 +604,7 @@ export default function OnboardingPage() {
                 className="h-14 px-md bg-white border border-sandstone hover:bg-cream/35 text-on-surface-variant font-headline-sm text-headline-sm rounded-xl transition-all flex items-center justify-center gap-2"
                 type="button"
               >
-                <span className="material-symbols-outlined">arrow_back</span>
+                <ArrowLeft className="h-5 w-5" />
                 Back
               </button>
             )}
@@ -552,12 +612,12 @@ export default function OnboardingPage() {
             {step < 4 ? (
               <button
                 onClick={handleNext}
-                disabled={!name || !slug || !city || (slugCheck && !slugCheck.available)}
+                disabled={!name || !slug || !city || !address || (slugCheck && !slugCheck.available)}
                 className="flex-grow h-14 bg-primary-container text-on-primary-fixed font-headline-sm text-headline-sm rounded-xl shadow-lg hover:bg-primary-container/90 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 group disabled:opacity-50"
                 type="button"
               >
                 Next Step
-                <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </button>
             ) : (
               <button
@@ -574,7 +634,7 @@ export default function OnboardingPage() {
                 ) : (
                   <>
                     Launch Portal
-                    <span className="material-symbols-outlined">celebration</span>
+                    <PartyPopper className="h-5 w-5" />
                   </>
                 )}
               </button>
@@ -582,32 +642,16 @@ export default function OnboardingPage() {
           </div>
 
         </div>
-
-        {/* Trust Badges / Info Footer */}
-        <div className="mt-xl flex flex-wrap justify-center gap-lg relative z-10">
-          <div className="flex items-center gap-2 bg-tulsi-green/10 text-tulsi-green px-4 py-2 rounded-full border border-tulsi-green/20">
-            <span className="material-symbols-outlined text-[18px]">security</span>
-            <span className="font-label-sm text-label-sm font-bold">Secure Data Handling</span>
-          </div>
-          <div className="flex items-center gap-2 bg-primary/5 text-primary px-4 py-2 rounded-full border border-primary/10">
-            <span className="material-symbols-outlined text-[18px]">celebration</span>
-            <span className="font-label-sm text-label-sm font-bold">5,000+ Mandals Registered</span>
-          </div>
-        </div>
-
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 w-full py-xl px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-lg border-t border-sandstone bg-surface-container-low mt-3xl">
-        <div className="flex flex-col items-center md:items-start gap-1">
-          <span className="font-headline-sm text-headline-sm text-primary font-bold">Utsav</span>
-          <p className="font-body-md text-body-md text-on-surface-variant">© 2026 Utsav Digital Platforms. All rights reserved.</p>
+      {/* Footer Links */}
+      <footer className="mt-xl text-center flex flex-col gap-md py-xl relative z-10">
+        <div className="flex justify-center items-center gap-xl text-outline font-label-sm">
+          <a className="hover:text-on-surface transition-colors" href="/privacy-policy">Privacy Policy</a>
+          <a className="hover:text-on-surface transition-colors" href="/terms-of-service">Terms of Service</a>
+          <a className="hover:text-on-surface transition-colors" href="/help-center">Help Center</a>
         </div>
-        <div className="flex gap-lg">
-          <a className="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">Privacy Policy</a>
-          <a className="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">Terms of Service</a>
-          <a className="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">Contact</a>
-        </div>
+        <p className="text-outline font-label-sm mt-md opacity-60">© {new Date().getFullYear()} Utsav Digital Platforms. All rights reserved.</p>
       </footer>
 
     </div>

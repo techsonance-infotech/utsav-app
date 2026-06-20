@@ -257,7 +257,7 @@ export default function SuperAdminPage() {
                             </div>
                             <div>
                               <p className="font-semibold text-gray-900">{t.name}</p>
-                              <p className="text-xs text-gray-400 font-mono">{t.slug}.utsav.app</p>
+                              <p className="text-xs text-gray-400 font-mono">{t.slug}.techsonance.co.in</p>
                             </div>
                           </div>
                         </td>

@@ -7,7 +7,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { email, password } = body;
+    const { email, password, tenantId } = body;
 
     if (!email || !password) {
       return NextResponse.json({ message: "Email and password are required" }, { status: 400 });
@@ -51,14 +51,49 @@ export async function POST(req: Request) {
       auth: { persistSession: false },
     });
 
-    const { data: membership } = await serviceClient
+    // Auto-associate user with tenant if not already a member
+    if (tenantId) {
+      const { data: existingMember } = await serviceClient
+        .from("tenant_members")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+
+      if (!existingMember) {
+        const { error: linkError } = await serviceClient.from("tenant_members").insert({
+          tenant_id: tenantId,
+          user_id: data.user.id,
+          role: "member",
+          status: "active",
+          full_name: data.user.user_metadata?.full_name || email.split("@")[0],
+          phone: data.user.user_metadata?.phone || null,
+        });
+        if (linkError) {
+          console.error("DEBUG LOGIN: Failed to auto-link user on login:", linkError);
+        }
+      }
+    }
+
+    const membershipQuery = serviceClient
       .from("tenant_members")
       .select("tenant_id, role, tenants(name, slug)")
       .eq("user_id", data.user.id)
-      .eq("status", "active")
-      .order("joined_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .eq("status", "active");
+
+    if (tenantId) {
+      membershipQuery.eq("tenant_id", tenantId);
+    } else {
+      membershipQuery.order("joined_at", { ascending: true }).limit(1);
+    }
+
+    const { data: membership, error: dbError } = await membershipQuery.maybeSingle();
+
+    console.log("DEBUG LOGIN: User ID =", data.user.id);
+    console.log("DEBUG LOGIN: Query Result =", membership);
+    if (dbError) {
+      console.error("DEBUG LOGIN: Database Error =", dbError);
+    }
 
     const tenant = membership
       ? {
@@ -68,6 +103,8 @@ export async function POST(req: Request) {
           role: membership.role,
         }
       : null;
+
+    console.log("DEBUG LOGIN: Resolved Tenant =", tenant);
 
     return NextResponse.json({
       accessToken: data.session.access_token,

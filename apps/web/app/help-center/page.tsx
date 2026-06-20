@@ -2,6 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import {
+  Search,
+  CreditCard,
+  ChevronRight,
+  PartyPopper,
+  Settings,
+  ChevronDown,
+  Headphones,
+  Mail,
+  Globe,
+  Share2
+} from "lucide-react";
 
 export default function HelpCenterPage() {
   const [openFaq, setOpenFaq] = useState<string | null>(null);
@@ -124,11 +136,9 @@ export default function HelpCenterPage() {
                   : "shadow-[0_0_25px_rgba(255,149,0,0.15)]"
               }`}
             >
-              <span className="material-symbols-outlined absolute left-lg top-1/2 -translate-y-1/2 text-primary text-2xl">
-                search
-              </span>
+              <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-primary h-6 w-6 pointer-events-none" />
               <input
-                className="w-full h-16 pl-3xl pr-lg rounded-2xl border-sandstone bg-puja-white shadow-md focus:ring-2 focus:ring-primary-container focus:border-primary-container outline-none transition-all text-body-lg"
+                className="w-full h-16 pl-16 pr-6 rounded-2xl border-sandstone bg-puja-white shadow-md focus:ring-2 focus:ring-primary-container focus:border-primary-container outline-none transition-all text-body-lg"
                 placeholder="Search for donations, events, technical guides..."
                 type="text"
                 value={searchQuery}
@@ -169,9 +179,7 @@ export default function HelpCenterPage() {
             {/* Donations Category */}
             <div className="bg-white/85 backdrop-blur-md border border-sandstone/50 p-xl rounded-2xl hover:shadow-lg transition-all group cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-primary-container/10 flex items-center justify-center mb-lg group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-primary text-3xl">
-                  payments
-                </span>
+                <CreditCard className="text-primary h-7 w-7" />
               </div>
               <h3 className="font-headline-md text-headline-md mb-md text-on-surface">
                 Donations
@@ -183,9 +191,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     Refund policy{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
                 <li>
@@ -194,9 +200,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     Receipt generation{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
                 <li>
@@ -205,9 +209,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     International payments{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
               </ul>
@@ -216,9 +218,7 @@ export default function HelpCenterPage() {
             {/* Events Category */}
             <div className="bg-white/85 backdrop-blur-md border border-sandstone/50 p-xl rounded-2xl hover:shadow-lg transition-all group cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-haldi-yellow/10 flex items-center justify-center mb-lg group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-haldi-yellow text-3xl">
-                  celebration
-                </span>
+                <PartyPopper className="text-haldi-yellow h-7 w-7" />
               </div>
               <h3 className="font-headline-md text-headline-md mb-md text-on-surface">
                 Events
@@ -230,9 +230,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     Creating new events{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
                 <li>
@@ -241,9 +239,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     Volunteer management{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
                 <li>
@@ -252,9 +248,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     Ticketing &amp; RSVP{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
               </ul>
@@ -263,9 +257,7 @@ export default function HelpCenterPage() {
             {/* Technical Support */}
             <div className="bg-white/85 backdrop-blur-md border border-sandstone/50 p-xl rounded-2xl hover:shadow-lg transition-all group cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-tulsi-green/10 flex items-center justify-center mb-lg group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-tulsi-green text-3xl">
-                  settings_suggest
-                </span>
+                <Settings className="text-tulsi-green h-7 w-7" />
               </div>
               <h3 className="font-headline-md text-headline-md mb-md text-on-surface">
                 Technical Support
@@ -277,9 +269,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     Data export guide{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
                 <li>
@@ -288,9 +278,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     Security &amp; Privacy{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
                 <li>
@@ -299,9 +287,7 @@ export default function HelpCenterPage() {
                     href="#"
                   >
                     Integrations API{" "}
-                    <span className="material-symbols-outlined text-sm">
-                      chevron_right
-                    </span>
+                    <ChevronRight className="h-4 w-4" />
                   </a>
                 </li>
               </ul>
@@ -334,15 +320,13 @@ export default function HelpCenterPage() {
                       <span className="font-headline-sm text-headline-sm text-on-surface">
                         {faq.question}
                       </span>
-                      <span
-                        className="material-symbols-outlined transition-transform duration-300"
+                      <ChevronDown
+                        className="transition-transform duration-300"
                         style={{
                           transform:
                             openFaq === faq.id ? "rotate(180deg)" : "rotate(0deg)",
                         }}
-                      >
-                        expand_more
-                      </span>
+                      />
                     </button>
                     {openFaq === faq.id && (
                       <div className="p-lg pt-0 border-t border-sandstone/50 bg-puja-white animate-in fade-in duration-200">
@@ -385,13 +369,11 @@ export default function HelpCenterPage() {
               </p>
               <div className="flex flex-wrap gap-md">
                 <button className="px-xl py-lg bg-primary-container text-on-primary-container rounded-xl font-headline-sm text-headline-sm hover:scale-95 transition-transform flex items-center gap-sm">
-                  <span className="material-symbols-outlined">
-                    support_agent
-                  </span>
+                  <Headphones className="h-5 w-5" />
                   Live Chat Support
                 </button>
                 <button className="px-xl py-lg border border-sandstone/30 text-puja-white rounded-xl font-headline-sm text-headline-sm hover:bg-white/5 transition-all flex items-center gap-sm">
-                  <span className="material-symbols-outlined">mail</span>
+                  <Mail className="h-5 w-5" />
                   Email Us
                 </button>
               </div>
@@ -451,13 +433,13 @@ export default function HelpCenterPage() {
             className="w-10 h-10 rounded-full bg-cream flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all"
             href="#"
           >
-            <span className="material-symbols-outlined text-lg">public</span>
+            <Globe className="h-5 w-5" />
           </a>
           <a
             className="w-10 h-10 rounded-full bg-cream flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all"
             href="#"
           >
-            <span className="material-symbols-outlined text-lg">share</span>
+            <Share2 className="h-5 w-5" />
           </a>
         </div>
       </footer>

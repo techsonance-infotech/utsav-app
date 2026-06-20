@@ -28,7 +28,7 @@ export async function GET(
       .select(`
         *,
         category:expense_categories(id, name, color, icon),
-        vendor:vendors(id, name, phone)
+        vendor:vendors(id, business_name, phone)
       `)
       .eq("id", expenseId)
       .eq("tenant_id", tenantId)

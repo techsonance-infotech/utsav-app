@@ -31,7 +31,7 @@ export default function MobileSettingsScreen() {
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Subdomain</Text>
-            <Text style={[styles.value, styles.mono]}>{tenant?.slug || "sai"}.utsav.app</Text>
+            <Text style={[styles.value, styles.mono]}>{tenant?.slug || "sai"}.techsonance.co.in</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Category</Text>

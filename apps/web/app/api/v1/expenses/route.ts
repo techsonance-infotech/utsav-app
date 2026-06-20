@@ -23,7 +23,7 @@ export async function GET(req: Request) {
       .select(`
         *,
         category:expense_categories(id, name, color, icon),
-        vendor:vendors(id, name, phone)
+        vendor:vendors(id, business_name, phone)
       `)
       .eq("tenant_id", tenantId)
       .order("expense_date", { ascending: false });

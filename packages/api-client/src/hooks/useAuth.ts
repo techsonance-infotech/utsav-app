@@ -9,8 +9,8 @@ export function useSignUp() {
       password: string;
       firstName?: string;
       lastName?: string;
-      username?: string;
       phone?: string;
+      tenantId?: string;
     }) => {
       return apiClient<{
         user: { id: string; email: string; full_name: string };
@@ -26,7 +26,7 @@ export function useLogin() {
   const setAuth = useAuthStore((state) => state.setAuth);
 
   return useMutation({
-    mutationFn: async (credentials: { email: string; password?: string; phone?: string; otp?: string }) => {
+    mutationFn: async (credentials: { email: string; password?: string; phone?: string; otp?: string; tenantId?: string }) => {
       return apiClient<{
         accessToken: string;
         refreshToken: string;

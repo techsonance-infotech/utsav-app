@@ -10,7 +10,17 @@ import {
 } from "@utsav/api-client";
 import {
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Mail,
+  ArrowRight,
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound,
+  CheckCircle2,
+  ArrowLeft,
+  Flame,
+  PartyPopper
 } from "lucide-react";
 
 type Step = "REQUEST" | "VERIFY" | "RESET" | "SUCCESS";
@@ -134,10 +144,10 @@ export default function ForgotPasswordPage() {
       {/* Background Decorative Garlands */}
       <div className="fixed inset-0 z-0 opacity-20 pointer-events-none">
         <div className="absolute top-0 left-0 w-24 md:w-48 pointer-events-none opacity-40 z-20">
-          <div className="w-full aspect-square bg-contain bg-no-repeat" style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuD5WuXiPps5xhagiMiyF9ND7UvE3q2lARoLPND5aqgtez4Ad4R7ljMEbnrfwTL9oV1JwLwYdNlMeLgiuBxWXeaFTF53QCloGuR73gmzBT3ziOXe6XEtwLS1htjp0JFn8_24rE4AIc0kjvm3f3XM-O3kxw6ckMleGZbJj2_g0LL_pvhMAHqkTC6rLok7lfITThtWhQzAMV4CvUyrEzGhzLovtvTzybpUWbnhJHU8cOU1_t9wnCe-7t4j')" }}></div>
+          <div className="w-full aspect-square bg-contain bg-no-repeat" style={{ backgroundImage: "url('/assets/garland-forgot-left.png')" }}></div>
         </div>
         <div className="absolute top-0 right-0 w-24 md:w-48 pointer-events-none opacity-40 z-20 transform scale-x-[-1]">
-          <div className="w-full aspect-square bg-contain bg-no-repeat" style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuB-IcePHugUVg4D0LqdQ8_vnR2PLYOcNeh8C3eC4rRAP8RIRxlYAWzdOLxW8A_YIj28aGIXcI_l6veQPM9k3adAZIFMrsEA4Nxe-vWtuQX1B5oaOGKLMR49YjPAhKS7mSfLqOFcvgiY6cntkvIKUGPrkzsXQ3ELbh6TsnVlHJXzmDQ0xs-ZOXCiM_B6PsfwOWuHKZdUIvg8NIROaEUvSrvA2x23eA8PTyLXJFqfTec8Q3X9FfycO8W4')" }}></div>
+          <div className="w-full aspect-square bg-contain bg-no-repeat" style={{ backgroundImage: "url('/assets/garland-forgot-right.png')" }}></div>
         </div>
       </div>
 
@@ -188,7 +198,7 @@ export default function ForgotPasswordPage() {
                 <div className="space-y-xs">
                   <label className="font-label-md text-label-md text-on-surface-variant ml-1" htmlFor="email">Email Address</label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">mail</span>
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-outline h-5 w-5 pointer-events-none" />
                     <input
                       className="w-full h-12 pl-12 pr-4 bg-cream/50 border border-sandstone rounded-xl focus:ring-2 focus:ring-primary-container focus:border-primary-container outline-none transition-all duration-200 placeholder:text-outline/60 font-body-md text-on-surface"
                       id="email"
@@ -212,7 +222,7 @@ export default function ForgotPasswordPage() {
                   ) : (
                     <>
                       <span>Send Reset Code</span>
-                      <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                      <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                     </>
                   )}
                 </button>
@@ -253,7 +263,7 @@ export default function ForgotPasswordPage() {
                   ) : (
                     <>
                       <span>Verify Code</span>
-                      <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                      <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                     </>
                   )}
                 </button>
@@ -282,7 +292,7 @@ export default function ForgotPasswordPage() {
                 <div className="space-y-xs">
                   <label className="font-label-md text-label-md text-on-surface-variant ml-1" htmlFor="password">New Password</label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">lock</span>
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-outline h-5 w-5 pointer-events-none" />
                     <input
                       className="w-full h-12 pl-12 pr-12 bg-cream/50 border border-sandstone rounded-xl focus:ring-2 focus:ring-primary-container focus:border-primary-container outline-none transition-all duration-200 font-body-md text-on-surface"
                       id="password"
@@ -298,9 +308,11 @@ export default function ForgotPasswordPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors"
                     >
-                      <span className="material-symbols-outlined text-[20px]">
-                        {showPassword ? "visibility_off" : "visibility"}
-                      </span>
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -308,7 +320,7 @@ export default function ForgotPasswordPage() {
                 <div className="space-y-xs">
                   <label className="font-label-md text-label-md text-on-surface-variant ml-1" htmlFor="confirmPassword">Confirm New Password</label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">lock_reset</span>
+                    <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-outline h-5 w-5 pointer-events-none" />
                     <input
                       className="w-full h-12 pl-12 pr-4 bg-cream/50 border border-sandstone rounded-xl focus:ring-2 focus:ring-primary-container focus:border-primary-container outline-none transition-all duration-200 font-body-md text-on-surface"
                       id="confirmPassword"
@@ -332,7 +344,7 @@ export default function ForgotPasswordPage() {
                   ) : (
                     <>
                       <span>Save New Password</span>
-                      <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                      <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                     </>
                   )}
                 </button>
@@ -343,7 +355,7 @@ export default function ForgotPasswordPage() {
             {step === "SUCCESS" && (
               <div className="text-center space-y-md animate-in fade-in duration-500">
                 <div className="w-16 h-16 bg-tulsi-green/10 text-tulsi-green rounded-full flex items-center justify-center mx-auto mb-md">
-                  <span className="material-symbols-outlined text-[32px]">check_circle</span>
+                  <CheckCircle2 className="h-8 w-8" />
                 </div>
                 <p className="font-body-lg text-on-surface">Password updated successfully!</p>
                 <p className="font-body-md text-on-surface-variant">You can now proceed to log in with your new credentials.</p>
@@ -367,7 +379,7 @@ export default function ForgotPasswordPage() {
                   }}
                   className="flex items-center gap-xs font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 group"
                 >
-                  <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                  <ArrowLeft className="h-[18px] w-[18px]" />
                   <span>{step === "REQUEST" ? "Back to Login" : "Back"}</span>
                 </button>
               </div>
@@ -378,13 +390,13 @@ export default function ForgotPasswordPage() {
           {/* Contextual Illustration/Decoration */}
           <div className="mt-2xl flex justify-center items-center gap-xl opacity-30 breathe-animation">
             <div className="text-aarti-gold diya-glow">
-              <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>fireplace</span>
+              <Flame className="h-[30px] w-[30px] fill-current" />
             </div>
             <div className="text-primary-container diya-glow">
-              <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>celebration</span>
+              <PartyPopper className="h-[40px] w-[40px]" />
             </div>
             <div className="text-aarti-gold diya-glow">
-              <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>fireplace</span>
+              <Flame className="h-[30px] w-[30px] fill-current" />
             </div>
           </div>
 

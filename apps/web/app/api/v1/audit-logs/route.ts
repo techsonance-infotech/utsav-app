@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { checkRole, createServiceRoleClient } from "../utils";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
   const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin"]);
   if (!hasAccess) return errorResponse!;

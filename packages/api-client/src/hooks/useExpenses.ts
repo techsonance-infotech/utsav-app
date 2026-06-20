@@ -4,23 +4,23 @@ import type { Expense, CreateExpenseInput, ExpenseCategory } from "@utsav/types"
 import { useAuthStore } from "@utsav/stores";
 
 export function useExpenses(status?: string) {
-  const { tenantId } = useAuthStore();
+  const { tenantId, userId } = useAuthStore();
   return useQuery({
     queryKey: ["expenses", tenantId, status],
     queryFn: () => {
       const url = `/expenses${status ? `?status=${status}` : ""}`;
       return apiClient<Expense[]>(url);
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!userId,
   });
 }
 
 export function useExpenseCategories() {
-  const { tenantId } = useAuthStore();
+  const { tenantId, userId } = useAuthStore();
   return useQuery({
     queryKey: ["expense-categories", tenantId],
     queryFn: () => apiClient<ExpenseCategory[]>("/expense-categories"),
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!userId,
   });
 }
 

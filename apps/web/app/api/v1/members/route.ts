@@ -55,5 +55,24 @@ export async function GET(req: Request) {
     return NextResponse.json({ message: dbError.message }, { status: 500 });
   }
 
-  return NextResponse.json(members);
+  // Fetch emails from auth.users list using service role client admin API
+  try {
+    const { data: authData } = await supabase.auth.admin.listUsers();
+    const emailMap = new Map((authData?.users || []).map((u) => [u.id, u.email]));
+
+    const membersWithEmail = (members || []).map((m: any) => ({
+      ...m,
+      email: emailMap.get(m.user_id) || `${m.full_name.toLowerCase().replace(/\s+/g, ".")}@utsavmail.com`,
+    }));
+
+    return NextResponse.json(membersWithEmail);
+  } catch (err) {
+    // Fallback if auth list fails
+    const membersWithEmail = (members || []).map((m: any) => ({
+      ...m,
+      email: `${m.full_name.toLowerCase().replace(/\s+/g, ".")}@utsavmail.com`,
+    }));
+    return NextResponse.json(membersWithEmail);
+  }
 }
+

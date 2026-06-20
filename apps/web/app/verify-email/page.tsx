@@ -5,56 +5,76 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
-type VerificationStatus = "VERIFYING" | "SUCCESS" | "ERROR";
+type VerificationStatus = "VERIFYING" | "SUCCESS" | "ERROR" | "MANUAL";
 
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("token");
+  const urlToken = searchParams.get("token");
+  const urlEmail = searchParams.get("email");
 
-  const [status, setStatus] = useState<VerificationStatus>("VERIFYING");
+  const [status, setStatus] = useState<VerificationStatus>(urlToken ? "VERIFYING" : "MANUAL");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  // Manual form state
+  const [emailInput, setEmailInput] = useState(urlEmail || "");
+  const [codeInput, setCodeInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const verifyCode = async (tokenToVerify: string, emailToVerify: string) => {
+    try {
+      const response = await fetch("/api/v1/auth/verify-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token: tokenToVerify, email: emailToVerify }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setStatus("SUCCESS");
+        setSuccessMessage(data.message || "Your email has been verified successfully.");
+        // Redirect to login after 5 seconds automatically
+        setTimeout(() => {
+          router.push("/login");
+        }, 5000);
+      } else {
+        setStatus("MANUAL");
+        setErrorMessage(data.message || "Verification failed. The code might have expired.");
+      }
+    } catch (err: any) {
+      setStatus("MANUAL");
+      setErrorMessage("An unexpected error occurred during email verification.");
+    }
+  };
 
   useEffect(() => {
-    if (!token) {
-      setStatus("ERROR");
-      setErrorMessage("The email verification link is invalid or missing.");
+    if (urlToken) {
+      verifyCode(urlToken, urlEmail || "");
+    }
+  }, [urlToken, urlEmail]);
+
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput || !codeInput) {
+      setErrorMessage("Email and verification code are required.");
       return;
     }
-
-    const verifyToken = async () => {
-      try {
-        const response = await fetch("/api/v1/auth/verify-email", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ token }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-          setStatus("SUCCESS");
-          // Redirect to login after 5 seconds automatically
-          setTimeout(() => {
-            router.push("/login");
-          }, 5000);
-        } else {
-          setStatus("ERROR");
-          setErrorMessage(data.message || "Verification failed. The token might have expired.");
-        }
-      } catch (err: any) {
-        setStatus("ERROR");
-        setErrorMessage("An unexpected error occurred during email verification.");
-      }
-    };
-
-    verifyToken();
-  }, [token, router]);
+    if (!/^\d{6}$/.test(codeInput)) {
+      setErrorMessage("Verification code must be exactly 6 digits.");
+      return;
+    }
+    setErrorMessage("");
+    setIsSubmitting(true);
+    await verifyCode(codeInput, emailInput);
+    setIsSubmitting(false);
+  };
 
   return (
-    <div className="glass-card border border-sandstone rounded-xl shadow-md p-xl flex flex-col items-center text-center gap-lg">
+    <div className="glass-card border border-sandstone rounded-xl shadow-md p-xl flex flex-col items-center text-center gap-lg w-full">
       {status === "VERIFYING" && (
         <div className="flex flex-col items-center gap-md py-xl animate-pulse">
           <Loader2 className="w-16 h-16 text-primary animate-spin" />
@@ -71,7 +91,7 @@ function VerifyEmailContent() {
           </div>
           <h2 className="font-headline-md text-headline-md text-emerald-700 mt-md">Account Verified!</h2>
           <p className="font-body-md text-on-surface-variant max-w-sm">
-            Your email has been successfully verified. Your 14-day premium trial is now active.
+            {successMessage || "Your email has been successfully verified. Your 14-day premium trial is now active."}
           </p>
           <p className="font-body-sm text-outline mt-sm">
             Redirecting to login page in 5 seconds...
@@ -85,19 +105,74 @@ function VerifyEmailContent() {
         </div>
       )}
 
-      {status === "ERROR" && (
-        <div className="flex flex-col items-center gap-md py-md">
-          <XCircle className="w-16 h-16 text-rose-600" />
-          <h2 className="font-headline-md text-headline-md text-rose-700 mt-md">Verification Failed</h2>
-          <p className="font-body-md text-on-surface-variant max-w-sm">
-            {errorMessage}
+      {status === "MANUAL" && (
+        <div className="w-full flex flex-col gap-md py-md">
+          <h2 className="font-headline-md text-headline-md text-on-surface">Enter Verification Code</h2>
+          <p className="font-body-md text-on-surface-variant mb-md text-sm">
+            Please enter your email and the 6-digit verification code sent to your inbox.
           </p>
-          <Link
-            href="/register"
-            className="w-full h-12 mt-lg bg-primary text-on-primary rounded-xl font-label-md flex items-center justify-center shadow-md hover:bg-surface-tint active:scale-98 transition-all"
-          >
-            Back to Registration
-          </Link>
+
+          {errorMessage && (
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-rose-50 border border-rose-100 text-left animate-in slide-in-from-top-2 duration-300">
+              <span className="text-rose-600 text-sm mt-0.5">⚠️</span>
+              <p className="text-xs text-rose-700 font-medium leading-relaxed">{errorMessage}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleManualSubmit} className="space-y-md text-left">
+            <div className="space-y-xs">
+              <label className="block font-label-md text-label-md text-on-surface-variant" htmlFor="email">Email Address</label>
+              <input
+                id="email"
+                type="email"
+                required
+                className="w-full h-12 px-4 bg-cream border border-sandstone rounded-xl focus:border-primary focus:ring-4 focus:ring-primary-container/10 outline-none transition-all text-body-md"
+                placeholder="rahul@example.com"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-xs">
+              <label className="block font-label-md text-label-md text-on-surface-variant" htmlFor="code">Verification Code</label>
+              <input
+                id="code"
+                type="text"
+                required
+                maxLength={6}
+                className="w-full h-12 px-4 bg-cream border border-sandstone rounded-xl focus:border-primary focus:ring-4 focus:ring-primary-container/10 outline-none transition-all text-center text-xl font-bold tracking-widest"
+                placeholder="123456"
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !emailInput || codeInput.length !== 6}
+              className="w-full h-12 bg-primary-container text-on-primary-container font-label-md rounded-xl shadow-md hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2 mt-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Verify Code"
+              )}
+            </button>
+          </form>
+
+          <div className="flex justify-between items-center mt-md text-xs">
+            <Link href="/register" className="text-primary hover:underline">
+              Back to Register
+            </Link>
+            <Link href="/login" className="text-on-surface-variant hover:underline">
+              Sign In
+            </Link>
+          </div>
         </div>
       )}
     </div>
@@ -143,17 +218,16 @@ export default function VerifyEmailPage() {
           <VerifyEmailContent />
         </Suspense>
 
+        {/* Footer Links */}
+        <footer className="mt-xl text-center flex flex-col gap-md">
+          <div className="flex justify-center items-center gap-xl text-outline font-label-sm">
+            <Link className="hover:text-on-surface transition-colors" href="/privacy-policy">Privacy Policy</Link>
+            <Link className="hover:text-on-surface transition-colors" href="/terms-of-service">Terms of Service</Link>
+            <Link className="hover:text-on-surface transition-colors" href="/help-center">Help Center</Link>
+          </div>
+          <p className="text-outline font-label-sm mt-md opacity-60">© {new Date().getFullYear()} Utsav Digital Platforms. All rights reserved.</p>
+        </footer>
       </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 w-full py-xl px-margin-mobile md:px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-lg border-t border-sandstone/50 bg-surface-container-low/50 backdrop-blur-sm mt-8">
-        <p className="font-body-md text-body-md text-on-surface-variant">© {new Date().getFullYear()} Utsav Digital Platforms. All rights reserved.</p>
-        <div className="flex gap-lg">
-          <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary hover:underline underline-offset-4 transition-all" href="/privacy-policy">Privacy Policy</Link>
-          <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary hover:underline underline-offset-4 transition-all" href="/terms-of-service">Terms of Service</Link>
-          <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary hover:underline underline-offset-4 transition-all" href="/help-center">Help Center</Link>
-        </div>
-      </footer>
     </div>
   );
 }

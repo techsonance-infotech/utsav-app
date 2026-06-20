@@ -1,6 +1,9 @@
 import React from "react";
 import { createServiceRoleClient } from "../../../api/v1/utils";
 import Link from "next/link";
+import { Flame, Newspaper } from "lucide-react";
+import NewsGrid from "../../../components/NewsGrid";
+import PublicHeader from "../../../components/PublicHeader";
 
 interface PublicNewsPageProps {
   params: {
@@ -17,7 +20,8 @@ export async function generateMetadata({ params }: PublicNewsPageProps) {
     .single();
 
   return {
-    title: tenant?.name ? `${tenant.name} | News 🪔` : "Mandal News",
+    title: tenant?.name ? `${tenant.name} | News & Updates 🪔` : "Mandal News",
+    description: `Stay updated with the latest bulletins, spiritual updates and events of ${tenant?.name || "Mandal"}`,
   };
 }
 
@@ -26,77 +30,159 @@ export default async function PublicNewsPage({ params }: PublicNewsPageProps) {
 
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("id, name")
+    .select("id, name, slug, primary_color, description, city, state, address, whatsapp_group_url")
     .eq("slug", params.slug)
     .single();
 
   if (!tenant) {
-    return <div className="p-8 text-center text-gray-500 text-sm">Tenant not found</div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="text-center p-8 bg-white shadow-xl rounded-2xl max-w-md border border-gray-150">
+          <span className="text-5xl">⚠️</span>
+          <h2 className="text-2xl font-bold text-gray-800 mt-4">Organization Not Found</h2>
+        </div>
+      </div>
+    );
   }
 
-  // Fetch all published news
-  const { data: news } = await supabase
-    .from("news")
-    .select("*")
-    .eq("tenant_id", tenant.id)
-    .eq("status", "published")
-    .order("created_at", { ascending: false });
+  // Fetch all published news from the public API
+  let news: any[] = [];
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/v1/public/news?slug=${params.slug}`,
+      { cache: "no-store" }
+    );
+    if (res.ok) {
+      news = await res.json();
+    }
+  } catch (err) {
+    console.error("Failed to fetch public news from API:", err);
+  }
+
+  const primaryColor = tenant.primary_color || "#ff9500";
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] text-gray-800 flex flex-col">
-      {/* Header */}
-      <div className="w-full py-16 bg-gradient-to-r from-orange-500 to-amber-600 text-center text-white">
-        <h1 className="text-3xl md:text-4xl font-black">Mandal News & Feed</h1>
-        <p className="text-sm opacity-90 mt-2">Latest press releases, statements, and community announcements</p>
-      </div>
+    <div className="min-h-screen bg-[#FAFAF8] text-[#1e1b18] flex flex-col font-sans selection:bg-[#ff9500]/25 selection:text-[#2d1600]">
+      {/* Navigation Header */}
+      <PublicHeader tenant={tenant} currentSlug={params.slug} />
 
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-100 shadow-sm z-30">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <span className="font-extrabold text-orange-600 tracking-wide text-lg">🪔 UTSAV</span>
-          <div className="flex items-center gap-6 text-sm font-semibold text-gray-600">
-            <Link href={`/public/${params.slug}`} className="hover:text-orange-600">Home</Link>
-            <Link href={`/public/${params.slug}/about`} className="hover:text-orange-600">About</Link>
-            <Link href={`/public/${params.slug}/events`} className="hover:text-orange-600">Events</Link>
-            <Link href={`/public/${params.slug}/news`} className="text-orange-600">News</Link>
-            <Link href={`/public/${params.slug}/gallery`} className="hover:text-orange-600">Gallery</Link>
+      <main className="flex-grow">
+        {/* 1. Hero Section with custom brand glows */}
+        <section className="relative min-h-[380px] flex items-center overflow-hidden py-16 bg-gradient-to-br from-[#2d1b0d] via-[#1e140a] to-[#140d06] text-white">
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none z-0" />
+          <div className="absolute top-1/2 left-1/3 -translate-y-1/2 w-80 h-80 rounded-full blur-3xl pointer-events-none z-0 opacity-30"
+            style={{ backgroundColor: primaryColor }} />
+          <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none z-0" />
+
+          <div className="relative z-10 px-6 max-w-7xl mx-auto w-full text-center space-y-5">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white/5 backdrop-blur-md rounded-full border border-white/10">
+              <span className="material-symbols-outlined text-sm text-[#ff9500] animate-pulse">campaign</span>
+              <span className="text-[10px] uppercase tracking-widest text-[#ffdcbf] font-black">Bulletins</span>
+            </div>
+            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight uppercase leading-tight font-headline-lg max-w-3xl mx-auto">
+              News & <span style={{ color: primaryColor }}>Bulletins</span>
+            </h1>
+            <p className="text-xs md:text-sm text-gray-300 max-w-lg mx-auto leading-relaxed">
+              Stay up-to-date with Mandal announcements, administrative releases, emergency notes, and holiday updates.
+            </p>
           </div>
-          <Link
-            href={`/public/${params.slug}/donate`}
-            className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-bold shadow-md transition-colors"
-          >
-            Donate
-          </Link>
-        </div>
-      </nav>
+        </section>
 
-      {/* Content */}
-      <main className="max-w-4xl mx-auto px-6 py-12 flex-1 w-full">
-        <div className="flex flex-col gap-8">
+        {/* 2. News Bulletins Content */}
+        <section className="py-16 px-6 max-w-7xl mx-auto w-full">
           {news && news.length > 0 ? (
-            news.map((item) => (
-              <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 shadow-xs">
-                <span className="text-xxs font-black text-orange-600 uppercase tracking-widest">{item.language || "English"}</span>
-                <h2 className="text-2xl font-bold text-gray-900 mt-1">{item.title}</h2>
-                <p className="text-xs text-gray-400 mt-2">Published on {new Date(item.created_at).toLocaleDateString()}</p>
-                {item.summary && <p className="text-sm font-medium text-gray-700 bg-gray-50 p-4 rounded-xl mt-4 border border-gray-100">{item.summary}</p>}
-                {item.content && (
-                  <div
-                    className="text-sm text-gray-600 leading-relaxed mt-6 prose max-w-none"
-                    dangerouslySetInnerHTML={{ __html: item.content }}
-                  />
-                )}
-              </div>
-            ))
+            <NewsGrid news={news} primaryColor={primaryColor} />
           ) : (
-            <p className="text-center text-gray-500 py-12">No announcements found at this time.</p>
+            <div className="bg-white border border-dashed border-[#E8E2D6] p-16 rounded-[32px] text-center max-w-md mx-auto space-y-4">
+              <span className="text-5xl block">📰</span>
+              <h4 className="font-black text-sm text-[#3A3530] uppercase">No Bulletins Found</h4>
+              <p className="text-xxs text-gray-500 font-semibold leading-relaxed">
+                There are no published news updates or announcements for this Mandal currently.
+              </p>
+            </div>
           )}
-        </div>
+        </section>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-8 text-center text-xs mt-12 border-t border-gray-800">
-        <p>© {new Date().getFullYear()} {tenant.name}. All rights reserved.</p>
+      {/* 9. Specialized Public Slug Footer */}
+      <footer className="w-full py-16 bg-[#e9e1dc] border-t border-[#dbc2ad] relative z-10 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 px-6 max-w-7xl mx-auto">
+          
+          {/* Col 1: Mandal Info */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#8c5000] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                temple_hindu
+              </span>
+              <span className="font-black text-sm uppercase tracking-wider text-[#3A3530]">{tenant.name}</span>
+            </div>
+            <p className="text-gray-500 leading-relaxed font-medium line-clamp-4">
+              {tenant.description || "Preserving traditional heritage and promoting community welfare projects under the spiritual direction of our trust."}
+            </p>
+            <p className="text-[10px] text-[#8c5000] font-bold uppercase tracking-wider">
+              {tenant.city || "Mumbai"}, {tenant.state || "Maharashtra"}
+            </p>
+          </div>
+
+          {/* Col 2: Navigation Links */}
+          <div className="space-y-4">
+            <h4 className="font-black text-xs uppercase text-[#8c5000] tracking-wider">Useful Navigations</h4>
+            <ul className="space-y-2.5 font-bold text-[#554334]">
+              <li><Link href={`/${params.slug}`} className="hover:text-[#ff9500] transition-colors">Home Page</Link></li>
+              <li><Link href={`/${params.slug}/events`} className="hover:text-[#ff9500] transition-colors">Utsav Timeline</Link></li>
+              <li><Link href={`/${params.slug}/news`} className="hover:text-[#ff9500] transition-colors">Announcements</Link></li>
+              <li><Link href={`/${params.slug}/blog`} className="hover:text-[#ff9500] transition-colors">Devotional Blogs</Link></li>
+              <li><Link href={`/${params.slug}/donate`} className="hover:text-[#ff9500] transition-colors">Donate Now</Link></li>
+            </ul>
+          </div>
+
+          {/* Col 3: Seva Schedules */}
+          <div className="space-y-4">
+            <h4 className="font-black text-xs uppercase text-[#8c5000] tracking-wider">Darshan Timings</h4>
+            <div className="space-y-3 text-gray-500 font-medium">
+              <div>
+                <p className="font-bold text-[#3A3530] uppercase text-[10px]">Morning Pooja</p>
+                <p className="mt-0.5">07:30 AM — 08:30 AM</p>
+              </div>
+              <div>
+                <p className="font-bold text-[#3A3530] uppercase text-[10px]">Evening Aarti</p>
+                <p className="mt-0.5">08:00 PM — 09:00 PM</p>
+              </div>
+              <p className="text-[10px] text-[#ff9500] font-black uppercase">Admission is free for all devotees.</p>
+            </div>
+          </div>
+
+          {/* Col 4: Reach Committee */}
+          <div className="space-y-4">
+            <h4 className="font-black text-xs uppercase text-[#8c5000] tracking-wider">Devotee Desk</h4>
+            <div className="space-y-2.5 text-gray-500 font-medium">
+              <p className="leading-relaxed">
+                <strong className="text-[#3A3530] block uppercase text-[10px] mb-0.5">Office Address:</strong>
+                {tenant.address || "Pandal Premises, Main Road"}
+              </p>
+              <p>
+                <strong className="text-[#3A3530] block uppercase text-[10px] mb-0.5">Support Desk:</strong>
+                support@utsavapp.in
+              </p>
+            </div>
+            
+            {tenant.whatsapp_group_url && (
+              <a
+                href={tenant.whatsapp_group_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/25 text-[#128C7E] rounded-lg font-bold transition-all text-[10px] uppercase tracking-wider"
+              >
+                <span>💬 Join Devotee WhatsApp</span>
+              </a>
+            )}
+            
+            <p className="text-[9px] text-[#554334] pt-2 border-t border-[#dbc2ad]">
+              Powered by <strong className="text-[#8c5000] uppercase tracking-wider font-black">UtsavManager</strong> &copy; {new Date().getFullYear()}
+            </p>
+          </div>
+
+        </div>
       </footer>
     </div>
   );

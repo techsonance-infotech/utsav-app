@@ -1,5 +1,11 @@
-const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-const RESEND_FROM_EMAIL = "Utsav <onboarding@resend.dev>"; // Fallback to Resend sandbox domain
+import nodemailer from "nodemailer";
+
+const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
+const SMTP_SECURE = process.env.SMTP_SECURE === "true"; // usually true for 465, false for 587
+const EMAIL_USER = process.env.EMAIL_USER || "";
+const EMAIL_PASS = process.env.EMAIL_PASS || "";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@techsonance.co.in";
 
 export async function sendEmail({
   to,
@@ -10,41 +16,39 @@ export async function sendEmail({
   subject: string;
   html: string;
 }) {
-  if (!RESEND_API_KEY) {
-    console.warn("WARNING: RESEND_API_KEY is missing! Email sending will be simulated.");
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    console.warn("WARNING: SMTP credentials (EMAIL_USER/EMAIL_PASS) are missing! Email sending will be simulated.");
     return { id: "simulated_id" };
   }
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
+    const transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      auth: {
+        user: EMAIL_USER,
+        pass: EMAIL_PASS,
       },
-      body: JSON.stringify({
-        from: RESEND_FROM_EMAIL,
-        to: [to],
-        subject,
-        html,
-      }),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Resend API Error: ${errText}`);
-    }
+    const info = await transporter.sendMail({
+      from: `"Utsav" <${EMAIL_USER}>`,
+      to,
+      subject,
+      html,
+      replyTo: ADMIN_EMAIL,
+    });
 
-    const data = await response.json();
-    return data;
+    return { id: info.messageId };
   } catch (error) {
-    console.error("Failed to send email via Resend:", error);
+    console.error("Failed to send email via SMTP (nodemailer):", error);
     throw error;
   }
 }
 
-export function getVerificationEmailTemplate(name: string, token: string, siteUrl: string) {
-  const verifyUrl = `${siteUrl}/verify-email?token=${token}`;
+export function getVerificationEmailTemplate(name: string, token: string, email: string, siteUrl: string) {
+  const verifyUrl = `${siteUrl}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
 
   return `
     <div style="font-family: 'Outfit', 'Inter', sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #fff8f4; border: 1px solid #dbc2ad; border-radius: 24px; color: #1e1b18;">
@@ -58,9 +62,14 @@ export function getVerificationEmailTemplate(name: string, token: string, siteUr
       
       <div style="background-color: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #efe7e1; box-shadow: 0 4px 10px rgba(140, 80, 0, 0.02);">
         <p style="color: #1e1b18; font-size: 16px; line-height: 1.6; margin-top: 0;">Hello ${name},</p>
-        <p style="color: #554334; font-size: 16px; line-height: 1.6;">Thank you for registering on Utsav! To activate your account and start your <strong>14-day free trial</strong>, please verify your email address by clicking the button below:</p>
+        <p style="color: #554334; font-size: 16px; line-height: 1.6;">Thank you for registering on Utsav! To activate your account and start your <strong>14-day free trial</strong>, please verify your email address by entering the code below or clicking the button:</p>
         
-        <div style="text-align: center; margin: 36px 0;">
+        <div style="background-color: #faf2ed; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0; border: 1px dashed #dbc2ad;">
+          <p style="color: #887361; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 10px 0;">Your Verification Code</p>
+          <span style="font-size: 38px; font-weight: 800; color: #8c5000; letter-spacing: 6px; font-family: monospace;">${token}</span>
+        </div>
+
+        <div style="text-align: center; margin: 24px 0;">
           <a href="${verifyUrl}" style="background-color: #8c5000; color: #ffffff; padding: 16px 36px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 8px 16px rgba(140, 80, 0, 0.25); transition: background-color 0.2s;">
             Verify Email & Start Trial
           </a>

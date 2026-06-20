@@ -2,6 +2,20 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import {
+  ShieldCheck,
+  Database,
+  Network,
+  CheckCircle,
+  Trash2,
+  RefreshCw,
+  UserCheck,
+  History,
+  Server,
+  Fingerprint,
+  AtSign,
+  Share2
+} from "lucide-react";
 
 export default function PrivacyPolicyPage() {
   const [activeSection, setActiveSection] = useState("introduction");
@@ -161,9 +175,7 @@ export default function PrivacyPolicyPage() {
               {/* Introduction */}
               <section id="introduction" className="scroll-mt-24">
                 <h2 className="font-headline-lg text-headline-lg text-on-surface mb-lg flex items-center gap-sm">
-                  <span className="material-symbols-outlined text-primary">
-                    verified_user
-                  </span>
+                  <ShieldCheck className="h-6 w-6 text-primary" />
                   1. Introduction
                 </h2>
                 <div className="font-body-lg text-body-lg text-on-surface-variant space-y-md">
@@ -180,9 +192,7 @@ export default function PrivacyPolicyPage() {
               <section id="data-collection" className="scroll-mt-24">
                 <div className="p-xl bg-surface-container-low rounded-xl border border-sandstone shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-lg opacity-5 pointer-events-none">
-                    <span className="material-symbols-outlined text-[80px]">
-                      database
-                    </span>
+                    <Database className="w-[80px] h-[80px]" />
                   </div>
                   <h2 className="font-headline-lg text-headline-lg text-on-surface mb-lg">
                     2. Data Collection
@@ -211,9 +221,7 @@ export default function PrivacyPolicyPage() {
               {/* Multi-tenant Isolation (RLS) */}
               <section id="tenant-isolation" className="scroll-mt-24">
                 <h2 className="font-headline-lg text-headline-lg text-on-surface mb-lg flex items-center gap-sm">
-                  <span className="material-symbols-outlined text-primary">
-                    hub
-                  </span>
+                  <Network className="h-6 w-6 text-primary" />
                   3. Multi-tenant Isolation & RLS
                 </h2>
                 <div className="font-body-lg text-body-lg text-on-surface-variant space-y-md">
@@ -257,9 +265,7 @@ export default function PrivacyPolicyPage() {
                   </div>
                   <div className="md:w-2/3 grid grid-cols-1 sm:grid-cols-2 gap-md">
                     <div className="bg-charcoal p-lg rounded-xl border border-white/10 hover:border-primary-container transition-colors">
-                      <span className="material-symbols-outlined text-primary-container mb-xs">
-                        check_circle
-                      </span>
+                      <CheckCircle className="h-6 w-6 text-primary-container mb-xs" />
                       <h4 className="font-label-md font-bold mb-xs text-white">
                         Explicit Consent
                       </h4>
@@ -268,9 +274,7 @@ export default function PrivacyPolicyPage() {
                       </p>
                     </div>
                     <div className="bg-charcoal p-lg rounded-xl border border-white/10 hover:border-primary-container transition-colors">
-                      <span className="material-symbols-outlined text-primary-container mb-xs">
-                        delete_forever
-                      </span>
+                      <Trash2 className="h-6 w-6 text-primary-container mb-xs" />
                       <h4 className="font-label-md font-bold mb-xs text-white">
                         Right to Erasure
                       </h4>
@@ -279,9 +283,7 @@ export default function PrivacyPolicyPage() {
                       </p>
                     </div>
                     <div className="bg-charcoal p-lg rounded-xl border border-white/10 hover:border-primary-container transition-colors">
-                      <span className="material-symbols-outlined text-primary-container mb-xs">
-                        update
-                      </span>
+                      <RefreshCw className="h-6 w-6 text-primary-container mb-xs animate-spin-slow" />
                       <h4 className="font-label-md font-bold mb-xs text-white">
                         Data Accuracy
                       </h4>
@@ -290,9 +292,7 @@ export default function PrivacyPolicyPage() {
                       </p>
                     </div>
                     <div className="bg-charcoal p-lg rounded-xl border border-white/10 hover:border-primary-container transition-colors">
-                      <span className="material-symbols-outlined text-primary-container mb-xs">
-                        person_pin
-                      </span>
+                      <UserCheck className="h-6 w-6 text-primary-container mb-xs" />
                       <h4 className="font-label-md font-bold mb-xs text-white">
                         Data Protection Officer
                       </h4>
@@ -307,9 +307,7 @@ export default function PrivacyPolicyPage() {
               {/* Data Retention */}
               <section id="data-retention" className="scroll-mt-24">
                 <h2 className="font-headline-lg text-headline-lg text-on-surface mb-lg flex items-center gap-sm">
-                  <span className="material-symbols-outlined text-primary">
-                    history
-                  </span>
+                  <History className="h-6 w-6 text-primary" />
                   4. Data Retention
                 </h2>
                 <div className="font-body-lg text-body-lg text-on-surface-variant space-y-md">
@@ -322,17 +320,13 @@ export default function PrivacyPolicyPage() {
               {/* Security */}
               <section id="security" className="scroll-mt-24">
                 <h2 className="font-headline-lg text-headline-lg text-on-surface mb-lg flex items-center gap-sm">
-                  <span className="material-symbols-outlined text-primary">
-                    shield_lock
-                  </span>
+                  <ShieldCheck className="h-6 w-6 text-primary" />
                   5. Security Measures
                 </h2>
                 <div className="bg-cream rounded-xl p-lg space-y-md">
                   <div className="flex items-start gap-md">
                     <div className="p-xs bg-primary/10 rounded-full flex-shrink-0">
-                      <span className="material-symbols-outlined text-primary">
-                        dns
-                      </span>
+                      <Server className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <h4 className="font-label-md font-bold text-on-surface">
@@ -345,9 +339,7 @@ export default function PrivacyPolicyPage() {
                   </div>
                   <div className="flex items-start gap-md">
                     <div className="p-xs bg-primary/10 rounded-full flex-shrink-0">
-                      <span className="material-symbols-outlined text-primary">
-                        fingerprint
-                      </span>
+                      <Fingerprint className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <h4 className="font-label-md font-bold text-on-surface">
@@ -415,14 +407,10 @@ export default function PrivacyPolicyPage() {
         </div>
         <div className="flex gap-md">
           <button className="w-10 h-10 flex items-center justify-center rounded-full bg-sandstone hover:bg-primary-fixed transition-colors">
-            <span className="material-symbols-outlined text-primary">
-              alternate_email
-            </span>
+            <AtSign className="h-5 w-5 text-primary" />
           </button>
           <button className="w-10 h-10 flex items-center justify-center rounded-full bg-sandstone hover:bg-primary-fixed transition-colors">
-            <span className="material-symbols-outlined text-primary">
-              share
-            </span>
+            <Share2 className="h-5 w-5 text-primary" />
           </button>
         </div>
       </footer>

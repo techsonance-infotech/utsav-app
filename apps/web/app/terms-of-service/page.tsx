@@ -2,6 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import {
+  Gavel,
+  Download,
+  Shield,
+  Star,
+  Users,
+  User,
+  CheckCircle
+} from "lucide-react";
 
 export default function TermsOfServicePage() {
   const [activeSection, setActiveSection] = useState("acceptance");
@@ -119,9 +128,7 @@ export default function TermsOfServicePage() {
         {/* Hero Section */}
         <div className="mb-16 text-center md:text-left">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-container/10 border border-primary-container/20 rounded-full mb-6">
-            <span className="material-symbols-outlined text-[18px] text-primary">
-              gavel
-            </span>
+            <Gavel className="h-[18px] w-[18px] text-primary" />
             <span className="font-label-sm text-label-sm text-primary uppercase tracking-wider">
               Legal Document
             </span>
@@ -160,9 +167,7 @@ export default function TermsOfServicePage() {
                 className="flex items-center gap-2 bg-charcoal text-puja-white px-5 py-2.5 rounded-xl hover:bg-on-surface transition-colors"
                 onClick={() => window.print()}
               >
-                <span className="material-symbols-outlined text-[20px]">
-                  download
-                </span>
+                <Download className="h-5 w-5" />
                 <span className="font-label-md text-label-md font-semibold">
                   Print / Save as PDF
                 </span>
@@ -171,12 +176,7 @@ export default function TermsOfServicePage() {
           </div>
           <div className="p-xl bg-surface-container-high border border-sandstone rounded-2xl flex flex-col justify-center items-center text-center hover:translate-y-[-4px] hover:shadow-[0_12px_24px_-10px_rgba(140,80,0,0.15)] transition-all duration-300">
             <div className="w-16 h-16 bg-primary-container/20 rounded-full flex items-center justify-center mb-4">
-              <span
-                className="material-symbols-outlined text-[32px] text-primary"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                security
-              </span>
+              <Shield className="h-8 w-8 text-primary" />
             </div>
             <h3 className="font-headline-sm text-headline-sm text-on-surface mb-2">
               Safe & Secure
@@ -244,9 +244,7 @@ export default function TermsOfServicePage() {
                 <div className="grid grid-cols-1 gap-md my-8">
                   <div className="p-lg bg-surface-container rounded-xl border border-sandstone">
                     <div className="flex items-center gap-3 mb-3">
-                      <span className="material-symbols-outlined text-primary">
-                        stars
-                      </span>
+                      <Star className="h-5 w-5 text-primary" />
                       <h4 className="font-label-md text-label-md font-bold text-on-surface">
                         Organization Owner
                       </h4>
@@ -257,9 +255,7 @@ export default function TermsOfServicePage() {
                   </div>
                   <div className="p-lg bg-surface-container rounded-xl border border-sandstone">
                     <div className="flex items-center gap-3 mb-3">
-                      <span className="material-symbols-outlined text-aarti-gold">
-                        manage_accounts
-                      </span>
+                      <Users className="h-5 w-5 text-aarti-gold" />
                       <h4 className="font-label-md text-label-md font-bold text-on-surface">
                         Committee Admin
                       </h4>
@@ -270,9 +266,7 @@ export default function TermsOfServicePage() {
                   </div>
                   <div className="p-lg bg-surface-container rounded-xl border border-sandstone">
                     <div className="flex items-center gap-3 mb-3">
-                      <span className="material-symbols-outlined text-outline">
-                        person
-                      </span>
+                      <User className="h-5 w-5 text-outline" />
                       <h4 className="font-label-md text-label-md font-bold text-on-surface">
                         General Member
                       </h4>
@@ -298,25 +292,19 @@ export default function TermsOfServicePage() {
                 </p>
                 <div className="my-6 p-xl bg-white border-2 border-primary/10 rounded-2xl shadow-sm space-y-4">
                   <div className="flex gap-4">
-                    <span className="material-symbols-outlined text-tulsi-green">
-                      check_circle
-                    </span>
+                    <CheckCircle className="h-5 w-5 text-tulsi-green shrink-0 mt-0.5" />
                     <span className="font-body-md text-on-surface-variant">
                       <strong>Transaction Fees:</strong> Platform fees and Razorpay processing fees are deducted at the source before settlement.
                     </span>
                   </div>
                   <div className="flex gap-4">
-                    <span className="material-symbols-outlined text-tulsi-green">
-                      check_circle
-                    </span>
+                    <CheckCircle className="h-5 w-5 text-tulsi-green shrink-0 mt-0.5" />
                     <span className="font-body-md text-on-surface-variant">
                       <strong>Settlement:</strong> Funds are typically settled to the Organization's bank account within T+2 business days.
                     </span>
                   </div>
                   <div className="flex gap-4">
-                    <span className="material-symbols-outlined text-tulsi-green">
-                      check_circle
-                    </span>
+                    <CheckCircle className="h-5 w-5 text-tulsi-green shrink-0 mt-0.5" />
                     <span className="font-body-md text-on-surface-variant">
                       <strong>Refunds:</strong> All donations are final. Event ticket refunds are subject to the specific event organizer's policy.
                     </span>

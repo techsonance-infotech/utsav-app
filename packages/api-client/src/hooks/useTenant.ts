@@ -53,6 +53,7 @@ export function useCreateTenant() {
       vertical: string;
       city: string;
       state: string;
+      address: string;
       primary_color?: string;
       default_language?: string;
       description?: string;

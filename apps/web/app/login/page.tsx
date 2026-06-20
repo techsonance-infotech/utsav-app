@@ -3,12 +3,18 @@
 import React, { useState, useEffect } from "react";
 import { useLogin, useResendVerification, supabase } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
 import {
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Flame
 } from "lucide-react";
 
 // Zod validation schema for login credentials
@@ -26,7 +32,11 @@ const loginSchema = z.object({
 
 export default function LoginPage() {
   const router = useRouter();
-  const { userId, tenantId } = useAuthStore();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect");
+  const tenantIdParam = searchParams.get("tenantId");
+  
+  const { userId, tenantId, tenantSlug } = useAuthStore();
   const loginMutation = useLogin();
 
   const [email, setEmail] = useState("");
@@ -45,13 +55,19 @@ export default function LoginPage() {
   // Redirect if logged in
   useEffect(() => {
     if (userId) {
-      if (tenantId) {
-        router.push("/dashboard");
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else if (tenantId) {
+        if (tenantSlug) {
+          router.push(`/${tenantSlug}/dashboard`);
+        } else {
+          router.push("/dashboard");
+        }
       } else {
         router.push("/onboarding");
       }
     }
-  }, [userId, tenantId, router]);
+  }, [userId, tenantId, tenantSlug, redirectTo, router]);
 
   // Real-time Zod schema validation
   useEffect(() => {
@@ -131,7 +147,11 @@ export default function LoginPage() {
     }
 
     try {
-      const data = await loginMutation.mutateAsync({ email, password });
+      const data = await loginMutation.mutateAsync({ 
+        email, 
+        password, 
+        tenantId: tenantIdParam || undefined 
+      });
       
       // Store session data according to rememberMe checkbox choice
       if (typeof window !== "undefined") {
@@ -179,7 +199,7 @@ export default function LoginPage() {
           <img
             className="w-full h-full object-contain"
             alt="Traditional Indian marigold flower garland strands"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlsfOG7Cq-stL_b_csua2mSd2-md08aOxe4HCdb4AI4LurfyCPODJVs-Lk_Hmi5_yl0kbbTq5_0izToiJRss0n0_qmfWdWfqsdtuQZbcvN0pymkZ5PSoNk8JmhgJhOnw0lG1Omf3Xox2Owryjo3wcfe3VTXj3gI2ZarN5PK3jeq3-KwrD-JBbgzFirGQ0NGrx5bJZ9d3MrCCI-0uITew_iBm3iMNgT8JcotZwNy9o6Y7anp-TUefqE"
+            src="/assets/garland-login.png"
           />
         </div>
         {/* Bottom Right Diya Pattern */}
@@ -187,7 +207,7 @@ export default function LoginPage() {
           <img
             className="w-full h-full object-contain"
             alt="Intricate traditional Indian diya lamp illustration"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEgXQ2gc3GcWgvkQYnID-a_LeypOKstRaQeo9mE5UoaSFR1Ql8ZNryarns5XfA1mPixZbTgR-hdhTWCh0FD2q70Wl8BjK9V9brtSax6d0MTPOi1mdjJASxbhE4eyGVV0C0jLtbr7sp-ybqog4n-Zi8jdn6_sYZaHfa8AMuVrtDlMHHiPtix3qsVqHrec0Oc4y0ndXhaJwjOK9iYD5HmFucBvGMoMHGu1lobmJS6r4qTOIMEb5e7KxC"
+            src="/assets/diya-login.png"
           />
         </div>
       </div>
@@ -220,27 +240,44 @@ export default function LoginPage() {
                 <p className="text-xs text-rose-700 font-medium leading-relaxed">{authError}</p>
               </div>
               {showResend && (
-                <div className="pl-8">
+                <div className="pl-8 flex flex-col gap-1.5">
                   {resendStatus === "SUCCESS" ? (
-                    <span className="text-xs text-emerald-600 font-semibold">Verification link sent! Check your inbox.</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-emerald-600 font-semibold">Verification link & code sent! Check your inbox.</span>
+                      <Link
+                        href={`/verify-email?email=${encodeURIComponent(email)}`}
+                        className="text-xs text-primary font-bold hover:underline underline-offset-2"
+                      >
+                        Go to Email Verification Page &rarr;
+                      </Link>
+                    </div>
                   ) : (
-                    <button
-                      type="button"
-                      disabled={resendStatus === "PENDING"}
-                      onClick={async () => {
-                        try {
-                          setResendStatus("PENDING");
-                          await resendMutation.mutateAsync({ email });
-                          setResendStatus("SUCCESS");
-                        } catch (resendErr: any) {
-                          setResendStatus("ERROR");
-                          setAuthError(resendErr.message || "Failed to resend verification email.");
-                        }
-                      }}
-                      className="text-xs text-primary font-bold hover:underline transition-all outline-none"
-                    >
-                      {resendStatus === "PENDING" ? "Sending..." : "Resend verification link"}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={resendStatus === "PENDING"}
+                        onClick={async () => {
+                          try {
+                            setResendStatus("PENDING");
+                            await resendMutation.mutateAsync({ email });
+                            setResendStatus("SUCCESS");
+                          } catch (resendErr: any) {
+                            setResendStatus("ERROR");
+                            setAuthError(resendErr.message || "Failed to resend verification email.");
+                          }
+                        }}
+                        className="text-xs text-primary font-bold hover:underline transition-all outline-none"
+                      >
+                        {resendStatus === "PENDING" ? "Sending..." : "Resend verification link"}
+                      </button>
+                      <span className="text-outline text-xs">|</span>
+                      <Link
+                        href={`/verify-email?email=${encodeURIComponent(email)}`}
+                        className="text-xs text-on-surface-variant hover:text-primary transition-colors font-medium hover:underline"
+                      >
+                        Verify Code Manually
+                      </Link>
+                    </div>
                   )}
                 </div>
               )}
@@ -254,7 +291,7 @@ export default function LoginPage() {
             <div className="flex flex-col gap-xs">
               <label className="font-label-md text-label-md text-on-surface-variant ml-1" htmlFor="email">Email Address</label>
               <div className="relative group">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">mail</span>
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors h-5 w-5 pointer-events-none" />
                 <input
                   className={`w-full pl-12 pr-4 py-3 bg-puja-white border rounded-xl focus:ring-2 focus:ring-primary-container focus:border-primary outline-none transition-all font-body-md ${
                     touched.email && errors.email ? "border-rose-400" : "border-sandstone"
@@ -289,7 +326,7 @@ export default function LoginPage() {
                 </Link>
               </div>
               <div className="relative group">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">lock</span>
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors h-5 w-5 pointer-events-none" />
                 <input
                   className={`w-full pl-12 pr-12 py-3 bg-puja-white border rounded-xl focus:ring-2 focus:ring-primary-container focus:border-primary outline-none transition-all font-body-md ${
                     touched.password && errors.password ? "border-rose-400" : "border-sandstone"
@@ -309,9 +346,11 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                 >
-                  <span className="material-symbols-outlined">
-                    {showPassword ? "visibility_off" : "visibility"}
-                  </span>
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
               {touched.password && errors.password && (
@@ -347,7 +386,7 @@ export default function LoginPage() {
               ) : (
                 <>
                   Sign In
-                  <span className="material-symbols-outlined">arrow_forward</span>
+                  <ArrowRight className="h-5 w-5" />
                 </>
               )}
             </button>
@@ -396,7 +435,7 @@ export default function LoginPage() {
       {/* Interactive Diya Element (Visual Flare) */}
       <div className="fixed bottom-margin-desktop left-margin-desktop hidden lg:flex items-center gap-md bg-white/50 backdrop-blur-sm border border-sandstone p-md rounded-full animate-glow shadow-sm z-10">
         <div className="w-10 h-10 bg-primary-container rounded-full flex items-center justify-center text-on-primary-fixed">
-          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>fireplace</span>
+          <Flame className="h-5 w-5 fill-current" />
         </div>
         <div className="pr-md">
           <p className="font-label-sm text-label-sm text-primary uppercase tracking-tighter">Festive Season Live</p>

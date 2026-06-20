@@ -5,10 +5,10 @@ import { sendEmail, getConfirmationEmailTemplate } from "../email-helper";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { token } = body;
+    const { token, email } = body;
 
     if (!token) {
-      return NextResponse.json({ message: "Verification token is required" }, { status: 400 });
+      return NextResponse.json({ message: "Verification token/code is required" }, { status: 400 });
     }
 
     const supabase = createServiceRoleClient();
@@ -19,13 +19,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: findError.message }, { status: 400 });
     }
 
-    const targetUser = usersData.users.find(
-      (u) => u.user_metadata?.verification_token === token
-    );
+    let targetUser;
+    if (email) {
+      targetUser = usersData.users.find(
+        (u) => u.email?.toLowerCase() === email.toLowerCase() && u.user_metadata?.verification_token === token
+      );
+    } else {
+      targetUser = usersData.users.find(
+        (u) => u.user_metadata?.verification_token === token
+      );
+    }
 
     if (!targetUser) {
       return NextResponse.json(
-        { message: "Invalid or expired verification link. Please check your email or request a new link." },
+        { message: "Invalid or expired verification code. Please check your email or request a new one." },
         { status: 400 }
       );
     }
