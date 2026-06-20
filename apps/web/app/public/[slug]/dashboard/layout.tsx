@@ -27,12 +27,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const getPageTitle = () => {
     if (pathname.endsWith("/members")) return "Member Directory";
     if (pathname.endsWith("/events")) return "Manage Events";
-    if (pathname.endsWith("/news")) return "News & Blogs";
-    if (pathname.endsWith("/donations")) return "Donations";
-    if (pathname.endsWith("/expenses")) return "Expenses";
-    if (pathname.endsWith("/chat")) return "Chat Portal";
+    if (pathname.endsWith("/news")) return "News Updates";
+    if (pathname.endsWith("/blog")) return "Blog Articles";
+    if (pathname.endsWith("/donations")) return "Donations Ledger";
+    if (pathname.endsWith("/expenses")) return "Expenses Management";
+    if (pathname.endsWith("/committee")) return "Committee Organizer";
     if (pathname.endsWith("/vendors")) return "Vendor Directory";
+    if (pathname.endsWith("/reports")) return "Financial & Community Reports";
     if (pathname.endsWith("/gallery")) return "Media Gallery";
+    if (pathname.endsWith("/audit")) return "System Audit Logs";
     if (pathname.endsWith("/settings")) return "Portal Settings";
     return "Dashboard";
   };
@@ -55,21 +58,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const navItems = [
-    { name: "Dashboard", href: getDashboardHref(""), icon: "dashboard" },
-    { name: "Members", href: getDashboardHref("/members"), icon: "groups" },
-    { name: "Events", href: getDashboardHref("/events"), icon: "calendar_today" },
-    { name: "News", href: getDashboardHref("/news"), icon: "newspaper" },
-    { name: "Donations", href: getDashboardHref("/donations"), icon: "volunteer_activism" },
-    { name: "Expenses", href: getDashboardHref("/expenses"), icon: "payments" },
-    { name: "Chat", href: getDashboardHref("/chat"), icon: "chat" },
-    { name: "Vendors", href: getDashboardHref("/vendors"), icon: "storefront" },
-    { name: "Gallery", href: getDashboardHref("/gallery"), icon: "photo_library" },
-    { name: "Settings", href: getDashboardHref("/settings"), icon: "settings" },
+    { name: "Dashboard", href: getDashboardHref(""), icon: "dashboard", roles: ["owner", "admin", "treasurer", "committee_member"] },
+    { name: "Members", href: getDashboardHref("/members"), icon: "groups", roles: ["owner", "admin", "treasurer"] },
+    { name: "Committee", href: getDashboardHref("/committee"), icon: "badge", roles: ["owner", "admin"] },
+    { name: "Events", href: getDashboardHref("/events"), icon: "calendar_today", roles: ["owner", "admin", "committee_member"] },
+    { name: "News", href: getDashboardHref("/news"), icon: "newspaper", roles: ["owner", "admin", "committee_member"] },
+    { name: "Blog", href: getDashboardHref("/blog"), icon: "book", roles: ["owner", "admin", "committee_member"] },
+    { name: "Donations", href: getDashboardHref("/donations"), icon: "volunteer_activism", roles: ["owner", "admin", "treasurer"] },
+    { name: "Expenses", href: getDashboardHref("/expenses"), icon: "payments", roles: ["owner", "admin", "treasurer", "committee_member"] },
+    { name: "Vendors", href: getDashboardHref("/vendors"), icon: "storefront", roles: ["owner", "admin", "treasurer"] },
+    { name: "Reports", href: getDashboardHref("/reports"), icon: "assessment", roles: ["owner", "admin", "treasurer"] },
+    { name: "Gallery", href: getDashboardHref("/gallery"), icon: "photo_library", roles: ["owner", "admin", "committee_member"] },
+    { name: "Chat", href: getDashboardHref("/chat"), icon: "chat", roles: ["owner", "admin", "treasurer", "committee_member"] },
+    { name: "Audit Log", href: getDashboardHref("/audit"), icon: "history", roles: ["owner"] },
+    { name: "Settings", href: getDashboardHref("/settings"), icon: "settings", roles: ["owner"] },
   ];
 
   if (!userId || (!tenantId && pathname !== "/onboarding")) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-zinc-500 font-medium">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-zinc-505 font-medium">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 rounded-full border-4 border-amber-600 border-t-transparent animate-spin" />
           <span className="text-sm font-sans tracking-wide">Loading portal session...</span>
@@ -118,29 +125,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Navigation Links */}
           <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar pr-1">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href || (item.href !== getDashboardHref("") && pathname.startsWith(item.href + "/"));
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setIsSidebarOpen(false)}
-                  className={
-                    isActive
-                      ? "flex items-center space-x-3 px-sm py-md rounded-xl text-primary bg-primary-container/10 border-r-4 border-primary font-bold translate-x-1 transition-transform duration-150"
-                      : "flex items-center space-x-3 px-sm py-md rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200"
-                  }
-                >
-                  <span
-                    className="material-symbols-outlined text-[20px]"
-                    style={{ fontVariationSettings: isActive ? "'FILL' 1" : undefined }}
+            {navItems
+              .filter((item) => !item.roles || item.roles.includes(role || ""))
+              .map((item) => {
+                const isActive = pathname === item.href || (item.href !== getDashboardHref("") && pathname.startsWith(item.href + "/"));
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setIsSidebarOpen(false)}
+                    className={
+                      isActive
+                        ? "flex items-center space-x-3 px-sm py-md rounded-xl text-primary bg-primary-container/10 border-r-4 border-primary font-bold translate-x-1 transition-transform duration-150"
+                        : "flex items-center space-x-3 px-sm py-md rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200"
+                    }
                   >
-                    {item.icon}
-                  </span>
-                  <span className="font-label-md text-label-md">{item.name}</span>
-                </Link>
-              );
-            })}
+                    <span
+                      className="material-symbols-outlined text-[20px]"
+                      style={{ fontVariationSettings: isActive ? "'FILL' 1" : undefined }}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="font-label-md text-label-md">{item.name}</span>
+                  </Link>
+                );
+              })}
           </nav>
 
           {/* Sidebar Footer Controls */}

@@ -66,3 +66,41 @@ export function useAcceptInvite() {
     },
   });
 }
+
+export function useFetchInvitations() {
+  return useQuery({
+    queryKey: ["invitations"],
+    queryFn: async () => {
+      return apiClient<Invitation[]>("/invitations");
+    },
+  });
+}
+
+export function useBulkInvite() {
+  return useMutation({
+    mutationFn: async (data: {
+      invitees: Array<{
+        full_name?: string;
+        email?: string;
+        phone?: string;
+        role: string;
+      }>;
+    }) => {
+      return apiClient<Invitation[]>("/invitations/bulk", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+  });
+}
+
+export function useRevokeInvite() {
+  return useMutation({
+    mutationFn: async (token: string) => {
+      return apiClient<{ success: boolean; message: string }>(`/invitations/${token}`, {
+        method: "DELETE",
+      });
+    },
+  });
+}
+

@@ -86,3 +86,51 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }
+
+export async function GET(req: Request) {
+  const allowedRoles = ["owner", "admin"];
+  const { hasAccess, userId, errorResponse } = await checkRole(req, allowedRoles);
+  if (!hasAccess && errorResponse) {
+    return errorResponse;
+  }
+
+  const tenantId = req.headers.get("x-tenant-id")!;
+  const supabase = createServiceRoleClient();
+
+  try {
+    // Retrieve tenant details for origin slug URL mapping
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("slug")
+      .eq("id", tenantId)
+      .single();
+
+    if (!tenant) {
+      return NextResponse.json({ message: "Tenant not found" }, { status: 404 });
+    }
+
+    // Select all invitations for this tenant which haven't been used yet
+    const { data: invitations, error: dbError } = await supabase
+      .from("invitations")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .is("used_at", null)
+      .order("created_at", { ascending: false });
+
+    if (dbError) {
+      return NextResponse.json({ message: dbError.message }, { status: 500 });
+    }
+
+    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://utsav.app";
+
+    const mappedInvitations = (invitations || []).map((inv: any) => ({
+      ...inv,
+      link: `${origin}/join/${tenant.slug}/${inv.role}/${inv.token}`,
+    }));
+
+    return NextResponse.json(mappedInvitations);
+  } catch (err: any) {
+    return NextResponse.json({ message: err.message }, { status: 500 });
+  }
+}
+

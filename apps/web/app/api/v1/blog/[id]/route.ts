@@ -124,3 +124,67 @@ export async function PATCH(
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  const postId = params.id;
+  if (!postId) {
+    return NextResponse.json({ message: "Missing blog post ID" }, { status: 400 });
+  }
+
+  const allowedRoles = ["owner", "admin", "committee_member"];
+  const { hasAccess, userId, errorResponse } = await checkRole(req, allowedRoles);
+  if (!hasAccess && errorResponse) {
+    return errorResponse;
+  }
+
+  const tenantId = req.headers.get("x-tenant-id")!;
+  const supabase = createServiceRoleClient();
+
+  try {
+    const { data: existing, error: fetchError } = await supabase
+      .from("blog_posts")
+      .select("*")
+      .eq("id", postId)
+      .eq("tenant_id", tenantId)
+      .single();
+
+    if (fetchError || !existing) {
+      return NextResponse.json({ message: "Blog post not found" }, { status: 404 });
+    }
+
+    const { data: actorMember } = await supabase
+      .from("tenant_members")
+      .select("role")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId)
+      .single();
+
+    const { error: deleteError } = await supabase
+      .from("blog_posts")
+      .delete()
+      .eq("id", postId)
+      .eq("tenant_id", tenantId);
+
+    if (deleteError) {
+      return NextResponse.json({ message: deleteError.message }, { status: 500 });
+    }
+
+    await logAuditEvent({
+      tenantId,
+      actorId: userId,
+      actorRole: actorMember?.role || "committee_member",
+      action: "blog_post_delete",
+      entityType: "blog_post",
+      entityId: postId,
+      beforeData: existing,
+    });
+
+    return NextResponse.json({ message: "Blog post deleted successfully" });
+  } catch (err: any) {
+    return NextResponse.json({ message: err.message }, { status: 500 });
+  }
+}
+
