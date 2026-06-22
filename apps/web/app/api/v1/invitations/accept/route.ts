@@ -70,7 +70,7 @@ export async function POST(req: Request) {
         tenant_id: tenantId,
         user_id: userId,
         role,
-        status: "active",
+        status: "pending",
         full_name: fullName,
         preferred_language: "en",
       })
@@ -83,6 +83,7 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
 
     // 5. Update invitation to mark as used
     await supabase

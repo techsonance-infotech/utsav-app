@@ -48,11 +48,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       .from("committees")
       .update({
         ...(name !== undefined && { name }),
-        ...(year !== undefined && { year }),
+        ...(year !== undefined && { year: parseInt(year.toString(), 10) }),
         ...(is_active !== undefined && { is_active }),
         updated_at: new Date().toISOString(),
       })
       .eq("id", committeeId)
+      .eq("tenant_id", tenantId)
       .select()
       .single();
 
@@ -72,13 +73,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         return NextResponse.json({ message: deletePosError.message }, { status: 500 });
       }
 
-      if (positions.length > 0) {
-        const positionsToInsert = positions.map((pos: any) => ({
+      // Only insert positions that have a member assigned
+      const positionsToInsert = positions
+        .filter((pos: any) => pos.member_id)
+        .map((pos: any) => ({
+          tenant_id: tenantId,
           committee_id: committeeId,
           member_id: pos.member_id,
-          position: pos.position || pos.name, // Support both position name and custom position string
+          position_title: pos.position || pos.name || "Member",
         }));
 
+      if (positionsToInsert.length > 0) {
         const { error: insertPosError } = await supabase
           .from("committee_positions")
           .insert(positionsToInsert);

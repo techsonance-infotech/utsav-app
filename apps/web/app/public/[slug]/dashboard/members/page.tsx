@@ -43,7 +43,7 @@ export default function MembersPage() {
   const params = useParams();
   const slug = params?.slug as string | undefined;
 
-  const [activeTab, setActiveTab] = useState<"active" | "pending">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "approval" | "pending">("active");
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -127,8 +127,26 @@ export default function MembersPage() {
     }
   };
 
+  const handleApproveMember = async (memberId: string) => {
+    try {
+      await updateRoleMutation.mutateAsync({ id: memberId, status: "active" });
+      refetchMembers();
+      if (selectedMember && selectedMember.id === memberId) {
+        setSelectedMember({ ...selectedMember, status: "active" });
+      }
+      alert("Member request approved successfully!");
+    } catch (err: any) {
+      alert(err.message || "Failed to approve member request");
+    }
+  };
+
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm("Are you sure you want to remove this member? They will lose access immediately.")) {
+    const isPending = selectedMember?.status === "pending" || members.find((m: any) => m.id === memberId)?.status === "pending";
+    const confirmMessage = isPending
+      ? "Are you sure you want to reject and delete this member registration request?"
+      : "Are you sure you want to remove this member? They will lose access immediately.";
+
+    if (!confirm(confirmMessage)) {
       return;
     }
     try {
@@ -245,22 +263,31 @@ export default function MembersPage() {
 
   const isEditor = currentRole === "owner" || currentRole === "admin";
 
-  // Filter active directory client-side by status
-  const filteredMembers = (members || []).filter((m: any) => {
-    if (statusFilter && m.status !== statusFilter) return false;
-    return true;
-  });
+  // Split lists: Active/Suspended members vs. Pending Approval members
+  const activeMembersList = (members || []).filter((m: any) => m.status !== "pending");
+  const pendingApprovalList = (members || []).filter((m: any) => m.status === "pending");
 
-  // Pagination calculations for Active Directory
+  // Filter client-side based on activeTab and filters
+  const filteredMembers = activeTab === "active"
+    ? activeMembersList.filter((m: any) => {
+        if (statusFilter && m.status !== statusFilter) return false;
+        return true;
+      })
+    : pendingApprovalList.filter((m: any) => {
+        if (search && !m.full_name?.toLowerCase().includes(search.toLowerCase())) return false;
+        return true;
+      });
+
+  // Pagination calculations
   const totalRows = filteredMembers.length;
   const totalPages = Math.ceil(totalRows / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedMembers = filteredMembers.slice(startIndex, startIndex + rowsPerPage);
 
-  // Stats calculators
-  const volunteersCount = members?.filter((m: any) => m.role === "volunteer").length || 0;
+  // Stats calculators (based on approved active members)
+  const volunteersCount = activeMembersList.filter((m: any) => m.role === "volunteer").length || 0;
   
-  const joinedThisMonth = members?.filter((m: any) => {
+  const joinedThisMonth = activeMembersList.filter((m: any) => {
     const joinDate = new Date(m.joined_at || m.created_at || new Date());
     const oneMonthAgo = new Date();
     oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
@@ -309,7 +336,25 @@ export default function MembersPage() {
               : "border-transparent text-on-surface-variant hover:text-primary"
           }`}
         >
-          Active Directory ({filteredMembers.length})
+          Active Directory ({activeMembersList.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("approval");
+            setCurrentPage(1);
+          }}
+          className={`px-4 py-2 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 relative ${
+            activeTab === "approval"
+              ? "border-primary text-primary"
+              : "border-transparent text-on-surface-variant hover:text-primary"
+          }`}
+        >
+          Approval Requests
+          {pendingApprovalList.length > 0 && (
+            <span className="bg-kumkum-red text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
+              {pendingApprovalList.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => {
@@ -544,6 +589,153 @@ export default function MembersPage() {
           ) : (
             <div className="bg-cream border border-sandstone rounded-2xl p-16 text-center text-xs font-bold text-on-surface-variant">
               No registered members found matching the selected filters.
+            </div>
+          )}
+        </>
+      ) : activeTab === "approval" ? (
+        <>
+          {/* Approval Requests View */}
+          {loadingMembers ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              <span className="text-sm font-sans tracking-wide text-on-surface-variant">
+                Loading approval requests...
+              </span>
+            </div>
+          ) : paginatedMembers.length > 0 ? (
+            <div className="bg-cream border border-sandstone rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-sandstone text-[11px] font-bold uppercase tracking-wider text-on-surface-variant bg-[#F4F1EB]/50">
+                      <th className="px-lg py-3">Requester Name</th>
+                      <th className="px-lg py-3">Requested Role</th>
+                      <th className="px-lg py-3">Phone number</th>
+                      <th className="px-lg py-3">Requested On</th>
+                      <th className="px-lg py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-sandstone bg-white">
+                    {paginatedMembers.map((member: any) => (
+                      <tr
+                        key={member.id}
+                        onClick={() => {
+                          setSelectedMember(member);
+                          setEditingRole(member.role);
+                        }}
+                        className="hover:bg-[#F4F1EB]/30 transition-colors cursor-pointer text-xs font-semibold text-on-surface"
+                      >
+                        <td className="px-lg py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-primary-container/20 text-primary flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 border border-primary-container/10">
+                              {member.avatar_url ? (
+                                <img src={member.avatar_url} className="w-full h-full object-cover" alt="" />
+                              ) : (
+                                member.full_name?.charAt(0).toUpperCase() || "M"
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-bold text-on-surface leading-tight">
+                                {member.full_name}
+                              </p>
+                              <p className="text-[10px] text-on-surface-variant">
+                                {member.email || "No email assigned"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-lg py-4">
+                          <span className="px-2.5 py-0.5 rounded-full border text-[9px] uppercase font-bold tracking-wider bg-amber-50 text-amber-700 border-amber-200">
+                            {member.role}
+                          </span>
+                        </td>
+                        <td className="px-lg py-4 text-on-surface-variant font-mono">
+                          {member.phone || "—"}
+                        </td>
+                        <td className="px-lg py-4 text-on-surface-variant font-mono">
+                          {new Date(member.joined_at || member.created_at).toLocaleDateString("en-IN", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="px-lg py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => handleApproveMember(member.id)}
+                              className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold shadow-xs active:scale-95 duration-100 transition-all"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleRemoveMember(member.id)}
+                              className="px-3 py-1 border border-kumkum-red text-kumkum-red hover:bg-red-50 rounded-lg text-[10px] font-bold active:scale-95 duration-100 transition-all"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Approval Pagination */}
+              <div className="px-lg py-3 border-t border-sandstone flex flex-col sm:flex-row justify-between items-center gap-3 bg-[#F4F1EB]/50">
+                <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
+                  <span>Show rows:</span>
+                  <select
+                    value={rowsPerPage}
+                    onChange={(e) => {
+                      setRowsPerPage(parseInt(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-transparent border-none cursor-pointer outline-none font-bold text-on-surface"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <span className="border-l border-sandstone pl-3">
+                    Showing {startIndex + 1}-{Math.min(startIndex + rowsPerPage, totalRows)} of {totalRows} requests
+                  </span>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(p => p - 1)}
+                    className="px-2.5 py-1 border border-sandstone bg-white rounded-lg text-xs font-bold hover:bg-[#F4F1EB] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                        currentPage === page
+                          ? "bg-primary text-white"
+                          : "bg-white border border-sandstone hover:bg-[#F4F1EB]"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    className="px-2.5 py-1 border border-sandstone bg-white rounded-lg text-xs font-bold hover:bg-[#F4F1EB] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-cream border border-sandstone rounded-2xl p-16 text-center text-xs font-bold text-on-surface-variant flex flex-col items-center justify-center gap-2">
+              <ShieldCheck className="w-10 h-10 text-green-600 mb-1" />
+              <span>All clear! No pending membership approval requests.</span>
             </div>
           )}
         </>
@@ -1045,6 +1237,18 @@ export default function MembersPage() {
                 <span className="px-3 py-0.5 mt-1 border border-sandstone rounded-full bg-[#F4F1EB] text-[9px] uppercase font-bold tracking-wider text-on-surface-variant">
                   {selectedMember.role}
                 </span>
+
+                {selectedMember.status === "pending" && (
+                  <div className="bg-amber-50 border border-amber-250 rounded-2xl p-4 flex gap-3 text-left text-xs font-semibold leading-relaxed mt-4 w-full">
+                    <AlertTriangle className="w-5 h-5 text-[#ff9500] shrink-0" />
+                    <div>
+                      <p className="font-bold text-amber-900">Awaiting Verification</p>
+                      <p className="text-[11px] text-amber-700 mt-0.5">
+                        This user accepted an invitation and is awaiting registration approval. Review details below before granting active directory access.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Stats Block */}
@@ -1126,22 +1330,47 @@ export default function MembersPage() {
 
             {/* Bottom Actions footer */}
             <div className="flex justify-between items-center pt-6 border-t border-sandstone mt-6 gap-3">
-              {isEditor && selectedMember.role !== "owner" && selectedMember.user_id !== userId ? (
-                <button
-                  onClick={() => handleRemoveMember(selectedMember.id)}
-                  className="px-4 py-2 border border-kumkum-red text-kumkum-red font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-red-50 transition-all flex items-center gap-1"
-                >
-                  <Trash2 className="w-4 h-4" /> Remove Member
-                </button>
+              {selectedMember.status === "pending" ? (
+                <div className="flex gap-2 w-full">
+                  <button
+                    onClick={() => handleApproveMember(selectedMember.id)}
+                    className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-xs active:scale-95 duration-100 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" /> Approve
+                  </button>
+                  <button
+                    onClick={() => handleRemoveMember(selectedMember.id)}
+                    className="px-4 py-2 border border-kumkum-red text-kumkum-red font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-red-50 transition-all flex items-center gap-1"
+                  >
+                    <X className="w-4 h-4" /> Reject
+                  </button>
+                </div>
+              ) : isEditor && selectedMember.role !== "owner" && selectedMember.user_id !== userId ? (
+                <>
+                  <button
+                    onClick={() => handleRemoveMember(selectedMember.id)}
+                    className="px-4 py-2 border border-kumkum-red text-kumkum-red font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-red-50 transition-all flex items-center gap-1"
+                  >
+                    <Trash2 className="w-4 h-4" /> Remove Member
+                  </button>
+                  <button
+                    onClick={() => setSelectedMember(null)}
+                    className="px-4 py-2 bg-primary hover:bg-primary-hover text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all"
+                  >
+                    Close Profile
+                  </button>
+                </>
               ) : (
-                <div />
+                <>
+                  <div />
+                  <button
+                    onClick={() => setSelectedMember(null)}
+                    className="px-4 py-2 bg-primary hover:bg-primary-hover text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all"
+                  >
+                    Close Profile
+                  </button>
+                </>
               )}
-              <button
-                onClick={() => setSelectedMember(null)}
-                className="px-4 py-2 bg-primary hover:bg-primary-hover text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all"
-              >
-                Close Profile
-              </button>
             </div>
 
           </div>

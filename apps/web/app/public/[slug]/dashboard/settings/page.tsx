@@ -38,8 +38,18 @@ export default function SettingsPage() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [whatsappUrl, setWhatsappUrl] = useState("");
   const [foundedYear, setFoundedYear] = useState("");
+  
+  const [defaultLanguage, setDefaultLanguage] = useState("mr");
+  const [timezone, setTimezone] = useState("Asia/Kolkata");
+  const [razorpayKeyId, setRazorpayKeyId] = useState("");
+  const [isPublicDonations, setIsPublicDonations] = useState(true);
+  const [isPublicExpenses, setIsPublicExpenses] = useState(true);
+
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  const allowedRoles = ["owner", "admin"];
+  const isAllowed = allowedRoles.includes(role || "");
 
   // Pre-fill state when tenant loads
   useEffect(() => {
@@ -54,6 +64,12 @@ export default function SettingsPage() {
       setWebsiteUrl(tenant.website_url || "");
       setWhatsappUrl(tenant.whatsapp_group_url || "");
       setFoundedYear(tenant.founded_year?.toString() || "");
+      
+      setDefaultLanguage(tenant.default_language || "mr");
+      setTimezone(tenant.timezone || "Asia/Kolkata");
+      setRazorpayKeyId(tenant.razorpay_key_id || "");
+      setIsPublicDonations(tenant.is_public_donations ?? true);
+      setIsPublicExpenses(tenant.is_public_expenses ?? true);
     }
   }, [tenant]);
 
@@ -65,7 +81,7 @@ export default function SettingsPage() {
     if (!tenantId) return;
 
     // Check permissions: only admin or owner
-    if (role !== "owner" && role !== "admin") {
+    if (!isAllowed) {
       setErrorMsg("Only the organization Owner or Admin can update settings.");
       return;
     }
@@ -83,6 +99,11 @@ export default function SettingsPage() {
         website_url: websiteUrl,
         whatsapp_group_url: whatsappUrl,
         founded_year: foundedYear ? parseInt(foundedYear) : null,
+        default_language: defaultLanguage,
+        timezone,
+        razorpay_key_id: razorpayKeyId,
+        is_public_donations: isPublicDonations,
+        is_public_expenses: isPublicExpenses,
       } as any);
 
       setSuccessMsg("Organization settings updated successfully!");
@@ -105,6 +126,12 @@ export default function SettingsPage() {
       setWebsiteUrl(tenant.website_url || "");
       setWhatsappUrl(tenant.whatsapp_group_url || "");
       setFoundedYear(tenant.founded_year?.toString() || "");
+      
+      setDefaultLanguage(tenant.default_language || "mr");
+      setTimezone(tenant.timezone || "Asia/Kolkata");
+      setRazorpayKeyId(tenant.razorpay_key_id || "");
+      setIsPublicDonations(tenant.is_public_donations ?? true);
+      setIsPublicExpenses(tenant.is_public_expenses ?? true);
       setSuccessMsg("");
       setErrorMsg("");
     }
@@ -115,6 +142,18 @@ export default function SettingsPage() {
       <div className="p-16 text-center text-on-surface-variant w-full bg-puja-white rounded-xl border border-sandstone">
         <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto mb-4" />
         <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Loading Mandal Settings...</span>
+      </div>
+    );
+  }
+
+  if (!isAllowed) {
+    return (
+      <div className="p-margin-desktop text-center bg-white rounded-xl border border-sandstone max-w-xl mx-auto mt-20 p-12 shadow-sm font-sans text-on-surface">
+        <span className="material-symbols-outlined text-kumkum-red text-[48px] mb-4">gpp_bad</span>
+        <h2 className="font-headline-md text-headline-sm font-bold text-on-surface">Access Denied</h2>
+        <p className="font-body-md text-on-surface-variant mt-2">
+          You are not authorized to view or edit Organization Settings. Only the organization Owner or Admin can access this page.
+        </p>
       </div>
     );
   }
@@ -271,19 +310,27 @@ export default function SettingsPage() {
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block font-label-md text-on-surface-variant mb-1 font-semibold">Primary Language</label>
-              <select className="w-full px-4 py-2.5 rounded-xl border border-sandstone focus:ring-2 focus:ring-primary-container focus:border-primary outline-none bg-white text-charcoal font-semibold cursor-pointer">
-                <option>English (International)</option>
-                <option selected>Marathi (मराठी)</option>
-                <option>Hindi (हिन्दी)</option>
-                <option>Gujarati (ગુજરાતી)</option>
+              <select
+                value={defaultLanguage}
+                onChange={(e) => setDefaultLanguage(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-sandstone focus:ring-2 focus:ring-primary-container focus:border-primary outline-none bg-white text-charcoal font-semibold cursor-pointer"
+              >
+                <option value="en">English (International)</option>
+                <option value="mr">Marathi (मराठी)</option>
+                <option value="hi">Hindi (हिन्दी)</option>
+                <option value="gu">Gujarati (ગુજરાતી)</option>
               </select>
             </div>
 
             <div>
               <label className="block font-label-md text-on-surface-variant mb-1 font-semibold">Default Timezone</label>
-              <select className="w-full px-4 py-2.5 rounded-xl border border-sandstone focus:ring-2 focus:ring-primary-container focus:border-primary outline-none bg-white text-charcoal font-semibold cursor-pointer">
-                <option selected>(GMT+05:30) Mumbai, Kolkata, New Delhi</option>
-                <option>(GMT+00:00) UTC</option>
+              <select
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-sandstone focus:ring-2 focus:ring-primary-container focus:border-primary outline-none bg-white text-charcoal font-semibold cursor-pointer"
+              >
+                <option value="Asia/Kolkata">(GMT+05:30) Mumbai, Kolkata, New Delhi</option>
+                <option value="UTC">(GMT+00:00) UTC</option>
               </select>
             </div>
 
@@ -340,18 +387,27 @@ export default function SettingsPage() {
                 Connect your payment gateway and configure digital portals.
               </p>
             </div>
-            <span className="px-3 py-1 bg-[#22C55E]/10 text-[#22C55E] rounded-full font-label-sm flex items-center gap-1 font-bold text-xs">
-              <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                check_circle
+            {razorpayKeyId ? (
+              <span className="px-3 py-1 bg-[#22C55E]/10 text-[#22C55E] rounded-full font-label-sm flex items-center gap-1 font-bold text-xs">
+                <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  check_circle
+                </span>
+                Connected
               </span>
-              Connected
-            </span>
+            ) : (
+              <span className="px-3 py-1 bg-[#EAB308]/10 text-[#EAB308] rounded-full font-label-sm flex items-center gap-1 font-bold text-xs">
+                <span className="material-symbols-outlined text-[16px]">
+                  warning
+                </span>
+                Missing Key
+              </span>
+            )}
           </div>
 
           <div className="p-6 space-y-6">
-            <div className="p-4 bg-cream/50 rounded-xl border border-sandstone flex items-center justify-between">
+            <div className="p-4 bg-cream/50 rounded-xl border border-sandstone flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white rounded-lg border border-sandstone flex items-center justify-center p-2">
+                <div className="w-12 h-12 bg-white rounded-lg border border-sandstone flex items-center justify-center p-2 shrink-0">
                   <img
                     className="w-full h-auto"
                     alt="Razorpay"
@@ -360,10 +416,20 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-charcoal text-sm">Razorpay Integration</p>
-                  <p className="text-xs text-on-surface-variant">Active: mid_H8j7K9l2M1n0</p>
+                  <p className="text-xs text-on-surface-variant font-mono">
+                    {razorpayKeyId ? `Active: ${razorpayKeyId.slice(0, 14)}...` : "Status: Not configured"}
+                  </p>
                 </div>
               </div>
-              <button type="button" className="text-primary font-bold text-xs hover:underline">Reconfigure</button>
+              <div className="w-full md:w-auto flex-1 md:max-w-xs">
+                <input
+                  type="text"
+                  value={razorpayKeyId}
+                  onChange={(e) => setRazorpayKeyId(e.target.value)}
+                  placeholder="Enter Razorpay Key ID"
+                  className="w-full px-3 py-1.5 rounded-lg border border-sandstone focus:ring-1 focus:ring-primary outline-none text-xs font-mono bg-white text-charcoal"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -390,6 +456,34 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-4 border-t border-sandstone/60">
+              <div className="flex items-start gap-2">
+                <input
+                  id="public-donations"
+                  type="checkbox"
+                  checked={isPublicDonations}
+                  onChange={(e) => setIsPublicDonations(e.target.checked)}
+                  className="w-5 h-5 rounded border-sandstone text-primary focus:ring-primary-container cursor-pointer mt-0.5"
+                />
+                <label htmlFor="public-donations" className="text-xs text-on-surface-variant cursor-pointer font-semibold select-none leading-tight">
+                  Make donations ledger public (accessible on public pages)
+                </label>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <input
+                  id="public-expenses"
+                  type="checkbox"
+                  checked={isPublicExpenses}
+                  onChange={(e) => setIsPublicExpenses(e.target.checked)}
+                  className="w-5 h-5 rounded border-sandstone text-primary focus:ring-primary-container cursor-pointer mt-0.5"
+                />
+                <label htmlFor="public-expenses" className="text-xs text-on-surface-variant cursor-pointer font-semibold select-none leading-tight">
+                  Make expenses ledger public (accessible on public pages)
+                </label>
+              </div>
+            </div>
+
             <div className="flex items-start gap-2 pt-2">
               <input
                 id="auto-receipt"
@@ -413,24 +507,22 @@ export default function SettingsPage() {
           >
             Discard Changes
           </button>
-          {(role === "owner" || role === "admin") && (
-            <button
-              type="submit"
-              disabled={updateTenantMutation.isPending}
-              className="px-8 py-3 rounded-xl font-bold text-on-primary bg-primary saffron-glow hover:opacity-90 active:scale-95 transition-all flex items-center gap-2 relative overflow-hidden text-xs uppercase tracking-wider"
-            >
-              {updateTenantMutation.isPending ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <span>Save Changes</span>
-                </>
-              )}
-            </button>
-          )}
+          <button
+            type="submit"
+            disabled={updateTenantMutation.isPending}
+            className="px-8 py-3 rounded-xl font-bold text-on-primary bg-primary saffron-glow hover:opacity-90 active:scale-95 transition-all flex items-center gap-2 relative overflow-hidden text-xs uppercase tracking-wider"
+          >
+            {updateTenantMutation.isPending ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <span>Save Changes</span>
+              </>
+            )}
+          </button>
         </footer>
       </form>
     </div>

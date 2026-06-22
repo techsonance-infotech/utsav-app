@@ -181,3 +181,20 @@ export function useCreateCampaign() {
   });
 }
 
+export function useUpdateDonation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      return apiClient<Donation>(`/donations/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["donations"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-summary"] });
+    },
+  });
+}
+

@@ -36,18 +36,59 @@ export async function middleware(req: NextRequest) {
   const host = req.headers.get("host") || "";
   const ip = req.headers.get("x-forwarded-for") || req.ip || "127.0.0.1";
 
+  // Enforce HTTPS in production
+  if (
+    process.env.NODE_ENV === "production" &&
+    req.headers.get("x-forwarded-proto") === "http"
+  ) {
+    return NextResponse.redirect(`https://${host}${url.pathname}${url.search}`);
+  }
+
   // 1. Rate Limiting on API endpoints
   if (url.pathname.startsWith("/api/v1/")) {
     let allowed = true;
-    if (url.pathname.startsWith("/api/v1/auth/otp/send")) {
-      // OTP rate limiting: 5 attempts per 10 minutes (600 seconds)
+    if (url.pathname.startsWith("/api/v1/auth/login")) {
+      // Login rate limiting: 5 attempts per 5 minutes (300 seconds)
+      allowed = await checkRateLimit(ip, 5, 300);
+    } else if (url.pathname.startsWith("/api/v1/auth/signup")) {
+      // Signup rate limiting: 5 attempts per 10 minutes (600 seconds)
       allowed = await checkRateLimit(ip, 5, 600);
+    } else if (url.pathname.startsWith("/api/v1/auth/forgot-password")) {
+      // Forgot password rate limiting: 5 attempts per 10 minutes (600 seconds)
+      allowed = await checkRateLimit(ip, 5, 600);
+    } else if (url.pathname.startsWith("/api/v1/auth/verify-otp")) {
+      // Verify OTP rate limiting: 5 attempts per 5 minutes (300 seconds)
+      allowed = await checkRateLimit(ip, 5, 300);
+    } else if (url.pathname.startsWith("/api/v1/auth/verify-email")) {
+      // Verify email rate limiting: 5 attempts per 5 minutes (300 seconds)
+      allowed = await checkRateLimit(ip, 5, 300);
+    } else if (url.pathname.startsWith("/api/v1/auth/resend-verification")) {
+      // Resend verification rate limiting: 5 attempts per 10 minutes (600 seconds)
+      allowed = await checkRateLimit(ip, 5, 600);
+    } else if (url.pathname.startsWith("/api/v1/public/")) {
+      // Public endpoints scraping protection: 60 requests per minute (60 seconds)
+      allowed = await checkRateLimit(ip, 60, 60);
+    } else if (
+      url.pathname.startsWith("/api/v1/ai/") ||
+      url.pathname.startsWith("/api/v1/generate/")
+    ) {
+      // AI generation requests protection: 10 requests per minute (60 seconds)
+      allowed = await checkRateLimit(ip, 10, 60);
     } else {
       // Global rate limiting: 1000 requests per minute (60 seconds)
       allowed = await checkRateLimit(ip, 1000, 60);
     }
 
     if (!allowed) {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: "WARN",
+          ip,
+          action: "rate_limit_exceeded",
+          path: url.pathname,
+        })
+      );
       return new NextResponse(
         JSON.stringify({ error: "Too many requests. Please try again later." }),
         { status: 429, headers: { "Content-Type": "application/json" } }

@@ -1,5 +1,16 @@
 import { NextResponse } from "next/server";
 import { verifySession, createServiceRoleClient } from "../../../utils";
+import { z } from "zod";
+
+const CreateOrderSchema = z.object({
+  donor_name: z.string().min(1, "Donor name is required"),
+  donor_phone: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  donor_email: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  amount: z.number().positive("Amount must be a positive number"),
+  campaign_id: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  is_anonymous: z.boolean().default(false),
+  note: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+});
 
 export async function POST(req: Request) {
   const tenantId = req.headers.get("x-tenant-id");
@@ -17,21 +28,21 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const {
-      amount,
-      donor_name,
-      donor_phone,
-      donor_email,
-      campaign_id,
-      is_anonymous = false,
-      note,
-    } = body;
-
-    if (!donor_name) {
-      return NextResponse.json({ message: "Donor name is required" }, { status: 400 });
+    const parsed = CreateOrderSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ message: "Validation error", errors: parsed.error.format() }, { status: 400 });
     }
-    if (!amount || amount <= 0) {
-      return NextResponse.json({ message: "Amount must be a positive number" }, { status: 400 });
+
+    const validatedData = parsed.data;
+
+    // Validate phone number format if provided
+    if (validatedData.donor_phone && !/^\d{10}$/.test(validatedData.donor_phone)) {
+      return NextResponse.json({ message: "Phone number must be exactly 10 digits" }, { status: 400 });
+    }
+
+    // Validate email format if provided
+    if (validatedData.donor_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(validatedData.donor_email)) {
+      return NextResponse.json({ message: "Invalid email address" }, { status: 400 });
     }
 
     const supabase = createServiceRoleClient();
@@ -47,7 +58,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Tenant not found" }, { status: 404 });
     }
 
-    const amountInPaise = Math.round(amount * 100);
+    const amountInPaise = Math.round(validatedData.amount * 100);
     const keyId = tenant.razorpay_key_id || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
@@ -93,17 +104,17 @@ export async function POST(req: Request) {
       .from("donations")
       .insert({
         tenant_id: tenantId,
-        campaign_id: campaign_id || null,
+        campaign_id: validatedData.campaign_id,
         donor_id: userId || null,
-        donor_name,
-        donor_phone: donor_phone || null,
-        donor_email: donor_email || null,
-        amount,
+        donor_name: validatedData.donor_name,
+        donor_phone: validatedData.donor_phone,
+        donor_email: validatedData.donor_email,
+        amount: validatedData.amount,
         currency: "INR",
         mode: "online",
         status: "pending",
-        is_anonymous,
-        note: note || null,
+        is_anonymous: validatedData.is_anonymous,
+        note: validatedData.note,
         razorpay_order_id: orderId,
       })
       .select()

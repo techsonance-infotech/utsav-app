@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useLogin, useResendVerification, supabase } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -30,7 +30,7 @@ const loginSchema = z.object({
     .min(6, "Password must be at least 6 characters"),
 });
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect");
@@ -444,5 +444,13 @@ export default function LoginPage() {
       </div>
 
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+      <LoginContent />
+    </Suspense>
   );
 }

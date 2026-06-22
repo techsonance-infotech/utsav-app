@@ -15,10 +15,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   try {
     const body = await req.json();
-    const { role } = body;
+    const { role, status } = body;
 
-    if (!role) {
-      return NextResponse.json({ message: "Role is required" }, { status: 400 });
+    if (role === undefined && status === undefined) {
+      return NextResponse.json({ message: "Role or status is required" }, { status: 400 });
     }
 
     if (role === "owner") {
@@ -45,20 +45,24 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
 
     if (targetMember.user_id === userId) {
-      return NextResponse.json({ message: "You cannot change your own role" }, { status: 403 });
+      return NextResponse.json({ message: "You cannot change your own profile role/status" }, { status: 403 });
     }
 
-    // 3. Update role
+    const updateObj: Record<string, any> = {};
+    if (role !== undefined) updateObj.role = role;
+    if (status !== undefined) updateObj.status = status;
+
+    // 3. Update member record
     const { data: updatedMember, error: updateError } = await supabase
       .from("tenant_members")
-      .update({ role })
+      .update(updateObj)
       .eq("id", id)
       .select()
       .single();
 
     if (updateError || !updatedMember) {
       return NextResponse.json(
-        { message: updateError?.message || "Failed to update member role" },
+        { message: updateError?.message || "Failed to update member" },
         { status: 500 }
       );
     }
@@ -71,12 +75,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       .eq("user_id", userId)
       .single();
 
-    // 4. Log role update to audit logs
+    // 4. Log update to audit logs
     await logAuditEvent({
       tenantId,
       actorId: userId,
       actorRole: editorMember?.role || "admin",
-      action: "member_role_update",
+      action: status !== undefined && role === undefined ? "member_status_update" : "member_role_update",
       entityType: "tenant_member",
       entityId: id,
       beforeData: targetMember,
@@ -84,14 +88,26 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     });
 
     // 5. Send push notification to target user
+    let title = "Profile Updated! 🪔";
+    let messageBody = "Your profile has been modified by the administrators.";
+    
+    if (status === "active" && targetMember.status !== "active") {
+      title = "Membership Approved! 🎉";
+      messageBody = "Welcome to our Utsav Mandal! Your registration has been approved by the administrators.";
+    } else if (role !== undefined) {
+      title = "Role Updated! 🪔";
+      messageBody = `Your role has been changed to ${role.toUpperCase()}.`;
+    }
+
     await supabase.from("notifications").insert({
       tenant_id: tenantId,
       user_id: targetMember.user_id,
       type: "role_assigned",
-      title: "Role Updated! 🪔",
-      body: `Your role has been changed to ${role.toUpperCase()}.`,
+      title,
+      body: messageBody,
       payload: {
-        new_role: role,
+        new_role: updatedMember.role,
+        new_status: updatedMember.status,
         assigned_by: userId,
       },
     });
@@ -100,6 +116,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   } catch (err: any) {
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
+
 }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {

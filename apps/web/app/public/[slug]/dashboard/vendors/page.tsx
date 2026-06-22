@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useAuthStore } from "@utsav/stores";
+import { useParams } from "next/navigation";
 import {
   useFetchVendors,
   useCreateVendor,
@@ -12,6 +14,14 @@ import {
 import { RefreshCw, Search, SlidersHorizontal, Plus, ShieldCheck, HelpCircle } from "lucide-react";
 
 export default function VendorsDashboardPage() {
+  const { role } = useAuthStore();
+  const params = useParams();
+  const slug = params?.slug as string | undefined;
+
+  const allowedRoles = ["owner", "admin", "treasurer", "committee_member"];
+  const isAllowed = allowedRoles.includes(role || "");
+  const hasAdminAccess = ["owner", "admin", "treasurer"].includes(role || "");
+
   const { data: vendors, isLoading: loadingVendors } = useFetchVendors();
   const { data: pos, isLoading: loadingPOs } = useFetchPurchaseOrders();
   const { data: invoices, isLoading: loadingInvoices } = useFetchVendorInvoices();
@@ -44,6 +54,7 @@ export default function VendorsDashboardPage() {
 
   const handleCreateVendor = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasAdminAccess) return;
     if (!vendorForm.name.trim()) return;
     createVendorMutation.mutate(vendorForm, {
       onSuccess: () => {
@@ -162,6 +173,18 @@ export default function VendorsDashboardPage() {
     ? invoices.reduce((acc: number, cur: any) => acc + (cur.amount || 0), 0)
     : 842000;
 
+  if (!isAllowed) {
+    return (
+      <div className="p-margin-desktop text-center bg-white rounded-xl border border-sandstone max-w-xl mx-auto mt-20 p-12 shadow-sm">
+        <span className="material-symbols-outlined text-kumkum-red text-[48px] mb-4">gpp_bad</span>
+        <h2 className="font-headline-md text-headline-sm font-bold text-on-surface">Access Denied</h2>
+        <p className="font-body-md text-on-surface-variant mt-2">
+          You are not authorized to view Procurement & Vendors. Only treasury, committee, and admin roles are permitted.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-margin-desktop space-y-lg w-full font-sans text-on-surface">
       {/* Top Header Row */}
@@ -173,7 +196,7 @@ export default function VendorsDashboardPage() {
           </p>
         </div>
 
-        {activeTab === "profiles" && (
+        {activeTab === "profiles" && hasAdminAccess && (
           <button
             onClick={() => setShowVendorModal(true)}
             className="flex items-center justify-center gap-2 bg-primary-container text-on-primary-container hover:opacity-90 px-6 py-2.5 rounded-full font-bold shadow-md saffron-glow active:scale-95 transition-transform"

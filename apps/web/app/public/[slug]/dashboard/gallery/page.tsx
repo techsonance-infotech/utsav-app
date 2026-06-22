@@ -8,9 +8,11 @@ import {
   useAddAlbumMedia,
 } from "@utsav/api-client";
 import { GalleryGrid } from "@utsav/ui";
-import { CloudUpload, FolderPlus, ArrowLeft, RefreshCw, X, Folder, Image as ImageIcon, Calendar } from "lucide-react";
+import { useAuthStore } from "@utsav/stores";
+import { CloudUpload, FolderPlus, ArrowLeft, RefreshCw, X, Folder, Image as ImageIcon, Calendar, Plus } from "lucide-react";
 
 export default function GalleryDashboardPage() {
+  const { role } = useAuthStore();
   const { data: albums, isLoading: loadingAlbums } = useFetchAlbums();
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | undefined>();
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -27,8 +29,13 @@ export default function GalleryDashboardPage() {
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaCaption, setMediaCaption] = useState("");
 
+  const allowedRoles = ["owner", "admin", "treasurer", "committee_member"];
+  const isAllowed = allowedRoles.includes(role || "");
+  const hasAdminAccess = ["owner", "admin", "treasurer"].includes(role || "");
+
   const handleCreateAlbum = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasAdminAccess) return;
     if (!newAlbumName.trim()) return;
     createAlbumMutation.mutate(
       { name: newAlbumName, description: newAlbumDesc },
@@ -45,6 +52,7 @@ export default function GalleryDashboardPage() {
 
   const handleAddMedia = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasAdminAccess) return;
     if (!selectedAlbumId || !mediaUrl.trim()) return;
     addMediaMutation.mutate(
       {
@@ -84,6 +92,18 @@ export default function GalleryDashboardPage() {
     return covers[index % covers.length];
   };
 
+  if (!isAllowed) {
+    return (
+      <div className="p-margin-desktop text-center bg-white rounded-xl border border-sandstone max-w-xl mx-auto mt-20 p-12 shadow-sm font-sans text-on-surface">
+        <span className="material-symbols-outlined text-kumkum-red text-[48px] mb-4">gpp_bad</span>
+        <h2 className="font-headline-md text-headline-sm font-bold text-on-surface">Access Denied</h2>
+        <p className="font-body-md text-on-surface-variant mt-2">
+          You are not authorized to view the Gallery Dashboard. Only staff roles are permitted.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-margin-desktop space-y-lg w-full font-sans text-on-surface">
       {/* Top Header Row */}
@@ -96,7 +116,7 @@ export default function GalleryDashboardPage() {
         </div>
 
         <div className="flex gap-2">
-          {selectedAlbumId && (
+          {selectedAlbumId && hasAdminAccess && (
             <button
               onClick={() => setShowMediaModal(true)}
               className="flex items-center gap-1.5 px-5 py-2.5 bg-primary-container text-on-primary-container hover:opacity-90 rounded-full font-bold shadow-md saffron-glow active:scale-95 transition-transform text-xs uppercase tracking-wider"
@@ -105,13 +125,15 @@ export default function GalleryDashboardPage() {
               <span>Upload Media</span>
             </button>
           )}
-          <button
-            onClick={() => setShowAlbumModal(true)}
-            className="flex items-center gap-1.5 px-5 py-2.5 bg-cream border border-sandstone text-charcoal hover:bg-sandstone/30 rounded-full font-bold transition-all active:scale-95 text-xs uppercase tracking-wider"
-          >
-            <FolderPlus className="w-4 h-4 text-primary" />
-            <span>New Album</span>
-          </button>
+          {hasAdminAccess && (
+            <button
+              onClick={() => setShowAlbumModal(true)}
+              className="flex items-center gap-1.5 px-5 py-2.5 bg-cream border border-sandstone text-charcoal hover:bg-sandstone/30 rounded-full font-bold transition-all active:scale-95 text-xs uppercase tracking-wider"
+            >
+              <FolderPlus className="w-4 h-4 text-primary" />
+              <span>New Album</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -125,13 +147,15 @@ export default function GalleryDashboardPage() {
                 High-fidelity preservation of ritual media. Manage metadata, organize ceremony collections, and curate public galleries for the community.
               </p>
             </div>
-            <button
-              onClick={() => setShowAlbumModal(true)}
-              className="bg-puja-white text-primary px-6 py-3.5 rounded-2xl font-bold flex items-center gap-2 hover:shadow-xl transition-all active:scale-95 text-sm shrink-0"
-            >
-              <FolderPlus className="w-5 h-5" />
-              <span>Create Preservation Album</span>
-            </button>
+            {hasAdminAccess && (
+              <button
+                onClick={() => setShowAlbumModal(true)}
+                className="bg-puja-white text-primary px-6 py-3.5 rounded-2xl font-bold flex items-center gap-2 hover:shadow-xl transition-all active:scale-95 text-sm shrink-0"
+              >
+                <FolderPlus className="w-5 h-5" />
+                <span>Create Preservation Album</span>
+              </button>
+            )}
           </div>
           <div className="absolute -right-16 -bottom-16 opacity-10">
             <Folder className="w-[300px] h-[300px] text-white" />
@@ -199,7 +223,7 @@ export default function GalleryDashboardPage() {
                       </span>
                       <div className="flex items-center gap-1 text-white text-xs font-bold">
                         <ImageIcon className="w-3.5 h-3.5" />
-                        Photos
+                        Photos ({album.media_count || 0})
                       </div>
                     </div>
                   </div>
@@ -217,18 +241,20 @@ export default function GalleryDashboardPage() {
               ))}
 
               {/* Create album placeholder button inside grid */}
-              <button
-                onClick={() => setShowAlbumModal(true)}
-                className="group relative h-[252px] border-2 border-dashed border-outline-variant rounded-2xl flex flex-col items-center justify-center gap-3 hover:bg-[#F4F1EB]/40 transition-all hover:border-primary shrink-0"
-              >
-                <div className="w-12 h-12 rounded-full bg-cream flex items-center justify-center group-hover:scale-105 transition-transform group-hover:bg-primary-fixed border border-sandstone">
-                  <FolderPlus className="w-6 h-6 text-primary" />
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-charcoal text-sm">Create New Album</p>
-                  <p className="text-xs text-on-surface-variant mt-0.5">Saffron-glow secured</p>
-                </div>
-              </button>
+              {hasAdminAccess && (
+                <button
+                  onClick={() => setShowAlbumModal(true)}
+                  className="group relative h-[252px] border-2 border-dashed border-outline-variant rounded-2xl flex flex-col items-center justify-center gap-3 hover:bg-[#F4F1EB]/40 transition-all hover:border-primary shrink-0"
+                >
+                  <div className="w-12 h-12 rounded-full bg-cream flex items-center justify-center group-hover:scale-105 transition-transform group-hover:bg-primary-fixed border border-sandstone">
+                    <FolderPlus className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-charcoal text-sm">Create New Album</p>
+                    <p className="text-xs text-on-surface-variant mt-0.5">Saffron-glow secured</p>
+                  </div>
+                </button>
+              )}
             </section>
           )}
         </div>
@@ -251,15 +277,17 @@ export default function GalleryDashboardPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowMediaModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white hover:opacity-90 rounded-xl font-bold transition-all text-xs active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Photo/Video</span>
-              </button>
-            </div>
+            {hasAdminAccess && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowMediaModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white hover:opacity-90 rounded-xl font-bold transition-all text-xs active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Photo/Video</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Media grid feed */}
@@ -278,7 +306,9 @@ export default function GalleryDashboardPage() {
               <div>
                 <h4 className="font-bold text-charcoal text-sm">This album has no media files</h4>
                 <p className="text-xs mt-1 max-w-xs text-on-surface-variant leading-relaxed">
-                  Click the "Add Photo/Video" button above to upload and register files for public display.
+                  {hasAdminAccess
+                    ? "Click the \"Add Photo/Video\" button above to upload and register files for public display."
+                    : "No media has been uploaded to this preservation album yet."}
                 </p>
               </div>
             </div>
@@ -287,7 +317,7 @@ export default function GalleryDashboardPage() {
       )}
 
       {/* Album Creation Dialog */}
-      {showAlbumModal && (
+      {showAlbumModal && hasAdminAccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
           <form
             onSubmit={handleCreateAlbum}
@@ -357,7 +387,7 @@ export default function GalleryDashboardPage() {
       )}
 
       {/* Add Media Dialog */}
-      {showMediaModal && (
+      {showMediaModal && hasAdminAccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
           <form
             onSubmit={handleAddMedia}

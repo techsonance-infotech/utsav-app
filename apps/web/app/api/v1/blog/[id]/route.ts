@@ -1,5 +1,29 @@
 import { NextResponse } from "next/server";
 import { verifySession, createServiceRoleClient, logAuditEvent, checkRole } from "../../utils";
+import { z } from "zod";
+import { BlogCategorySchema, ContentStatusSchema } from "@utsav/types";
+
+const UpdateBlogSchema = z.object({
+  title: z.string().min(1, "Title cannot be empty").optional(),
+  subtitle: z.string().nullable().optional(),
+  slug: z
+    .string()
+    .min(1, "Slug cannot be empty")
+    .regex(/^[a-z0-9-_]+$/, "Slug must only contain lowercase alphanumeric characters, dashes, and underscores")
+    .optional(),
+  body: z.string().min(1, "Body cannot be empty").optional(),
+  excerpt: z.string().nullable().optional(),
+  cover_image_url: z.string().url("Must be a valid URL").nullable().or(z.literal("")).optional(),
+  category: BlogCategorySchema.optional(),
+  tags: z.array(z.string()).optional(),
+  language: z.string().optional(),
+  status: ContentStatusSchema.optional(),
+  scheduled_at: z.string().datetime().nullable().optional(),
+  estimated_read_mins: z.number().int().positive().nullable().optional(),
+  allow_comments: z.boolean().optional(),
+  meta_title: z.string().nullable().optional(),
+  meta_description: z.string().nullable().optional(),
+});
 
 export async function GET(
   req: Request,
@@ -49,7 +73,7 @@ export async function PATCH(
     return NextResponse.json({ message: "Missing blog post ID" }, { status: 400 });
   }
 
-  const allowedRoles = ["owner", "admin", "committee_member"];
+  const allowedRoles = ["owner", "admin"];
   const { hasAccess, userId, errorResponse } = await checkRole(req, allowedRoles);
   if (!hasAccess && errorResponse) {
     return errorResponse;
@@ -60,6 +84,15 @@ export async function PATCH(
 
   try {
     const body = await req.json();
+    const parsed = UpdateBlogSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { message: "Validation failed", errors: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const validatedData = parsed.data as any;
 
     const { data: existing, error: fetchError } = await supabase
       .from("blog_posts")
@@ -83,17 +116,40 @@ export async function PATCH(
     const allowedFields = [
       "title", "subtitle", "slug", "body", "excerpt", "cover_image_url",
       "category", "tags", "language", "status", "estimated_read_mins",
-      "allow_comments", "meta_title", "meta_description",
+      "allow_comments", "meta_title", "meta_description", "scheduled_at"
     ];
 
     for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updatePayload[field] = body[field];
+      if (validatedData[field] !== undefined) {
+        updatePayload[field] = validatedData[field];
       }
     }
 
-    if (body.status === "published" && existing.status !== "published") {
-      updatePayload.published_at = new Date().toISOString();
+    if (updatePayload.cover_image_url === "") {
+      updatePayload.cover_image_url = null;
+    }
+
+    // Handle status & date transitions
+    const finalStatus = validatedData.status || existing.status;
+
+    if (finalStatus === "published") {
+      if (existing.status !== "published") {
+        updatePayload.published_at = new Date().toISOString();
+      }
+      updatePayload.scheduled_at = null;
+    } else if (finalStatus === "scheduled") {
+      const targetScheduledAt = validatedData.scheduled_at !== undefined ? validatedData.scheduled_at : existing.scheduled_at;
+      if (!targetScheduledAt) {
+        return NextResponse.json({ message: "Scheduled Date & Time is required for scheduled posts" }, { status: 400 });
+      }
+      if (new Date(targetScheduledAt) <= new Date()) {
+        return NextResponse.json({ message: "Scheduled Date & Time must be in the future" }, { status: 400 });
+      }
+      updatePayload.scheduled_at = new Date(targetScheduledAt).toISOString();
+      updatePayload.published_at = null;
+    } else if (finalStatus === "draft" || finalStatus === "archived") {
+      updatePayload.scheduled_at = null;
+      updatePayload.published_at = null;
     }
 
     const { data: updated, error: updateError } = await supabase
@@ -104,14 +160,21 @@ export async function PATCH(
       .select()
       .single();
 
-    if (updateError || !updated) {
-      return NextResponse.json({ message: updateError?.message || "Failed to update blog post" }, { status: 500 });
+    if (updateError) {
+      if (updateError.code === "23505") {
+        return NextResponse.json({ message: "A blog post with this URL slug already exists." }, { status: 409 });
+      }
+      return NextResponse.json({ message: updateError.message }, { status: 500 });
+    }
+
+    if (!updated) {
+      return NextResponse.json({ message: "Failed to update blog post" }, { status: 500 });
     }
 
     await logAuditEvent({
       tenantId,
       actorId: userId,
-      actorRole: actorMember?.role || "committee_member",
+      actorRole: actorMember?.role || "admin",
       action: "blog_post_update",
       entityType: "blog_post",
       entityId: postId,
@@ -134,7 +197,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Missing blog post ID" }, { status: 400 });
   }
 
-  const allowedRoles = ["owner", "admin", "committee_member"];
+  const allowedRoles = ["owner", "admin"];
   const { hasAccess, userId, errorResponse } = await checkRole(req, allowedRoles);
   if (!hasAccess && errorResponse) {
     return errorResponse;
@@ -175,7 +238,7 @@ export async function DELETE(
     await logAuditEvent({
       tenantId,
       actorId: userId,
-      actorRole: actorMember?.role || "committee_member",
+      actorRole: actorMember?.role || "admin",
       action: "blog_post_delete",
       entityType: "blog_post",
       entityId: postId,
@@ -187,4 +250,5 @@ export async function DELETE(
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }
+
 

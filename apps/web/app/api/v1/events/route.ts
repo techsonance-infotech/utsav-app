@@ -1,5 +1,30 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, logAuditEvent, checkRole } from "../utils";
+import { verifySession, createServiceRoleClient, logAuditEvent, checkRole, sanitizeInputText } from "../utils";
+import { z } from "zod";
+
+const eventCreateSchema = z.object({
+  title: z.string().trim().min(3, "Title must be at least 3 characters").max(100, "Title too long").transform(val => sanitizeInputText(val)),
+  title_hi: z.string().trim().max(100).transform(val => sanitizeInputText(val)).optional().nullable(),
+  title_gu: z.string().trim().max(100).transform(val => sanitizeInputText(val)).optional().nullable(),
+  description: z.string().trim().max(1000).transform(val => sanitizeInputText(val)).optional().nullable(),
+  category: z.enum(["general", "festival", "meeting", "cultural", "pooja", "other"]).default("general"),
+  start_at: z.string().trim().min(1, "Start date is required"),
+  end_at: z.string().trim().optional().nullable(),
+  location_name: z.string().trim().max(200).transform(val => sanitizeInputText(val)).optional().nullable(),
+  location_maps_url: z.string().trim().max(500).transform(val => sanitizeInputText(val)).optional().nullable(),
+  banner_image_url: z.string().trim().max(500).transform(val => sanitizeInputText(val)).optional().nullable(),
+  max_capacity: z.any().transform(val => {
+    if (val === undefined || val === null || val === "") return null;
+    const parsed = parseInt(val, 10);
+    return isNaN(parsed) ? null : parsed;
+  }).optional().nullable(),
+  rsvp_required: z.any().transform(val => {
+    if (val === "true" || val === true) return true;
+    return false;
+  }).default(false),
+  rsvp_deadline: z.string().trim().optional().nullable(),
+  tags: z.array(z.string().trim().max(50).transform(val => sanitizeInputText(val))).max(10).optional().default([]),
+});
 
 export async function GET(req: Request) {
   const { userId, error } = await verifySession(req);
@@ -41,7 +66,8 @@ export async function GET(req: Request) {
     // 3. For each event, count RSVP summaries
     const { data: rsvpCounts } = await supabase
       .from("event_rsvps")
-      .select("event_id, status");
+      .select("event_id, status")
+      .eq("tenant_id", tenantId);
 
     const countsMap: Record<string, { attending: number; maybe: number; not_attending: number }> = {};
     (rsvpCounts || []).forEach((r) => {
@@ -78,26 +104,27 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
+    const parsed = eventCreateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ message: parsed.error.errors[0].message }, { status: 400 });
+    }
+
     const {
       title,
       title_hi,
       title_gu,
       description,
-      category = "general",
+      category,
       start_at,
       end_at,
       location_name,
       location_maps_url,
       banner_image_url,
       max_capacity,
-      rsvp_required = false,
+      rsvp_required,
       rsvp_deadline,
-      tags = [],
-    } = body;
-
-    if (!title || !start_at) {
-      return NextResponse.json({ message: "Title and Start date/time are required" }, { status: 400 });
-    }
+      tags,
+    } = parsed.data;
 
     // Rejection rule: past start_at rejected
     if (new Date(start_at) < new Date()) {

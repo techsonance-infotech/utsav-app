@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceRoleClient } from "../../utils";
+import { createServiceRoleClient, logSecurityEvent } from "../../utils";
 import { z } from "zod";
 import crypto from "crypto";
 import { sendEmail, getVerificationEmailTemplate } from "../email-helper";
@@ -46,6 +46,11 @@ export async function POST(req: Request) {
     const parsed = signupSchema.safeParse(body);
     if (!parsed.success) {
       const firstError = parsed.error.issues[0];
+      await logSecurityEvent(req, {
+        action: "auth_signup_failed",
+        status: "failure",
+        details: { reason: `Validation error: ${firstError.message}` },
+      });
       return NextResponse.json(
         { message: firstError.message },
         { status: 400 }
@@ -83,11 +88,21 @@ export async function POST(req: Request) {
     if (authError || !authData.user) {
       const msg = authError?.message || "Failed to create user";
       if (msg.includes("already been registered") || msg.includes("already exists")) {
+        await logSecurityEvent(req, {
+          action: "auth_signup_failed",
+          status: "failure",
+          details: { email, reason: "Account already exists" },
+        });
         return NextResponse.json(
           { message: "An account with this email already exists. Please sign in instead." },
           { status: 409 }
         );
       }
+      await logSecurityEvent(req, {
+        action: "auth_signup_failed",
+        status: "failure",
+        details: { email, reason: msg },
+      });
       return NextResponse.json({ message: msg }, { status: 400 });
     }
 
@@ -120,6 +135,14 @@ export async function POST(req: Request) {
       // but let's still return success with a warning or logs.
     }
 
+    await logSecurityEvent(req, {
+      action: "auth_signup_success",
+      userId: authData.user.id,
+      tenantId,
+      status: "success",
+      details: { email },
+    });
+
     return NextResponse.json(
       {
         success: true,
@@ -135,6 +158,11 @@ export async function POST(req: Request) {
     );
   } catch (err: any) {
     console.error("Signup error:", err);
+    await logSecurityEvent(req, {
+      action: "auth_signup_exception",
+      status: "failure",
+      details: { error: err.message },
+    });
     return NextResponse.json(
       { message: "An unexpected error occurred. Please try again." },
       { status: 500 }

@@ -152,6 +152,21 @@ export default function WebReportsPage() {
   const expenseTotal = filteredExpenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
   const balanceTotal = donationTotal - expenseTotal;
 
+  const allowedRoles = ["owner", "admin", "treasurer", "committee_member"];
+  const isAllowed = allowedRoles.includes(role || "");
+
+  if (!isAllowed) {
+    return (
+      <div className="p-margin-desktop text-center bg-white rounded-xl border border-sandstone max-w-xl mx-auto mt-20 p-12 shadow-sm">
+        <span className="material-symbols-outlined text-kumkum-red text-[48px] mb-4">gpp_bad</span>
+        <h2 className="font-headline-md text-headline-sm font-bold text-on-surface">Access Denied</h2>
+        <p className="font-body-md text-on-surface-variant mt-2">
+          You are not authorized to view Financial Reports. Only treasury, committee, and admin roles are permitted.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-margin-desktop space-y-lg w-full font-sans text-on-surface">
       {/* Header and Quick Stats */}

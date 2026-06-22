@@ -70,3 +70,67 @@ export function useIncrementNewsRead() {
     },
   });
 }
+
+export function useUpdateNewsArticle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ articleId, data }: { articleId: string; data: Partial<NewsArticle> }) => {
+      return apiClient<NewsArticle>(`/news/${articleId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["news"] });
+    },
+  });
+}
+
+export function useDeleteNewsArticle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (articleId: string) => {
+      return apiClient<{ message: string }>(`/news/${articleId}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["news"] });
+    },
+  });
+}
+
+export function useUpdateBlogPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ postId, data }: { postId: string; data: Partial<BlogPost> }) => {
+      return apiClient<BlogPost>(`/blog/${postId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["blog-posts"] });
+    },
+  });
+}
+
+export function useDeleteBlogPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      return apiClient<{ message: string }>(`/blog/${postId}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["blog-posts"] });
+    },
+  });
+}
+
+

@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "@utsav/stores";
-import { useFetchDonations, useFetchCampaigns, useCreateDonation, useFetchTenant } from "@utsav/api-client";
+import { useFetchDonations, useFetchCampaigns, useCreateDonation, useFetchTenant, useUpdateDonation } from "@utsav/api-client";
 import { useParams } from "next/navigation";
-import { X, Check, Copy, AlertTriangle } from "lucide-react";
+import { X, Check, Copy, AlertTriangle, CheckCircle, Ban } from "lucide-react";
 
 export default function DonationsPage() {
   const { tenantId, role } = useAuthStore();
@@ -36,6 +36,7 @@ export default function DonationsPage() {
 
   const { data: campaigns = [] } = useFetchCampaigns() as any;
   const recordDonationMutation = useCreateDonation();
+  const updateDonationMutation = useUpdateDonation();
 
   // Cash slider panel state
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -730,7 +731,46 @@ export default function DonationsPage() {
               )}
             </div>
 
-            <div className="pt-4 border-t border-sandstone text-center text-xs text-on-surface-variant font-semibold">
+            {selectedDonation.status === "pending" && ["owner", "admin", "treasurer"].includes(role || "") && (
+              <div className="mt-4 pt-4 border-t border-sandstone flex gap-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const updated = await updateDonationMutation.mutateAsync({
+                        id: selectedDonation.id,
+                        status: "confirmed"
+                      });
+                      setSelectedDonation(updated);
+                    } catch (err: any) {
+                      alert(err.message || "Failed to confirm donation.");
+                    }
+                  }}
+                  disabled={updateDonationMutation.isPending}
+                  className="flex-1 py-2.5 bg-[#22C55E] text-white font-bold rounded-xl text-xs hover:bg-[#16A34A] transition-all flex items-center justify-center gap-1 active:scale-95 disabled:opacity-50"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" /> Confirm Clearance
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const updated = await updateDonationMutation.mutateAsync({
+                        id: selectedDonation.id,
+                        status: "failed"
+                      });
+                      setSelectedDonation(updated);
+                    } catch (err: any) {
+                      alert(err.message || "Failed to reject donation.");
+                    }
+                  }}
+                  disabled={updateDonationMutation.isPending}
+                  className="flex-1 py-2.5 bg-[#EF4444] text-white font-bold rounded-xl text-xs hover:bg-[#DC2626] transition-all flex items-center justify-center gap-1 active:scale-95 disabled:opacity-50"
+                >
+                  <Ban className="w-3.5 h-3.5" /> Mark Failed
+                </button>
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-sandstone text-center text-xs text-on-surface-variant font-semibold mt-4">
               Thank you for supporting community cultural heritage.
             </div>
           </div>

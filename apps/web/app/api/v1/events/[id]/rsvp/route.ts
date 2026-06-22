@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, logAuditEvent } from "../../../utils";
+import { verifySession, createServiceRoleClient, logAuditEvent, checkRole } from "../../../utils";
 
 export async function POST(
   req: Request,
@@ -89,3 +89,71 @@ export async function POST(
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }
+
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  const eventId = params.id;
+  if (!eventId) {
+    return NextResponse.json({ message: "Missing event ID" }, { status: 400 });
+  }
+
+  const allowedRoles = ["owner", "admin", "committee_member"];
+  const { hasAccess, userId, errorResponse } = await checkRole(req, allowedRoles);
+  if (!hasAccess && errorResponse) {
+    return errorResponse;
+  }
+
+  const tenantId = req.headers.get("x-tenant-id")!;
+  const supabase = createServiceRoleClient();
+
+  try {
+    // 1. Fetch RSVPs for this event
+    const { data: rsvps, error: rsvpsError } = await supabase
+      .from("event_rsvps")
+      .select("*")
+      .eq("event_id", eventId)
+      .eq("tenant_id", tenantId);
+
+    if (rsvpsError) {
+      return NextResponse.json({ message: rsvpsError.message }, { status: 500 });
+    }
+
+    if (!rsvps || rsvps.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    // 2. Fetch member profile info for these users
+    const userIds = rsvps.map((r) => r.user_id).filter(Boolean);
+    const { data: members, error: membersError } = await supabase
+      .from("tenant_members")
+      .select("user_id, full_name, avatar_url, role")
+      .eq("tenant_id", tenantId)
+      .in("user_id", userIds);
+
+    if (membersError) {
+      return NextResponse.json({ message: membersError.message }, { status: 500 });
+    }
+
+    const membersMap = new Map();
+    (members || []).forEach((m) => {
+      membersMap.set(m.user_id, m);
+    });
+
+    const enrichedRsvps = rsvps.map((r) => {
+      const member = membersMap.get(r.user_id);
+      return {
+        ...r,
+        full_name: member?.full_name || "Unknown Member",
+        avatar_url: member?.avatar_url || null,
+        member_role: member?.role || "member",
+      };
+    });
+
+    return NextResponse.json(enrichedRsvps);
+  } catch (err: any) {
+    return NextResponse.json({ message: err.message }, { status: 500 });
+  }
+}
+

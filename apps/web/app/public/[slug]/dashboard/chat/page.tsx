@@ -11,9 +11,9 @@ import { useAuthStore } from "@utsav/stores";
 import {
   Search,
   PlusCircle,
-  Campaign,
-  Groups,
-  VolunteerActivism,
+  Megaphone,
+  Users,
+  Heart,
   Send,
   Paperclip,
   Smile,
@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 
 export default function ChatDashboardPage() {
-  const { userId } = useAuthStore();
+  const { userId, role } = useAuthStore();
   const { data: channels, isLoading: loadingChannels } = useChatChannels();
   const [activeChannelId, setActiveChannelId] = useState<string | undefined>();
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,7 +41,22 @@ export default function ChatDashboardPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [inputText, setInputText] = useState("");
 
+  const allowedRoles = ["owner", "admin", "treasurer", "committee_member"];
+  const isAllowed = allowedRoles.includes(role || "");
+
   const activeChannel = channels?.find((c) => c.id === activeChannelId);
+
+  if (!isAllowed) {
+    return (
+      <div className="p-margin-desktop text-center bg-white rounded-xl border border-sandstone max-w-xl mx-auto mt-20 p-12 shadow-sm font-sans text-on-surface">
+        <span className="material-symbols-outlined text-kumkum-red text-[48px] mb-4">gpp_bad</span>
+        <h2 className="font-headline-md text-headline-sm font-bold text-on-surface">Access Denied</h2>
+        <p className="font-body-md text-on-surface-variant mt-2">
+          You are not authorized to view the Discussion Portal. Only treasury, committee, and admin roles are permitted.
+        </p>
+      </div>
+    );
+  }
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,12 +91,12 @@ export default function ChatDashboardPage() {
   const getChannelIcon = (name: string) => {
     const n = (name || "").toLowerCase();
     if (n.includes("announcement")) {
-      return <Campaign className="w-5 h-5 shrink-0" />;
+      return <Megaphone className="w-5 h-5 shrink-0" />;
     }
     if (n.includes("volunteer")) {
-      return <VolunteerActivism className="w-5 h-5 shrink-0" />;
+      return <Heart className="w-5 h-5 shrink-0" />;
     }
-    return <Groups className="w-5 h-5 shrink-0" />;
+    return <Users className="w-5 h-5 shrink-0" />;
   };
 
   // Filter channels based on search query
@@ -144,7 +159,7 @@ export default function ChatDashboardPage() {
                       }`}
                     >
                       <div className={`p-1.5 rounded-lg ${isActive ? "bg-primary/10 text-primary" : "bg-cream text-outline"}`}>
-                        {getChannelIcon(chan.name)}
+                        {getChannelIcon(chan.name || "")}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs truncate">{chan.name || `Chat #${chan.id.substring(0, 4)}`}</p>
@@ -152,9 +167,9 @@ export default function ChatDashboardPage() {
                           {chan.last_message_text || "No messages yet."}
                         </p>
                       </div>
-                      {chan.unread_count > 0 && (
+                      {(chan as any).unread_count > 0 && (
                         <span className="bg-kumkum-red text-white text-[9px] px-1.5 py-0.5 rounded-full shrink-0 font-bold">
-                          {chan.unread_count}
+                          {(chan as any).unread_count}
                         </span>
                       )}
                     </button>
@@ -305,7 +320,7 @@ export default function ChatDashboardPage() {
                 </>
               ) : (
                 <div className="py-20 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
-                  <Campaign className="w-12 h-12 text-outline-variant" />
+                  <Megaphone className="w-12 h-12 text-outline-variant" />
                   <div>
                     <h4 className="font-bold text-charcoal text-sm">No messages in this chat yet</h4>
                     <p className="text-xs mt-1 text-on-surface-variant leading-relaxed">
@@ -435,7 +450,7 @@ export default function ChatDashboardPage() {
           >
             <div className="flex justify-between items-center">
               <h3 className="text-base font-bold text-charcoal uppercase tracking-tight flex items-center gap-1.5">
-                <Groups className="w-5 h-5 text-primary" /> Create Group
+                <Users className="w-5 h-5 text-primary" /> Create Group
               </h3>
               <button
                 type="button"

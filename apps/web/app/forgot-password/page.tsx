@@ -127,7 +127,7 @@ export default function ForgotPasswordPage() {
     setError(null);
     
     try {
-      const res = await resetPasswordMutation.mutateAsync({ email, password });
+      const res = await resetPasswordMutation.mutateAsync({ email, password, otp: otp.join("") });
       setLoading(false);
       if (res.success) {
         setStep("SUCCESS");

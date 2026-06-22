@@ -23,6 +23,7 @@ export interface TenantDetails {
   address?: string | null;
   website_url?: string | null;
   whatsapp_group_url?: string | null;
+  razorpay_key_id?: string | null;
 }
 
 export function useCheckSlug(name: string) {

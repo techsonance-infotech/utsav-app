@@ -36,6 +36,20 @@ export async function PATCH(
       return NextResponse.json({ message: "Expense not found" }, { status: 404 });
     }
 
+    if (expense.submitted_by === userId) {
+      return NextResponse.json(
+        { message: "Access denied: Submitters are not allowed to reject their own expense requests." },
+        { status: 403 }
+      );
+    }
+
+    if (!review_note || !review_note.trim()) {
+      return NextResponse.json(
+        { message: "Validation error: A review note explaining the reason is mandatory to reject an expense." },
+        { status: 400 }
+      );
+    }
+
     if (expense.status !== "pending_approval") {
       return NextResponse.json(
         { message: `Cannot reject expense in current status: ${expense.status}` },

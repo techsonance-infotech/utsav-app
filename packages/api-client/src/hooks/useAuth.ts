@@ -107,7 +107,7 @@ export function useVerifyOtp() {
 
 export function useResetPassword() {
   return useMutation({
-    mutationFn: async (data: { email: string; password: string }) => {
+    mutationFn: async (data: { email: string; password: string; otp: string }) => {
       return apiClient<{ success: boolean }>("/auth/reset-password", {
         method: "POST",
         body: JSON.stringify(data),

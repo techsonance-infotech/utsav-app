@@ -39,10 +39,10 @@ export function useUpdateMemberRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, role }: { id: string; role: string }) => {
+    mutationFn: async ({ id, role, status }: { id: string; role?: string; status?: string }) => {
       return apiClient<Member>(`/members/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ role, status }),
       });
     },
     onSuccess: () => {

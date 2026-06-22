@@ -53,6 +53,8 @@ export default function WebExpensesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  const allowedRoles = ["owner", "admin", "treasurer", "committee_member"];
+  const isAllowed = allowedRoles.includes(role || "");
   const hasAdminAccess = ["owner", "admin", "treasurer"].includes(role || "");
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -61,6 +63,11 @@ export default function WebExpensesPage() {
 
     if (!title || !amount || Number(amount) <= 0) {
       setErrorMsg("Please enter a valid title and amount.");
+      return;
+    }
+
+    if (Number(amount) > 500 && (!receiptUrl || receiptUrl.trim() === "")) {
+      setErrorMsg("A digital receipt upload is mandatory for expenses exceeding ₹500.");
       return;
     }
 
@@ -93,31 +100,41 @@ export default function WebExpensesPage() {
   };
 
   const handleApprove = async (id: string) => {
+    setErrorMsg("");
     try {
       await approveMutation.mutateAsync(id);
       refetch();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Approve expense error:", err);
+      setErrorMsg(err.message || "Failed to approve expense.");
     }
   };
 
   const handleRejectConfirm = async () => {
     if (!rejectId) return;
+    setErrorMsg("");
     try {
+      if (!reviewNote || !reviewNote.trim()) {
+        setErrorMsg("A review note is required to reject an expense.");
+        return;
+      }
       await rejectMutation.mutateAsync({ id: rejectId, review_note: reviewNote });
       setRejectId(null);
       refetch();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Reject expense error:", err);
+      setErrorMsg(err.message || "Failed to reject expense.");
     }
   };
 
   const handlePay = async (id: string) => {
+    setErrorMsg("");
     try {
       await payMutation.mutateAsync(id);
       refetch();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Pay expense error:", err);
+      setErrorMsg(err.message || "Failed to mark expense as paid.");
     }
   };
 
@@ -128,6 +145,18 @@ export default function WebExpensesPage() {
       maximumFractionDigits: 0,
     }).format(value);
   };
+
+  if (!isAllowed) {
+    return (
+      <div className="p-margin-desktop text-center bg-white rounded-xl border border-sandstone max-w-xl mx-auto mt-20 p-12 shadow-sm">
+        <span className="material-symbols-outlined text-kumkum-red text-[48px] mb-4">gpp_bad</span>
+        <h2 className="font-headline-md text-headline-sm font-bold text-on-surface">Access Denied</h2>
+        <p className="font-body-md text-on-surface-variant mt-2">
+          You are not authorized to view the Expense Ledger. Only treasury, committee, and admin roles are permitted.
+        </p>
+      </div>
+    );
+  }
 
   // Stats computation
   const totalBudgetUsed = expenses
@@ -248,6 +277,15 @@ export default function WebExpensesPage() {
           </button>
         </div>
       </div>
+
+      {errorMsg && !isDrawerOpen && (
+        <div className="p-4 bg-error-container text-error rounded-xl text-sm font-semibold border border-error/20 flex justify-between items-center animate-in fade-in duration-200">
+          <span>{errorMsg}</span>
+          <button onClick={() => setErrorMsg("")} className="text-error hover:opacity-80">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Main Table Ledger Section */}
       <section className="bg-white border border-sandstone rounded-xl shadow-sm overflow-hidden">

@@ -279,7 +279,7 @@ export default function WebCommitteePage() {
                     // Find assignment
                     const assignment = committeePositions.find((p: any) => p.position === posName);
                     const assignedMember = assignment
-                      ? members.find((m: any) => m.id === assignment.member_id)
+                      ? members.find((m: any) => m.user_id === assignment.member_id)
                       : null;
 
                     return (
@@ -319,18 +319,20 @@ export default function WebCommitteePage() {
                         {/* Assignment dropdown */}
                         <div className="flex gap-2 items-center">
                           <select
-                            value={assignedMember?.id || ""}
+                            value={assignedMember?.user_id || ""}
                             onChange={(e) =>
                               handleAssignPosition(posName, e.target.value || null)
                             }
                             className="bg-[#F4F1EB]/50 hover:bg-[#F4F1EB] border border-sandstone/50 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-primary cursor-pointer w-full"
                           >
                             <option value="">Choose officer...</option>
-                            {members.map((m: any) => (
-                              <option key={m.id} value={m.id}>
-                                {m.full_name} ({m.role})
-                              </option>
-                            ))}
+                            {members
+                              .filter((m: any) => m.status === "active")
+                              .map((m: any) => (
+                                <option key={m.user_id} value={m.user_id}>
+                                  {m.full_name} ({m.role})
+                                </option>
+                              ))}
                           </select>
                           {assignedMember && (
                             <button

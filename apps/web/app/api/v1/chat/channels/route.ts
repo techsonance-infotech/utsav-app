@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, logAuditEvent } from "../../utils";
+import { checkRole, createServiceRoleClient, logAuditEvent, sanitizeInputText } from "../../utils";
 
 export async function GET(req: Request) {
-  const { userId, error } = await verifySession(req);
-  if (error) {
-    return NextResponse.json({ message: error }, { status: 401 });
-  }
+  const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer", "committee_member"]);
+  if (!hasAccess) return errorResponse!;
 
-  const tenantId = req.headers.get("x-tenant-id");
+  const tenantId = req.headers.get("x-tenant-id")!;
   if (!tenantId) {
     return NextResponse.json({ message: "Missing x-tenant-id header" }, { status: 400 });
   }
@@ -49,12 +47,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { userId, error } = await verifySession(req);
-  if (error) {
-    return NextResponse.json({ message: error }, { status: 401 });
-  }
+  const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer", "committee_member"]);
+  if (!hasAccess) return errorResponse!;
 
-  const tenantId = req.headers.get("x-tenant-id");
+  const tenantId = req.headers.get("x-tenant-id")!;
   if (!tenantId) {
     return NextResponse.json({ message: "Missing x-tenant-id header" }, { status: 400 });
   }
@@ -67,6 +63,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Group name is required" }, { status: 400 });
     }
 
+    const sanitizedName = name ? sanitizeInputText(name) : null;
+    if (sanitizedName && (sanitizedName.length < 3 || sanitizedName.length > 50)) {
+      return NextResponse.json({ message: "Group name must be between 3 and 50 characters" }, { status: 400 });
+    }
+
     const supabase = createServiceRoleClient();
 
     // 1. Create channel record
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
       .from("chat_channels")
       .insert({
         tenant_id: tenantId,
-        name: type === "direct" ? null : name,
+        name: type === "direct" ? null : sanitizedName,
         type,
         created_by: userId,
       })

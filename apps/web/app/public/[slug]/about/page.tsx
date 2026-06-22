@@ -60,8 +60,25 @@ export default async function PublicAboutPage({ params }: PublicAboutPageProps) 
 
   const primaryColor = tenant.primary_color || "#ff9500";
 
-  // Mandal leadership/committee
-  const committee = [
+  // Fetch active committee for this tenant
+  const { data: activeCommittee } = await supabase
+    .from("committees")
+    .select(`
+      id,
+      name,
+      year,
+      committee_positions (
+        id,
+        position_title,
+        member_id
+      )
+    `)
+    .eq("tenant_id", tenant.id)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  // Mandal leadership/committee default fallback
+  const fallbackCommittee = [
     {
       name: "Rajesh K. Salvi",
       role: "Mandal President & Chief Trustee",
@@ -91,6 +108,47 @@ export default async function PublicAboutPage({ params }: PublicAboutPageProps) 
       tenure: "4 Years"
     }
   ];
+
+  let displayCommittee: any[] = fallbackCommittee;
+
+  if (activeCommittee && activeCommittee.committee_positions?.length > 0) {
+    const userIds = activeCommittee.committee_positions.map((p: any) => p.member_id).filter(Boolean);
+    if (userIds.length > 0) {
+      const { data: tenantMembers } = await supabase
+        .from("tenant_members")
+        .select("id, user_id, full_name, role, avatar_url, joined_at, created_at")
+        .eq("tenant_id", tenant.id)
+        .in("user_id", userIds);
+
+      const membersMap = new Map();
+      (tenantMembers || []).forEach((m) => {
+        membersMap.set(m.user_id, m);
+      });
+
+      const mappedDisplay: any[] = [];
+      activeCommittee.committee_positions.forEach((pos: any) => {
+        const m = membersMap.get(pos.member_id);
+        if (m) {
+          const joinDate = new Date(m.joined_at || m.created_at || new Date());
+          const yearsDiff = new Date().getFullYear() - joinDate.getFullYear();
+          const tenureStr = yearsDiff > 0 ? `${yearsDiff} Year${yearsDiff > 1 ? "s" : ""}` : "Joined recently";
+
+          mappedDisplay.push({
+            name: m.full_name,
+            role: pos.position_title,
+            initials: m.full_name?.split(" ").map((n: string) => n[0]).join("").toUpperCase() || "M",
+            avatar_url: m.avatar_url,
+            desc: `${pos.position_title} representing the ${activeCommittee.name} for the year ${activeCommittee.year}.`,
+            tenure: tenureStr
+          });
+        }
+      });
+
+      if (mappedDisplay.length > 0) {
+        displayCommittee = mappedDisplay;
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#1e1b18] flex flex-col font-sans selection:bg-[#ff9500]/25 selection:text-[#2d1600]">
@@ -225,13 +283,21 @@ export default async function PublicAboutPage({ params }: PublicAboutPageProps) 
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {committee.map((c) => (
+              {displayCommittee.map((c) => (
                 <div key={c.name} className="bg-white border border-[#E8E2D6]/80 p-6 rounded-3xl shadow-xxs hover:shadow-md hover:border-[#ff9500]/30 transition-all flex flex-col justify-between group">
                   <div className="space-y-4">
-                    {/* Circle initials mockup */}
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#8c5000] to-[#ff9500] text-white flex items-center justify-center font-black text-lg shadow-inner shadow-black/10 group-hover:scale-105 transition-transform">
-                      {c.initials}
-                    </div>
+                    {/* Circle initials or avatar */}
+                    {c.avatar_url ? (
+                      <img
+                        src={c.avatar_url}
+                        className="w-16 h-16 rounded-full object-cover border border-[#ff9500]/20 group-hover:scale-105 transition-transform"
+                        alt=""
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#8c5000] to-[#ff9500] text-white flex items-center justify-center font-black text-lg shadow-inner shadow-black/10 group-hover:scale-105 transition-transform">
+                        {c.initials}
+                      </div>
+                    )}
                     
                     <div>
                       <h4 className="text-sm font-black text-[#3A3530] uppercase tracking-tight">{c.name}</h4>

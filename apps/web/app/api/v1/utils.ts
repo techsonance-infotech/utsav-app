@@ -136,10 +136,13 @@ export async function logAuditEvent(data: {
   }
 }
 
-const ENCRYPTION_KEY = process.env.VENDOR_BANK_ENCRYPTION_KEY || "a_default_secret_key_of_32_bytes_len!"; // Must be 32 bytes
+const ENCRYPTION_KEY = process.env.VENDOR_BANK_ENCRYPTION_KEY || "";
 
 export function encryptText(text: string): string {
   if (!text) return "";
+  if (!ENCRYPTION_KEY) {
+    throw new Error("Encryption key VENDOR_BANK_ENCRYPTION_KEY is not configured.");
+  }
   const crypto = require("crypto");
   const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
   const iv = crypto.randomBytes(16);
@@ -151,6 +154,9 @@ export function encryptText(text: string): string {
 
 export function decryptText(encryptedText: string): string {
   if (!encryptedText) return "";
+  if (!ENCRYPTION_KEY) {
+    throw new Error("Encryption key VENDOR_BANK_ENCRYPTION_KEY is not configured.");
+  }
   try {
     const crypto = require("crypto");
     const parts = encryptedText.split(":");
@@ -164,6 +170,55 @@ export function decryptText(encryptedText: string): string {
   } catch (err) {
     console.error("Decryption failed:", err);
     return "";
+  }
+}
+
+// Structured security logger helper for SIEM ingestion and audit trails
+export async function logSecurityEvent(
+  req: Request,
+  data: {
+    action: string;
+    userId?: string;
+    tenantId?: string | null;
+    status: "success" | "failure" | "warning";
+    details?: any;
+  }
+) {
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  const userAgent = req.headers.get("user-agent") || "unknown";
+
+  const logPayload = {
+    timestamp: new Date().toISOString(),
+    level: data.status === "failure" ? "ERROR" : data.status === "warning" ? "WARN" : "INFO",
+    ip,
+    userAgent,
+    action: data.action,
+    userId: data.userId || "anonymous",
+    tenantId: data.tenantId || null,
+    details: data.details || {},
+  };
+
+  if (data.status === "failure") {
+    console.error(`[SECURITY_EVENT] ${JSON.stringify(logPayload)}`);
+  } else {
+    console.log(`[SECURITY_EVENT] ${JSON.stringify(logPayload)}`);
+  }
+
+  // Also write to audit_logs database table if tenantId is available
+  try {
+    const supabase = createServiceRoleClient();
+    await supabase.from("audit_logs").insert({
+      tenant_id: data.tenantId || null,
+      actor_id: data.userId || "00000000-0000-0000-0000-000000000000",
+      actor_role: data.userId ? "user" : "anonymous",
+      action: data.action,
+      entity_type: "security_log",
+      entity_id: ip,
+      before_data: { details: data.details, userAgent },
+      after_data: { status: data.status },
+    });
+  } catch (err) {
+    console.error("Failed to write security event to database:", err);
   }
 }export async function checkSuperAdmin(
   req: Request
@@ -208,4 +263,17 @@ export function decryptText(encryptedText: string): string {
   }
 
   return { hasAccess: true, userId };
+}
+
+// Sanitize input text to strip HTML tags and escape HTML special characters to prevent XSS script injection
+export function sanitizeInputText(str: string | null | undefined): string {
+  if (!str) return "";
+  return str
+    .replace(/<[^>]*>/g, "") // Strip all HTML tags
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;")
+    .replace(/\//g, "&#x2F;");
 }

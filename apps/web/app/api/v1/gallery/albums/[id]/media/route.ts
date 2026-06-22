@@ -1,19 +1,30 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, checkRole, logAuditEvent } from "../../../../utils";
+import { createServiceRoleClient, checkRole, logAuditEvent } from "../../../../utils";
 
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
 ) {
   const albumId = params.id;
-  const { userId, error } = await verifySession(req);
-  if (error) {
-    return NextResponse.json({ message: error }, { status: 401 });
-  }
+  const { hasAccess, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer", "committee_member"]);
+  if (!hasAccess) return errorResponse!;
 
+  const tenantId = req.headers.get("x-tenant-id")!;
   const supabase = createServiceRoleClient();
 
   try {
+    // Validate that the album belongs to the caller's tenant
+    const { data: album, error: albumError } = await supabase
+      .from("gallery_albums")
+      .select("id")
+      .eq("id", albumId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+
+    if (albumError || !album) {
+      return NextResponse.json({ message: "Album not found or access denied" }, { status: 404 });
+    }
+
     const { data: media, error: dbError } = await supabase
       .from("gallery_media")
       .select("*")
@@ -24,7 +35,15 @@ export async function GET(
       return NextResponse.json({ message: dbError.message }, { status: 500 });
     }
 
-    return NextResponse.json(media || []);
+    // Map DB columns back to frontend expected properties
+    const mapped = (media || []).map((m: any) => ({
+      ...m,
+      media_url: m.url,
+      media_type: m.type,
+      size_bytes: m.file_size_bytes,
+    }));
+
+    return NextResponse.json(mapped);
   } catch (err: any) {
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
@@ -35,7 +54,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const albumId = params.id;
-  const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer", "committee_member"]);
+  const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer"]);
   if (!hasAccess) return errorResponse!;
 
   const tenantId = req.headers.get("x-tenant-id")!;
@@ -50,18 +69,30 @@ export async function POST(
 
     const supabase = createServiceRoleClient();
 
-    // 1. Insert media row
+    // Validate that the album belongs to the caller's tenant and get media count
+    const { data: album, error: albumError } = await supabase
+      .from("gallery_albums")
+      .select("id, media_count")
+      .eq("id", albumId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+
+    if (albumError || !album) {
+      return NextResponse.json({ message: "Album not found or access denied" }, { status: 404 });
+    }
+
+    // 1. Insert media row using actual DB columns
     const { data: media, error: insertError } = await supabase
       .from("gallery_media")
       .insert({
         tenant_id: tenantId,
         album_id: albumId,
-        media_url,
-        media_type,
+        url: media_url,
+        type: media_type,
         caption: caption || null,
         width: width || null,
         height: height || null,
-        size_bytes: size_bytes || null,
+        file_size_bytes: size_bytes || null,
         uploaded_by: userId,
       })
       .select()
@@ -72,15 +103,9 @@ export async function POST(
     }
 
     // 2. Increment media count on album
-    const { data: album } = await supabase
-      .from("gallery_albums")
-      .select("media_count")
-      .eq("id", albumId)
-      .single();
-
     await supabase
       .from("gallery_albums")
-      .update({ media_count: (album?.media_count || 0) + 1 })
+      .update({ media_count: (album.media_count || 0) + 1 })
       .eq("id", albumId);
 
     // Retrieve user role
@@ -102,7 +127,14 @@ export async function POST(
       afterData: media,
     });
 
-    return NextResponse.json(media, { status: 201 });
+    const mapped = {
+      ...media,
+      media_url: media.url,
+      media_type: media.type,
+      size_bytes: media.file_size_bytes,
+    };
+
+    return NextResponse.json(mapped, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ message: err.message }, { status: 500 });
   }

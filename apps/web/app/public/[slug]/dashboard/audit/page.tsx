@@ -12,6 +12,9 @@ export default function WebAuditLogPage() {
   const params = useParams();
   const slug = params?.slug as string | undefined;
 
+  const allowedRoles = ["owner", "admin"];
+  const isAllowed = allowedRoles.includes(role || "");
+
   // Local state for pagination and search filters
   const [limit, setLimit] = useState(25);
   const [cursorList, setCursorList] = useState<(string | null)[]>([null]);
@@ -32,6 +35,7 @@ export default function WebAuditLogPage() {
           ...(activeCursor && { cursor: activeCursor }),
         },
       }),
+    enabled: isAllowed,
   }) as any;
 
   const handleNextPage = () => {
@@ -86,6 +90,18 @@ export default function WebAuditLogPage() {
       JSON.stringify(log.after_data || {}).toLowerCase().includes(q)
     );
   });
+
+  if (!isAllowed) {
+    return (
+      <div className="p-margin-desktop text-center bg-white rounded-xl border border-sandstone max-w-xl mx-auto mt-20 p-12 shadow-sm font-sans text-on-surface">
+        <span className="material-symbols-outlined text-kumkum-red text-[48px] mb-4">gpp_bad</span>
+        <h2 className="font-headline-md text-headline-sm font-bold text-on-surface">Access Denied</h2>
+        <p className="font-body-md text-on-surface-variant mt-2">
+          You are not authorized to view the System Audit Logs. Only the organization Owner or Admin can access these records.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-margin-desktop space-y-lg w-full font-sans text-on-surface">

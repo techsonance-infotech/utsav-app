@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logSecurityEvent } from "../../utils";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -10,6 +11,11 @@ export async function POST(req: Request) {
     const { email, password, tenantId } = body;
 
     if (!email || !password) {
+      await logSecurityEvent(req, {
+        action: "auth_login_failed",
+        status: "failure",
+        details: { reason: "Missing email or password" },
+      });
       return NextResponse.json({ message: "Email and password are required" }, { status: 400 });
     }
 
@@ -25,12 +31,22 @@ export async function POST(req: Request) {
         msg.toLowerCase().includes("email not confirmed") || 
         msg.toLowerCase().includes("email not verified")
       ) {
+        await logSecurityEvent(req, {
+          action: "auth_login_unverified",
+          status: "warning",
+          details: { email },
+        });
         return NextResponse.json({
           message: "Your email address is not verified. Please check your inbox for the verification link.",
           isUnverified: true,
           email: email
         }, { status: 403 });
       }
+      await logSecurityEvent(req, {
+        action: "auth_login_failed",
+        status: "failure",
+        details: { email, reason: msg },
+      });
       return NextResponse.json({ message: msg }, { status: 401 });
     }
 
@@ -39,6 +55,11 @@ export async function POST(req: Request) {
     const isVerified = data.user.user_metadata?.is_verified ?? true; // Default true for legacy or non-metadata users
     
     if (!isGoogleUser && (!data.user.email_confirmed_at || isVerified === false)) {
+      await logSecurityEvent(req, {
+        action: "auth_login_unverified",
+        status: "warning",
+        details: { email, userId: data.user.id },
+      });
       return NextResponse.json({
         message: "Your email address is not verified. Please check your inbox for the verification link.",
         isUnverified: true,
@@ -54,11 +75,11 @@ export async function POST(req: Request) {
     // Auto-associate user with tenant if not already a member
     if (tenantId) {
       const { data: existingMember } = await serviceClient
-        .from("tenant_members")
-        .select("id")
-        .eq("tenant_id", tenantId)
-        .eq("user_id", data.user.id)
-        .maybeSingle();
+         .from("tenant_members")
+         .select("id")
+         .eq("tenant_id", tenantId)
+         .eq("user_id", data.user.id)
+         .maybeSingle();
 
       if (!existingMember) {
         const { error: linkError } = await serviceClient.from("tenant_members").insert({
@@ -106,6 +127,14 @@ export async function POST(req: Request) {
 
     console.log("DEBUG LOGIN: Resolved Tenant =", tenant);
 
+    await logSecurityEvent(req, {
+      action: "auth_login_success",
+      userId: data.user.id,
+      tenantId: tenant?.id || null,
+      status: "success",
+      details: { email },
+    });
+
     return NextResponse.json({
       accessToken: data.session.access_token,
       refreshToken: data.session.refresh_token,
@@ -118,6 +147,11 @@ export async function POST(req: Request) {
       tenant,
     });
   } catch (err: any) {
+    await logSecurityEvent(req, {
+      action: "auth_login_exception",
+      status: "failure",
+      details: { error: err.message },
+    });
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }

@@ -1,10 +1,32 @@
 "use client";
 
 import React, { useState } from "react";
-import { useEvents, useCreateEvent, useRSVP } from "@utsav/api-client";
+import {
+  useEvents,
+  useCreateEvent,
+  useRSVP,
+  useUpdateEvent,
+  useDeleteEvent,
+  useEventRSVPs,
+  useFetchMembers,
+} from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 import { useParams } from "next/navigation";
-import { X, Check, MapPin, Calendar, Users, AlertTriangle } from "lucide-react";
+import { X, Check, MapPin, Calendar, Users, AlertTriangle, Edit2, Trash2, ShieldAlert } from "lucide-react";
+
+const formatDateTimeLocal = (dateStr?: string) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
 
 export default function WebEventsPage() {
   const { role } = useAuthStore();
@@ -15,9 +37,16 @@ export default function WebEventsPage() {
 
   const createMutation = useCreateEvent();
   const rsvpMutation = useRSVP();
+  const updateMutation = useUpdateEvent();
+  const deleteMutation = useDeleteEvent();
+
+  // Fetch tenant members for organiser dropdown
+  const { data: members = [] } = useFetchMembers() as any;
+  const activeMembers = (members || []).filter((m: any) => m.status === "active");
 
   // Create Form Drawer State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<
@@ -31,6 +60,10 @@ export default function WebEventsPage() {
   const [maxCapacity, setMaxCapacity] = useState("");
   const [rsvpRequired, setRsvpRequired] = useState(false);
   const [rsvpDeadline, setRsvpDeadline] = useState("");
+  const [organiserId, setOrganiserId] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
+  const [status, setStatus] = useState("draft");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -40,9 +73,62 @@ export default function WebEventsPage() {
   const [monthFilter, setMonthFilter] = useState("");
   const [activeMenuEventId, setActiveMenuEventId] = useState<string | null>(null);
 
+  // RSVPs List Modal State
+  const [viewRsvpsEventId, setViewRsvpsEventId] = useState<string | null>(null);
+
   const hasAdminAccess = ["owner", "admin", "committee_member"].includes(role || "");
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setEditingEventId(null);
+    setTitle("");
+    setDescription("");
+    setCategory("general");
+    setStartAt("");
+    setEndAt("");
+    setLocationName("");
+    setLocationMapsUrl("");
+    setBannerImageUrl("");
+    setMaxCapacity("");
+    setRsvpRequired(false);
+    setRsvpDeadline("");
+    setOrganiserId("");
+    setTagsInput("");
+    setStatus("draft");
+  };
+
+  const handleEditClick = (evt: any) => {
+    setEditingEventId(evt.id);
+    setTitle(evt.title || "");
+    setDescription(evt.description || "");
+    setCategory(evt.category || "general");
+    setStartAt(formatDateTimeLocal(evt.start_at));
+    setEndAt(formatDateTimeLocal(evt.end_at));
+    setLocationName(evt.location_name || "");
+    setLocationMapsUrl(evt.location_maps_url || "");
+    setBannerImageUrl(evt.banner_image_url || "");
+    setMaxCapacity(evt.max_capacity ? String(evt.max_capacity) : "");
+    setRsvpRequired(evt.rsvp_required || false);
+    setRsvpDeadline(formatDateTimeLocal(evt.rsvp_deadline));
+    setOrganiserId(evt.organiser_id || "");
+    setTagsInput((evt.tags || []).join(", "));
+    setStatus(evt.status || "draft");
+    
+    setIsDrawerOpen(true);
+  };
+
+  const handleDelete = async (eventId: string) => {
+    if (!window.confirm("Are you sure you want to cancel/delete this event?")) {
+      return;
+    }
+    try {
+      await deleteMutation.mutateAsync(eventId);
+      refetch();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete event");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -51,39 +137,39 @@ export default function WebEventsPage() {
       return;
     }
 
+    const payload = {
+      title,
+      description: description || null,
+      category,
+      start_at: new Date(startAt).toISOString(),
+      end_at: endAt ? new Date(endAt).toISOString() : null,
+      location_name: locationName || null,
+      location_maps_url: locationMapsUrl || null,
+      banner_image_url: bannerImageUrl || null,
+      max_capacity: maxCapacity ? Number(maxCapacity) : null,
+      rsvp_required: rsvpRequired,
+      rsvp_deadline: rsvpDeadline ? new Date(rsvpDeadline).toISOString() : null,
+      organiser_id: organiserId || null,
+      tags: tagsInput.split(",").map(t => t.trim()).filter(Boolean),
+      status: editingEventId ? status : "published",
+    };
+
     setIsSubmitting(true);
     try {
-      await createMutation.mutateAsync({
-        title,
-        description: description || undefined,
-        category,
-        start_at: new Date(startAt).toISOString(),
-        end_at: endAt ? new Date(endAt).toISOString() : undefined,
-        location_name: locationName || undefined,
-        location_maps_url: locationMapsUrl || undefined,
-        banner_image_url: bannerImageUrl || undefined,
-        max_capacity: maxCapacity ? Number(maxCapacity) : undefined,
-        rsvp_required: rsvpRequired,
-        rsvp_deadline: rsvpDeadline ? new Date(rsvpDeadline).toISOString() : undefined,
-        tags: [],
-      });
+      if (editingEventId) {
+        await updateMutation.mutateAsync({
+          eventId: editingEventId,
+          input: payload as any,
+        });
+      } else {
+        await createMutation.mutateAsync(payload as any);
+      }
 
-      // Clear Form
-      setTitle("");
-      setDescription("");
-      setCategory("general");
-      setStartAt("");
-      setEndAt("");
-      setLocationName("");
-      setLocationMapsUrl("");
-      setBannerImageUrl("");
-      setMaxCapacity("");
-      setRsvpRequired(false);
-      setRsvpDeadline("");
+      resetForm();
       setIsDrawerOpen(false);
       refetch();
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to create event");
+      setErrorMsg(err.message || "Failed to save event");
     } finally {
       setIsSubmitting(false);
     }
@@ -274,7 +360,10 @@ export default function WebEventsPage() {
 
           {hasAdminAccess && (
             <button
-              onClick={() => setIsDrawerOpen(true)}
+              onClick={() => {
+                resetForm();
+                setIsDrawerOpen(true);
+              }}
               className="flex items-center justify-center gap-2 bg-primary-container text-on-primary-container hover:opacity-90 px-6 py-2.5 rounded-lg font-bold shadow-md saffron-glow active:scale-95 transition-transform"
             >
               <span className="material-symbols-outlined text-lg">add</span>
@@ -455,6 +544,45 @@ export default function WebEventsPage() {
                                   <span className="material-symbols-outlined text-sm">help_outline</span>
                                   Maybe Attending
                                 </button>
+
+                                {hasAdminAccess && (
+                                  <>
+                                    <div className="border-t border-sandstone my-1" />
+                                    <p className="px-4 py-1.5 text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                                      Organizer Actions
+                                    </p>
+                                    <button
+                                      onClick={() => {
+                                        setActiveMenuEventId(null);
+                                        setViewRsvpsEventId(event.id);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs font-bold flex items-center gap-2 hover:bg-surface-container text-charcoal"
+                                    >
+                                      <Users className="w-4.5 h-4.5 text-primary shrink-0" />
+                                      View RSVPs List
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setActiveMenuEventId(null);
+                                        handleEditClick(event);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs font-bold flex items-center gap-2 hover:bg-surface-container text-charcoal"
+                                    >
+                                      <Edit2 className="w-4 h-4 text-blue-500 shrink-0" />
+                                      Edit Details
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setActiveMenuEventId(null);
+                                        handleDelete(event.id);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs font-bold flex items-center gap-2 hover:bg-surface-container text-kumkum-red"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-kumkum-red shrink-0" />
+                                      Delete Event
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </>
                           )}
@@ -528,10 +656,12 @@ export default function WebEventsPage() {
               <div>
                 <h2 className="text-2xl font-black text-[#3A3530] uppercase tracking-tight flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary text-[24px]">calendar_today</span>
-                  Schedule Festival Event
+                  {editingEventId ? "Update Festival Event" : "Schedule Festival Event"}
                 </h2>
                 <p className="text-gray-500 text-xs mt-1 font-semibold leading-relaxed">
-                  Publish a new cultural program, ritual, or committee meet onto the public calendar.
+                  {editingEventId
+                    ? "Modify scheduled timing, location, category, or status details for this event."
+                    : "Publish a new cultural program, ritual, or committee meet onto the public calendar."}
                 </p>
               </div>
 
@@ -541,7 +671,7 @@ export default function WebEventsPage() {
                 </div>
               )}
 
-              <form onSubmit={handleCreate} className="space-y-4 pt-4">
+              <form onSubmit={handleSubmit} className="space-y-4 pt-4">
                 <div>
                   <label className="block text-[10px] font-black uppercase text-[#554334] tracking-wider mb-2">
                     Event Title / Ritual Name *
@@ -556,25 +686,45 @@ export default function WebEventsPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-[#554334] tracking-wider mb-2">
-                    Category Type
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e: any) => setCategory(e.target.value)}
-                    className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-primary font-bold"
-                  >
-                    <option value="puja">Puja / Ritual</option>
-                    <option value="cultural">Cultural Program</option>
-                    <option value="sports">Sports / Competition</option>
-                    <option value="aarti">Aarti Session</option>
-                    <option value="prasad_vitran">Prasad Distribution</option>
-                    <option value="volunteer_duty">Volunteer Briefing</option>
-                    <option value="meeting">Mandal Committee Meeting</option>
-                    <option value="visarjan">Visarjan Ceremony</option>
-                    <option value="general">General</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-[#554334] tracking-wider mb-2">
+                      Category Type
+                    </label>
+                    <select
+                      value={category}
+                      onChange={(e: any) => setCategory(e.target.value)}
+                      className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-primary font-bold"
+                    >
+                      <option value="puja">Puja / Ritual</option>
+                      <option value="cultural">Cultural Program</option>
+                      <option value="sports">Sports / Competition</option>
+                      <option value="aarti">Aarti Session</option>
+                      <option value="prasad_vitran">Prasad Distribution</option>
+                      <option value="volunteer_duty">Volunteer Briefing</option>
+                      <option value="meeting">Mandal Committee Meeting</option>
+                      <option value="visarjan">Visarjan Ceremony</option>
+                      <option value="general">General</option>
+                    </select>
+                  </div>
+
+                  {editingEventId && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-[#554334] tracking-wider mb-2">
+                        Event Status
+                      </label>
+                      <select
+                        value={status}
+                        onChange={(e: any) => setStatus(e.target.value)}
+                        className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-primary font-bold"
+                      >
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -600,6 +750,39 @@ export default function WebEventsPage() {
                       onChange={(e) => setEndAt(e.target.value)}
                       className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-primary"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-[#554334] tracking-wider mb-2">
+                      Max Capacity (Optional)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={maxCapacity}
+                      onChange={(e) => setMaxCapacity(e.target.value)}
+                      placeholder="e.g. 500"
+                      className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-[#554334] tracking-wider mb-2">
+                      Organiser In Charge
+                    </label>
+                    <select
+                      value={organiserId}
+                      onChange={(e) => setOrganiserId(e.target.value)}
+                      className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-primary font-bold"
+                    >
+                      <option value="">Select Organiser</option>
+                      {activeMembers.map((m: any) => (
+                        <option key={m.user_id} value={m.user_id}>
+                          {m.full_name} ({m.role})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -641,6 +824,19 @@ export default function WebEventsPage() {
                       className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-primary"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-[#554334] tracking-wider mb-2">
+                    Tags (Comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    placeholder="e.g. puja, cultural, evening"
+                    className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-primary"
+                  />
                 </div>
 
                 <div>
@@ -691,10 +887,10 @@ export default function WebEventsPage() {
                   {isSubmitting ? (
                     <>
                       <div className="w-4 h-4 rounded-full border-2 border-on-primary-container border-t-transparent animate-spin" />
-                      <span>Creating Event...</span>
+                      <span>{editingEventId ? "Saving Changes..." : "Creating Event..."}</span>
                     </>
                   ) : (
-                    "Publish Event Details"
+                    editingEventId ? "Save Changes" : "Publish Event Details"
                   )}
                 </button>
               </form>
@@ -710,6 +906,133 @@ export default function WebEventsPage() {
         </div>
       )}
 
+      {/* RSVPs Attendees List Modal */}
+      {viewRsvpsEventId && (
+        <RsvpsListModal
+          eventId={viewRsvpsEventId}
+          onClose={() => setViewRsvpsEventId(null)}
+        />
+      )}
+
     </div>
   );
 }
+
+function RsvpsListModal({ eventId, onClose }: { eventId: string; onClose: () => void }) {
+  const { data: rsvps = [], isLoading } = useEventRSVPs(eventId);
+
+  const stats = {
+    attending: rsvps.filter((r) => r.status === "attending").length,
+    maybe: rsvps.filter((r) => r.status === "maybe").length,
+    not_attending: rsvps.filter((r) => r.status === "not_attending").length,
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white border border-sandstone rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
+        
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-sandstone flex items-center justify-between bg-cream/35">
+          <div>
+            <h3 className="text-lg font-black text-charcoal uppercase tracking-tight flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              RSVP Attendees List
+            </h3>
+            <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
+              Showing responses registered by community members
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-sandstone/50 rounded-lg text-gray-500 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 border-b border-sandstone bg-surface-variant/10 text-center py-3 font-mono-data text-xs">
+          <div className="border-r border-sandstone">
+            <p className="text-gray-500 font-bold uppercase text-[9px] tracking-wider mb-0.5">Attending</p>
+            <p className="text-tulsi-green font-black text-sm">{stats.attending}</p>
+          </div>
+          <div className="border-r border-sandstone">
+            <p className="text-gray-500 font-bold uppercase text-[9px] tracking-wider mb-0.5">Maybe</p>
+            <p className="text-aarti-gold font-black text-sm">{stats.maybe}</p>
+          </div>
+          <div>
+            <p className="text-gray-500 font-bold uppercase text-[9px] tracking-wider mb-0.5">Skip</p>
+            <p className="text-kumkum-red font-black text-sm">{stats.not_attending}</p>
+          </div>
+        </div>
+
+        {/* List Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              <p className="text-xs font-semibold text-gray-500">Loading attendee responses...</p>
+            </div>
+          ) : rsvps.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center text-gray-500">
+              <ShieldAlert className="w-10 h-10 text-gray-300 mb-2" />
+              <p className="text-xs font-bold uppercase tracking-wide">No RSVPs Yet</p>
+              <p className="text-[11px] font-semibold mt-1 max-w-xs">
+                No replies have been recorded for this event.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-sandstone">
+              {rsvps.map((rsvp) => (
+                <div key={rsvp.id} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
+                  <div className="flex items-center gap-3">
+                    {rsvp.avatar_url ? (
+                      <img
+                        src={rsvp.avatar_url}
+                        alt={rsvp.full_name}
+                        className="w-10 h-10 rounded-full border border-sandstone object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-primary-fixed/20 border border-primary/20 flex items-center justify-center font-bold text-primary text-sm uppercase">
+                        {rsvp.full_name.slice(0, 2)}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-bold text-charcoal">{rsvp.full_name}</p>
+                      <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider mt-0.5">
+                        {rsvp.member_role}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`px-3 py-1 rounded-full font-label-md text-label-md font-bold capitalize ${
+                      rsvp.status === "attending"
+                        ? "bg-tulsi-green/10 text-tulsi-green"
+                        : rsvp.status === "maybe"
+                        ? "bg-aarti-gold/10 text-aarti-gold"
+                        : "bg-kumkum-red/10 text-kumkum-red"
+                    }`}
+                  >
+                    {rsvp.status.replace("_", " ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-sandstone bg-cream/20 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 bg-sandstone/30 hover:bg-sandstone/50 text-charcoal font-bold rounded-xl text-xs uppercase tracking-wider transition-all"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

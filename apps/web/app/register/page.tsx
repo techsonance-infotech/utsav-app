@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSignUp, supabase } from "@utsav/api-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -29,7 +29,7 @@ function PasswordRequirement({ met, text }: { met: boolean; text: string }) {
   );
 }
 
-export default function RegisterPage() {
+function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tenantIdParam = searchParams.get("tenantId");
@@ -450,5 +450,13 @@ export default function RegisterPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+      <RegisterContent />
+    </Suspense>
   );
 }

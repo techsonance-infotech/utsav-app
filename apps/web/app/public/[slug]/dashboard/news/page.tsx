@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useNewsArticles, useCreateNewsArticle, useIncrementNewsRead } from "@utsav/api-client";
+import { useNewsArticles, useCreateNewsArticle, useIncrementNewsRead, useUpdateNewsArticle, useDeleteNewsArticle } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 import { useParams } from "next/navigation";
 import { X, Globe, Eye, MessageSquare, AlertTriangle } from "lucide-react";
@@ -13,10 +13,13 @@ export default function WebNewsPage() {
 
   const { data: articles = [], isLoading: loadingNews, refetch } = useNewsArticles(true) as any;
   const createMutation = useCreateNewsArticle();
+  const updateMutation = useUpdateNewsArticle();
+  const deleteMutation = useDeleteNewsArticle();
   const incrementRead = useIncrementNewsRead();
 
-  // Create Form States
+  // Form & Drawer States
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [titleHi, setTitleHi] = useState("");
   const [titleGu, setTitleGu] = useState("");
@@ -30,10 +33,13 @@ export default function WebNewsPage() {
   const [language, setLanguage] = useState("en");
   const [bannerImageUrl, setBannerImageUrl] = useState("");
   const [tagsInput, setTagsInput] = useState("");
-  const [status, setStatus] = useState<"draft" | "published">("draft");
+  const [status, setStatus] = useState<"draft" | "published" | "scheduled">("draft");
+  const [scheduledAt, setScheduledAt] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [deletingArticle, setDeletingArticle] = useState<any | null>(null);
+  const [deleteErrorMsg, setDeleteErrorMsg] = useState("");
 
   // Preview / translation view states
   const [viewedArticle, setViewedArticle] = useState<any | null>(null);
@@ -45,12 +51,69 @@ export default function WebNewsPage() {
 
   const hasAdminAccess = ["owner", "admin", "committee_member"].includes(role || "");
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setTitle("");
+    setTitleHi("");
+    setTitleGu("");
+    setBody("");
+    setBodyHi("");
+    setBodyGu("");
+    setExcerpt("");
+    setCategory("general");
+    setLanguage("en");
+    setBannerImageUrl("");
+    setTagsInput("");
+    setStatus("draft");
+    setScheduledAt("");
+    setEditingArticleId(null);
+    setErrorMsg("");
+  };
+
+  const handleEdit = (art: any) => {
+    setEditingArticleId(art.id);
+    setTitle(art.title || "");
+    setTitleHi(art.title_hi || "");
+    setTitleGu(art.title_gu || "");
+    setBody(art.body || "");
+    setBodyHi(art.body_hi || "");
+    setBodyGu(art.body_gu || "");
+    setExcerpt(art.excerpt || "");
+    setCategory(art.category || "general");
+    setLanguage(art.language || "en");
+    setBannerImageUrl(art.banner_image_url || "");
+    setTagsInput(art.tags?.join(", ") || "");
+    setStatus(art.status || "draft");
+    setScheduledAt(art.scheduled_at ? new Date(art.scheduled_at).toISOString().slice(0, 16) : "");
+    setIsDrawerOpen(true);
+  };
+
+  const handleDeleteClick = (art: any) => {
+    setDeletingArticle(art);
+    setDeleteErrorMsg("");
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingArticle) return;
+    try {
+      await deleteMutation.mutateAsync(deletingArticle.id);
+      setDeletingArticle(null);
+      refetch();
+    } catch (err: any) {
+      setDeleteErrorMsg(err.message || "Failed to delete article");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
 
     if (!title || !body) {
       setErrorMsg("Title and Body content are required.");
+      return;
+    }
+
+    if (status === "scheduled" && !scheduledAt) {
+      setErrorMsg("Scheduled Date & Time is required for scheduled status.");
       return;
     }
 
@@ -61,9 +124,9 @@ export default function WebNewsPage() {
             .split(",")
             .map((t) => t.trim())
             .filter((t) => t.length > 0)
-      : [];
+        : [];
 
-      await createMutation.mutateAsync({
+      const payload = {
         title,
         title_hi: titleHi || undefined,
         title_gu: titleGu || undefined,
@@ -76,26 +139,24 @@ export default function WebNewsPage() {
         banner_image_url: bannerImageUrl || undefined,
         tags,
         status,
+        scheduled_at: status === "scheduled" && scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         allow_comments: false,
-      });
+      };
 
-      // Clear form
-      setTitle("");
-      setTitleHi("");
-      setTitleGu("");
-      setBody("");
-      setBodyHi("");
-      setBodyGu("");
-      setExcerpt("");
-      setCategory("general");
-      setLanguage("en");
-      setBannerImageUrl("");
-      setTagsInput("");
-      setStatus("draft");
+      if (editingArticleId) {
+        await updateMutation.mutateAsync({
+          articleId: editingArticleId,
+          data: payload,
+        });
+      } else {
+        await createMutation.mutateAsync(payload);
+      }
+
+      resetForm();
       setIsDrawerOpen(false);
       refetch();
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to create news article");
+      setErrorMsg(err.message || "Failed to save news article");
     } finally {
       setIsSubmitting(false);
     }
@@ -136,6 +197,12 @@ export default function WebNewsPage() {
   const totalPublished = articles.filter((a: any) => a.status === "published").length;
   const totalViews = articles.reduce((sum: number, a: any) => sum + (a.read_count || 0), 0);
   const totalDrafts = articles.filter((a: any) => a.status === "draft").length;
+  const scheduledArticles = articles.filter((a: any) => a.status === "scheduled");
+  const totalScheduled = scheduledArticles.length;
+  const sortedScheduled = [...scheduledArticles].sort(
+    (a: any, b: any) => new Date(a.scheduled_at || 0).getTime() - new Date(b.scheduled_at || 0).getTime()
+  );
+  const nextScheduledTitle = sortedScheduled[0] ? `Next: ${sortedScheduled[0].title}` : "No upcoming items";
 
   return (
     <div className="p-margin-desktop space-y-lg w-full font-sans text-on-surface">
@@ -197,10 +264,12 @@ export default function WebNewsPage() {
 
         <div className="bg-cream p-lg rounded-2xl border border-sandstone">
           <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">Scheduled Items</p>
-          <p className="font-display-xl text-display-xl text-primary font-bold">8</p>
+          <p className="font-display-xl text-display-xl text-primary font-bold">{totalScheduled}</p>
           <div className="flex items-center gap-1 mt-2 text-aarti-gold">
             <span className="material-symbols-outlined text-[16px]">schedule</span>
-            <span className="font-label-sm text-label-sm font-bold">Next: Maha Shivratri Update</span>
+            <span className="font-label-sm text-label-sm font-bold truncate max-w-full" title={nextScheduledTitle}>
+              {nextScheduledTitle}
+            </span>
           </div>
         </div>
 
@@ -356,12 +425,30 @@ export default function WebNewsPage() {
                       <span className="material-symbols-outlined text-[15px] text-primary">visibility</span>
                       <span>{article.read_count || 0}</span>
                     </div>
-                    <button className="p-1 hover:bg-sandstone/50 rounded-full text-on-surface-variant transition-colors">
-                      <span className="material-symbols-outlined text-[18px]">edit</span>
-                    </button>
-                    <button className="p-1 hover:bg-sandstone/50 rounded-full text-on-surface-variant transition-colors">
-                      <span className="material-symbols-outlined text-[18px]">more_vert</span>
-                    </button>
+                    {hasAdminAccess && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(article);
+                          }}
+                          className="p-1 hover:bg-sandstone/50 rounded-full text-on-surface-variant transition-colors"
+                          title="Edit Article"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">edit</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClick(article);
+                          }}
+                          className="p-1 hover:bg-sandstone/50 rounded-full text-on-surface-variant transition-colors"
+                          title="Delete Article"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -415,12 +502,33 @@ export default function WebNewsPage() {
                     {art.language || "EN"}
                   </td>
                   <td className="px-lg py-4 text-right">
-                    <button
-                      onClick={() => handleOpenArticle(art)}
-                      className="text-on-surface-variant hover:text-primary transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">analytics</span>
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleOpenArticle(art)}
+                        className="text-on-surface-variant hover:text-primary transition-colors"
+                        title="View Details"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">analytics</span>
+                      </button>
+                      {hasAdminAccess && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(art)}
+                            className="text-on-surface-variant hover:text-primary transition-colors"
+                            title="Edit Article"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(art)}
+                            className="text-on-surface-variant hover:text-kumkum-red transition-colors"
+                            title="Delete Article"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -435,7 +543,10 @@ export default function WebNewsPage() {
           <div className="w-full max-w-2xl bg-white border-l border-sandstone h-full p-6 md:p-8 flex flex-col justify-between shadow-2xl relative animate-in slide-in-from-right duration-300 overflow-y-auto">
             
             <button
-              onClick={() => setIsDrawerOpen(false)}
+              onClick={() => {
+                setIsDrawerOpen(false);
+                resetForm();
+              }}
               className="absolute top-6 right-6 p-2 bg-[#FAFAF8] border border-[#E8E2D6] hover:bg-[#F4F1EB] rounded-lg text-gray-500 transition-all"
             >
               <X className="w-5 h-5" />
@@ -444,11 +555,15 @@ export default function WebNewsPage() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-2xl font-black text-[#3A3530] uppercase tracking-tight flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-[24px]">post_add</span>
-                  Compose Multilingual Update
+                  <span className="material-symbols-outlined text-primary text-[24px]">
+                    {editingArticleId ? "edit_note" : "post_add"}
+                  </span>
+                  {editingArticleId ? "Update News Article" : "Compose Multilingual Update"}
                 </h2>
                 <p className="text-gray-500 text-xs mt-1 font-semibold leading-relaxed">
-                  Compose and dispatch articles across English, Hindi, and Gujarati versions of connected feeds.
+                  {editingArticleId
+                    ? "Update and dispatch changes across English, Hindi, and Gujarati versions of connected feeds."
+                    : "Compose and dispatch articles across English, Hindi, and Gujarati versions of connected feeds."}
                 </p>
               </div>
 
@@ -458,7 +573,7 @@ export default function WebNewsPage() {
                 </div>
               )}
 
-              <form onSubmit={handleCreate} className="space-y-4 pt-4 text-xs font-semibold text-[#554334]">
+              <form onSubmit={handleSubmit} className="space-y-4 pt-4 text-xs font-semibold text-[#554334]">
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-wider mb-2">Title (English) *</label>
@@ -575,13 +690,29 @@ export default function WebNewsPage() {
                     <select
                       value={status}
                       onChange={(e: any) => setStatus(e.target.value)}
-                      className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-primary"
+                      className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-primary font-bold"
                     >
                       <option value="draft">Save as Draft</option>
+                      <option value="scheduled">Schedule Publication</option>
                       <option value="published">Publish Instantly</option>
                     </select>
                   </div>
                 </div>
+
+                {status === "scheduled" && (
+                  <div className="animate-in fade-in slide-in-from-top duration-200">
+                    <label className="block text-[10px] font-black uppercase tracking-wider mb-2">
+                      Scheduled Date & Time *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required={status === "scheduled"}
+                      value={scheduledAt}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                      className="w-full bg-[#FAFAF8] border border-[#E8E2D6] rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-primary font-sans"
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -614,10 +745,10 @@ export default function WebNewsPage() {
                   {isSubmitting ? (
                     <>
                       <div className="w-4 h-4 rounded-full border-2 border-on-primary-container border-t-transparent animate-spin" />
-                      <span>Disbursing Article...</span>
+                      <span>{editingArticleId ? "Updating Article..." : "Disbursing Article..."}</span>
                     </>
                   ) : (
-                    "Save News Article"
+                    editingArticleId ? "Update News Article" : "Save News Article"
                   )}
                 </button>
               </form>
@@ -697,6 +828,44 @@ export default function WebNewsPage() {
             <div className="flex justify-between items-center text-xs text-on-surface-variant font-bold">
               <span>Published on: {new Date(viewedArticle.created_at).toLocaleDateString("en-IN")}</span>
               <span>Reads: {viewedArticle.read_count || 0}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingArticle && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-sandstone rounded-2xl w-full max-w-md p-6 relative shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="font-headline-sm text-headline-sm font-bold text-charcoal flex items-center gap-2">
+              <AlertTriangle className="w-6 h-6 text-kumkum-red shrink-0" />
+              Delete Article?
+            </h3>
+            <p className="text-body-md text-on-surface-variant mt-3 leading-relaxed">
+              Are you sure you want to delete <strong className="text-charcoal">"{deletingArticle.title}"</strong>? This action cannot be undone and will immediately remove the article from all public feeds.
+            </p>
+            {deleteErrorMsg && (
+              <div className="mt-3 p-3 bg-kumkum-red/10 text-kumkum-red rounded-xl text-xs font-semibold text-center border border-kumkum-red/20">
+                {deleteErrorMsg}
+              </div>
+            )}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setDeletingArticle(null);
+                  setDeleteErrorMsg("");
+                }}
+                className="px-4 py-2 border border-sandstone rounded-lg hover:bg-cream bg-white transition-colors font-label-md text-label-md font-bold text-on-surface-variant"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-5 py-2 bg-kumkum-red text-white hover:opacity-90 rounded-lg font-bold shadow-md transition-all flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">delete</span>
+                Delete
+              </button>
             </div>
           </div>
         </div>

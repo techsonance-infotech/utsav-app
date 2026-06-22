@@ -2,7 +2,16 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuthStore } from "@utsav/stores";
-import { useFetchTenant, useLogout, useFetchMembers } from "@utsav/api-client";
+import {
+  useFetchTenant,
+  useLogout,
+  useFetchMembers,
+  useFetchDonations,
+  useExpenses,
+  useNotifications,
+  useUnreadNotificationsCount,
+  useMarkNotificationRead
+} from "@utsav/api-client";
 import { useRouter, usePathname, useParams } from "next/navigation";
 import Link from "next/link";
 
@@ -13,6 +22,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const params = useParams();
   const logoutMutation = useLogout();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Header interaction states
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const slug = params?.slug as string | undefined;
 
@@ -35,6 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (pathname.endsWith("/vendors")) return "Vendor Directory";
     if (pathname.endsWith("/reports")) return "Financial & Community Reports";
     if (pathname.endsWith("/gallery")) return "Media Gallery";
+    if (pathname.endsWith("/chat")) return "Mandal Chatroom";
     if (pathname.endsWith("/audit")) return "System Audit Logs";
     if (pathname.endsWith("/settings")) return "Portal Settings";
     return "Dashboard";
@@ -51,6 +66,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const { data: tenant } = useFetchTenant(tenantId);
   const { data: members } = useFetchMembers();
+
+  // Search queries
+  const { data: allDonations } = useFetchDonations();
+  const { data: allExpenses } = useExpenses();
+
+  // Notification hooks
+  const unreadCount = useUnreadNotificationsCount();
+  const { data: notifications } = useNotifications();
+  const markReadMutation = useMarkNotificationRead();
 
   const handleLogout = async () => {
     await logoutMutation.mutateAsync();
@@ -70,8 +94,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: "Reports", href: getDashboardHref("/reports"), icon: "assessment", roles: ["owner", "admin", "treasurer"] },
     { name: "Gallery", href: getDashboardHref("/gallery"), icon: "photo_library", roles: ["owner", "admin", "committee_member"] },
     { name: "Chat", href: getDashboardHref("/chat"), icon: "chat", roles: ["owner", "admin", "treasurer", "committee_member"] },
-    { name: "Audit Log", href: getDashboardHref("/audit"), icon: "history", roles: ["owner"] },
-    { name: "Settings", href: getDashboardHref("/settings"), icon: "settings", roles: ["owner"] },
+    { name: "Audit Log", href: getDashboardHref("/audit"), icon: "history", roles: ["owner", "admin"] },
+    { name: "Settings", href: getDashboardHref("/settings"), icon: "settings", roles: ["owner", "admin"] },
   ];
 
   if (!userId || (!tenantId && pathname !== "/onboarding")) {
@@ -88,6 +112,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Resolve current user member information
   const currentUserMember = members?.find((m: any) => m.user_id === userId);
   const currentUserAvatar = currentUserMember?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCb2RcCu63CpVfuVCJqdvQPl3hrYM4daILS6dDMSbGePzBwoYZtotnn-Eejag28XcCBalxXUCcGznMzznNlLl1JTBCLbgXYf_ONZUP_m14t7Vvrszu5gaC8QdNETogsH25rEQCPJZx3ofBjxUWPeeiwJ37_jUSdlGYbsnIxN1CfuJLqnu1p2mHqBdBz0Mb2nuhvuWJwe0PkNBcp1y7bhttSPW8AB28RZpUhW0M0o11Vs5wGh-4X5jeC";
+
+  const getSearchMatches = () => {
+    if (!searchQuery.trim()) return { members: [], donations: [], expenses: [] };
+    const q = searchQuery.toLowerCase();
+
+    const matchedMembers = (members || []).filter((m: any) =>
+      m.first_name?.toLowerCase().includes(q) ||
+      m.last_name?.toLowerCase().includes(q) ||
+      m.email?.toLowerCase().includes(q)
+    ).slice(0, 3);
+
+    const matchedDonations = (allDonations || []).filter((d: any) =>
+      d.donor_name?.toLowerCase().includes(q) ||
+      d.receipt_number?.toLowerCase().includes(q) ||
+      d.amount?.toString().includes(q)
+    ).slice(0, 3);
+
+    const matchedExpenses = (allExpenses || []).filter((e: any) =>
+      e.merchant_name?.toLowerCase().includes(q) ||
+      e.description?.toLowerCase().includes(q) ||
+      e.amount?.toString().includes(q)
+    ).slice(0, 3);
+
+    return {
+      members: matchedMembers,
+      donations: matchedDonations,
+      expenses: matchedExpenses,
+    };
+  };
+
+  const matches = getSearchMatches();
+  const hasMatches = matches.members.length > 0 || matches.donations.length > 0 || matches.expenses.length > 0;
 
   return (
     <div className="min-h-screen bg-puja-white text-[#1e1b18] flex font-sans antialiased">
@@ -200,21 +256,157 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {getPageTitle()}
             </h2>
           </div>
-          <div className="flex items-center space-x-md">
+          <div className="flex items-center space-x-md relative">
+            {/* Global Search Input with Float results */}
             <div className="relative hidden sm:block">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant">search</span>
               <input
-                className="pl-10 pr-4 py-2 bg-surface-container border border-outline-variant rounded-full text-body-md focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none w-64"
+                className="pl-10 pr-4 py-2 bg-surface-container border border-outline-variant rounded-full text-body-md focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none w-64 text-sm font-semibold"
                 placeholder="Global search..."
                 type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
               />
+              {isSearchFocused && searchQuery.trim() !== "" && (
+                <div className="absolute right-0 mt-3 w-96 bg-white border border-sandstone rounded-2xl shadow-xl z-50 p-4 max-h-[400px] overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-150 text-left">
+                  {!hasMatches ? (
+                    <p className="text-center text-xs text-on-surface-variant/60 py-4 font-medium">No results matching "{searchQuery}"</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {matches.members.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1.5 border-b border-sandstone pb-1">Members</p>
+                          <div className="space-y-1">
+                            {matches.members.map((m: any) => (
+                              <Link
+                                key={m.id}
+                                href={getDashboardHref("/members")}
+                                className="block p-1.5 hover:bg-cream/50 rounded-lg text-xs transition-colors"
+                              >
+                                <p className="font-bold text-charcoal">{m.first_name} {m.last_name}</p>
+                                <p className="text-[10px] text-on-surface-variant">{m.email} · {m.role}</p>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {matches.donations.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1.5 border-b border-sandstone pb-1">Donations</p>
+                          <div className="space-y-1">
+                            {matches.donations.map((d: any) => (
+                              <Link
+                                key={d.id}
+                                href={getDashboardHref("/donations")}
+                                className="block p-1.5 hover:bg-cream/50 rounded-lg text-xs transition-colors"
+                              >
+                                <p className="font-bold text-charcoal">₹{d.amount} from {d.donor_name}</p>
+                                <p className="text-[10px] text-on-surface-variant">Receipt: {d.receipt_number || "Draft"} · {d.payment_status}</p>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {matches.expenses.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1.5 border-b border-sandstone pb-1">Expenses</p>
+                          <div className="space-y-1">
+                            {matches.expenses.map((e: any) => (
+                              <Link
+                                key={e.id}
+                                href={getDashboardHref("/expenses")}
+                                className="block p-1.5 hover:bg-cream/50 rounded-lg text-xs transition-colors"
+                              >
+                                <p className="font-bold text-charcoal">₹{e.amount} - {e.merchant_name}</p>
+                                <p className="text-[10px] text-on-surface-variant">{e.description || "No description"} · {e.status}</p>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <button className="p-2 text-on-surface-variant hover:text-primary transition-colors">
-              <span className="material-symbols-outlined">notifications</span>
-            </button>
-            <button className="p-2 text-on-surface-variant hover:text-primary transition-colors">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
+
+            {/* Notification Bell with Badge & Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                className="p-2 text-on-surface-variant hover:text-primary transition-colors relative flex items-center"
+              >
+                <span className="material-symbols-outlined">notifications</span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-kumkum-red text-white text-[9px] font-bold rounded-full flex items-center justify-center border border-white animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {isNotifOpen && (
+                <div className="absolute right-0 mt-3 w-80 bg-white border border-sandstone rounded-2xl shadow-xl z-50 p-4 font-sans text-on-surface animate-in fade-in slide-in-from-top-2 duration-200 text-left">
+                  <div className="flex items-center justify-between border-b border-sandstone pb-2 mb-2">
+                    <span className="font-bold text-xs uppercase tracking-wider text-primary">Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={async () => {
+                          await markReadMutation.mutateAsync({ all: true });
+                        }}
+                        className="text-[10px] font-bold text-primary hover:underline"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-64 overflow-y-auto space-y-2 custom-scrollbar">
+                    {notifications && notifications.length > 0 ? (
+                      notifications.slice(0, 5).map((notif: any) => (
+                        <div
+                          key={notif.id}
+                          onClick={async () => {
+                            if (!notif.is_read) {
+                              await markReadMutation.mutateAsync({ id: notif.id });
+                            }
+                          }}
+                          className={`p-2 rounded-xl text-xs cursor-pointer border transition-colors ${
+                            notif.is_read
+                              ? "bg-puja-white border-sandstone/30 text-on-surface-variant/70"
+                              : "bg-cream border-primary/20 text-on-surface font-semibold hover:bg-cream/80"
+                          }`}
+                        >
+                          <p className="font-bold text-charcoal">{notif.title}</p>
+                          <p className="mt-0.5 text-[11px] leading-snug">{notif.body}</p>
+                          <span className="text-[9px] text-on-surface-variant/50 mt-1 block">
+                            {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-center text-xs text-on-surface-variant/60 py-4 font-medium">
+                        No new notifications
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Gated Settings Icon Link */}
+            {(role === "owner" || role === "admin") && (
+              <Link
+                href={getDashboardHref("/settings")}
+                className="p-2 text-on-surface-variant hover:text-primary transition-colors flex items-center"
+              >
+                <span className="material-symbols-outlined">settings</span>
+              </Link>
+            )}
+
+            {/* User Profile Avatar */}
             <div className="w-10 h-10 rounded-full border-2 border-primary-container overflow-hidden shrink-0">
               <img
                 alt="Profile"

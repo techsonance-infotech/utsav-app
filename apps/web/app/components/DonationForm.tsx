@@ -1,10 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { useCreateDonation } from "@utsav/api-client";
-import { useAuthStore } from "@utsav/stores";
-import { useRouter, usePathname } from "next/navigation";
-import { Heart, CheckCircle2, AlertCircle, Sparkles, Lock } from "lucide-react";
+import { useCreateRazorpayOrder } from "@utsav/api-client";
+import { Heart, CheckCircle2, AlertCircle, Loader2, Sparkles, Lock, X } from "lucide-react";
 
 interface Campaign {
   id: string;
@@ -18,66 +16,41 @@ interface DonationFormProps {
 }
 
 export default function DonationForm({ tenantId, campaigns, primaryColor }: DonationFormProps) {
-  const createDonationMutation = useCreateDonation();
-  const { userId } = useAuthStore();
-  const router = useRouter();
-  const pathname = usePathname();
+  const createOrderMutation = useCreateRazorpayOrder();
 
-  const [form, setForm] = useState({
-    donorName: "",
-    donorPhone: "",
-    donorEmail: "",
-    campaignId: "",
-    amount: "",
-    note: "",
-    isAnonymous: false,
-  });
+  const [donorName, setDonorName] = useState("");
+  const [donorPhone, setDonorPhone] = useState("");
+  const [donorEmail, setDonorEmail] = useState("");
+  const [campaignId, setCampaignId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [success, setSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  if (!userId) {
-    return (
-      <div className="text-center py-12 px-6 bg-slate-50/50 border border-zinc-200/70 rounded-2xl flex flex-col items-center gap-4">
-        <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center border border-amber-500/20 text-amber-600 animate-pulse">
-          <Lock className="w-5.5 h-5.5" />
-        </div>
-        <div>
-          <h3 className="text-sm font-bold text-zinc-950 uppercase tracking-wide">Secure Login Required</h3>
-          <p className="text-xs text-zinc-500 mt-2 max-w-sm leading-relaxed">
-            To fulfill audit compliance, track contributions, and issue verified 80G tax receipts instantly, please sign in to your account.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
-          }}
-          className="mt-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-98"
-        >
-          Sign In to Continue
-        </button>
-      </div>
-    );
-  }
+  // Payment states
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [mockOrderData, setMockOrderData] = useState<any>(null);
+  const [confirmedDonation, setConfirmedDonation] = useState<any>(null);
 
   const amounts = [501, 1001, 2100, 5100];
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!form.donorName.trim()) {
+    if (!donorName.trim()) {
       newErrors.donorName = "Donor name is required";
     }
 
-    if (!form.amount || Number(form.amount) <= 0) {
+    if (!amount || Number(amount) <= 0) {
       newErrors.amount = "Contribution amount must be greater than 0";
     }
 
-    if (form.donorEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.donorEmail)) {
+    if (donorEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(donorEmail)) {
       newErrors.donorEmail = "Please enter a valid email address";
     }
 
-    if (form.donorPhone.trim() && !/^\d{10}$/.test(form.donorPhone.trim())) {
+    if (donorPhone.trim() && !/^\d{10}$/.test(donorPhone.trim())) {
       newErrors.donorPhone = "Phone number must be exactly 10 digits";
     }
 
@@ -88,50 +61,176 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
+    setErrorMsg("");
+    setIsProcessing(true);
 
     try {
-      await createDonationMutation.mutateAsync({
-        donor_name: form.isAnonymous ? "Anonymous" : form.donorName,
-        donor_phone: form.donorPhone || undefined,
-        donor_email: form.donorEmail || undefined,
-        amount: Number(form.amount),
-        mode: "online",
-        campaign_id: form.campaignId || undefined,
-        is_anonymous: form.isAnonymous,
-        note: form.note || undefined,
+      const order = await createOrderMutation.mutateAsync({
+        donor_name: donorName,
+        donor_phone: donorPhone || undefined,
+        donor_email: donorEmail || undefined,
+        amount: Number(amount),
+        campaign_id: campaignId || undefined,
+        is_anonymous: isAnonymous,
+        note: note || undefined,
       });
 
-      setSuccess(true);
-      setForm({
-        donorName: "",
-        donorPhone: "",
-        donorEmail: "",
-        campaignId: "",
-        amount: "",
-        note: "",
-        isAnonymous: false,
-      });
-    } catch (err) {
-      console.error(err);
+      if (order.is_mock) {
+        setMockOrderData(order);
+      } else {
+        triggerRealRazorpay(order);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to initiate transaction.");
+      setIsProcessing(false);
     }
   };
 
-  if (success) {
+  const triggerRealRazorpay = (order: any) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => {
+      const options = {
+        key: order.key_id,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Utsav Mandal",
+        description: "Devotional Contribution",
+        order_id: order.id,
+        handler: async function (response: any) {
+          await handlePaymentSuccess(order.id, response.razorpay_payment_id, response.razorpay_signature);
+        },
+        prefill: {
+          name: donorName,
+          email: donorEmail || "",
+          contact: donorPhone || "",
+        },
+        theme: {
+          color: primaryColor,
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+      setIsProcessing(false);
+    };
+    script.onerror = () => {
+      setErrorMsg("Failed to load Razorpay payment SDK.");
+      setIsProcessing(false);
+    };
+    document.body.appendChild(script);
+  };
+
+  const handleSimulateMockPayment = async () => {
+    if (!mockOrderData) return;
+    setIsProcessing(true);
+
+    try {
+      const mockPaymentId = `pay_mock_${Math.random().toString(36).substring(2, 12)}`;
+      await handlePaymentSuccess(mockOrderData.id, mockPaymentId, "sandbox_bypass_signature");
+    } catch (err: any) {
+      setErrorMsg("Failed to complete sandbox payment simulation.");
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePaymentSuccess = async (orderId: string, paymentId: string, signature: string) => {
+    try {
+      const res = await fetch("/api/v1/webhooks/razorpay", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-razorpay-signature": signature,
+        },
+        body: JSON.stringify({
+          event: "payment.captured",
+          payload: {
+            payment: {
+              entity: {
+                id: paymentId,
+                order_id: orderId,
+                amount: Number(amount) * 100,
+                status: "captured",
+              },
+            },
+          },
+        }),
+      });
+
+      if (res.ok) {
+        setConfirmedDonation({
+          receipt_number: `RCPT-${Math.floor(Math.random() * 90000) + 10000}`,
+          donor_name: donorName,
+          amount: Number(amount),
+          payment_id: paymentId,
+        });
+        setMockOrderData(null);
+      } else {
+        setErrorMsg("Webhook payment capture verification failed.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to confirm payment.");
+    }
+    setIsProcessing(false);
+  };
+
+  if (confirmedDonation) {
     return (
-      <div className="text-center py-10 px-4 bg-green-50 border border-green-200/50 rounded-2xl flex flex-col items-center gap-4">
-        <CheckCircle2 className="w-12 h-12 text-green-600 animate-bounce" />
+      <div className="text-center py-10 px-4 bg-green-50/50 border border-green-200/50 rounded-2xl flex flex-col items-center gap-6">
+        <div className="w-16 h-16 bg-green-600/10 rounded-full flex items-center justify-center border border-green-500/20 text-green-600 animate-bounce">
+          <CheckCircle2 className="w-8 h-8" />
+        </div>
         <div>
           <h3 className="text-lg font-black text-green-800">Donation Successful!</h3>
           <p className="text-xs text-green-700 mt-2 max-w-sm">
             Thank you for your generous contribution. Seek blessings of the deity. Your contribution receipt has been generated.
           </p>
         </div>
-        <button
-          onClick={() => setSuccess(false)}
-          className="mt-4 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all"
-        >
-          Make Another Donation
-        </button>
+
+        {/* Receipt details */}
+        <div className="w-full bg-white border border-gray-150 p-6 rounded-2xl text-left space-y-3 font-mono text-xs text-zinc-600 shadow-sm">
+          <div className="flex justify-between border-b border-zinc-100 pb-2">
+            <span>Receipt Number:</span>
+            <span className="font-bold text-zinc-900">{confirmedDonation.receipt_number}</span>
+          </div>
+          <div className="flex justify-between border-b border-zinc-100 pb-2">
+            <span>Donor Name:</span>
+            <span className="font-bold text-zinc-900">{confirmedDonation.donor_name}</span>
+          </div>
+          <div className="flex justify-between border-b border-zinc-100 pb-2">
+            <span>Amount Contributed:</span>
+            <span className="font-bold text-green-600 text-sm">₹{confirmedDonation.amount.toLocaleString("en-IN")}</span>
+          </div>
+          <div className="flex justify-between pb-2">
+            <span>Transaction ID:</span>
+            <span className="font-bold text-zinc-900 truncate max-w-[150px]">{confirmedDonation.payment_id}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-3 w-full">
+          <button
+            onClick={() => window.print()}
+            className="flex-1 py-3 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+          >
+            Print Receipt
+          </button>
+          <button
+            onClick={() => {
+              setConfirmedDonation(null);
+              setDonorName("");
+              setDonorPhone("");
+              setDonorEmail("");
+              setAmount("");
+              setNote("");
+              setIsAnonymous(false);
+            }}
+            className="flex-1 py-3 text-white font-bold rounded-xl text-xs transition-all shadow-sm flex items-center justify-center gap-1.5"
+            style={{ backgroundColor: primaryColor }}
+          >
+            Donate Again
+          </button>
+        </div>
       </div>
     );
   }
@@ -139,10 +238,10 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {createDonationMutation.isError && (
+        {(createOrderMutation.isError || errorMsg) && (
           <div className="p-4 bg-red-50 border border-red-200/50 rounded-xl text-red-700 text-xs flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-            <p className="font-bold">An error occurred while placing donation. Please try again.</p>
+            <p className="font-bold">{errorMsg || "An error occurred while placing donation. Please try again."}</p>
           </div>
         )}
 
@@ -153,13 +252,13 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
           </label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {amounts.map((amt) => {
-              const isSelected = form.amount === String(amt);
+              const isSelected = amount === String(amt);
               return (
                 <button
                   key={amt}
                   type="button"
-                  onClick={() => setForm({ ...form, amount: String(amt) })}
-                  className={`py-3 border.5 rounded-xl font-bold text-xs uppercase tracking-wide transition-all ${
+                  onClick={() => setAmount(String(amt))}
+                  className={`py-3 border rounded-xl font-bold text-xs uppercase tracking-wide transition-all ${
                     isSelected
                       ? "text-white shadow-sm"
                       : "bg-[#FAFAF8] border-[#E8E2D6] text-gray-700 hover:border-[#8c5000] hover:bg-[#F4F1EB]"
@@ -179,8 +278,8 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#554334] font-bold text-sm">₹</span>
             <input
               type="number"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
               placeholder="Enter custom amount"
               className={`w-full pl-8 pr-4 py-3 bg-[#F4F1EB] border ${
                 errors.amount ? "border-red-500" : "border-[#E8E2D6]"
@@ -196,8 +295,8 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
             Select Campaign (Optional)
           </label>
           <select
-            value={form.campaignId}
-            onChange={(e) => setForm({ ...form, campaignId: e.target.value })}
+            value={campaignId}
+            onChange={(e) => setCampaignId(e.target.value)}
             className="w-full px-4 py-3 bg-[#F4F1EB] border border-[#E8E2D6] rounded-xl text-xs font-bold text-[#554334] focus:outline-none focus:ring-1 focus:ring-[#8c5000]"
           >
             <option value="">General Donation</option>
@@ -217,15 +316,14 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
             </label>
             <input
               type="text"
-              value={form.donorName}
-              onChange={(e) => setForm({ ...form, donorName: e.target.value })}
+              value={donorName}
+              onChange={(e) => setDonorName(e.target.value)}
               placeholder="e.g. Rajesh Kumar"
               className={`w-full px-4 py-3 bg-[#F4F1EB] border ${
                 errors.donorName ? "border-red-500" : "border-[#E8E2D6]"
               } rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#8c5000]`}
-              disabled={form.isAnonymous}
             />
-            {errors.donorName && !form.isAnonymous && (
+            {errors.donorName && (
               <p className="text-[10px] text-red-500 font-bold mt-1">{errors.donorName}</p>
             )}
           </div>
@@ -233,12 +331,12 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="block text-[10px] font-extrabold text-[#554334] uppercase tracking-widest">
-                Mobile Number
+                Mobile Number (Optional)
               </label>
               <input
                 type="text"
-                value={form.donorPhone}
-                onChange={(e) => setForm({ ...form, donorPhone: e.target.value })}
+                value={donorPhone}
+                onChange={(e) => setDonorPhone(e.target.value)}
                 placeholder="e.g. 9876543210"
                 className={`w-full px-4 py-3 bg-[#F4F1EB] border ${
                   errors.donorPhone ? "border-red-500" : "border-[#E8E2D6]"
@@ -250,12 +348,12 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
             </div>
             <div className="space-y-1">
               <label className="block text-[10px] font-extrabold text-[#554334] uppercase tracking-widest">
-                Email Address
+                Email Address (Optional)
               </label>
               <input
                 type="email"
-                value={form.donorEmail}
-                onChange={(e) => setForm({ ...form, donorEmail: e.target.value })}
+                value={donorEmail}
+                onChange={(e) => setDonorEmail(e.target.value)}
                 placeholder="e.g. rajesh@example.com"
                 className={`w-full px-4 py-3 bg-[#F4F1EB] border ${
                   errors.donorEmail ? "border-red-500" : "border-[#E8E2D6]"
@@ -274,8 +372,8 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
             Special Note or Instructions
           </label>
           <textarea
-            value={form.note}
-            onChange={(e) => setForm({ ...form, note: e.target.value })}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. In memory of... / Family name / specific puja slot"
             rows={2}
             className="w-full px-4 py-3 bg-[#F4F1EB] border border-[#E8E2D6] rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#8c5000]"
@@ -295,8 +393,8 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
             <input
               type="checkbox"
               id="isAnonymous"
-              checked={form.isAnonymous}
-              onChange={(e) => setForm({ ...form, isAnonymous: e.target.checked })}
+              checked={isAnonymous}
+              onChange={(e) => setIsAnonymous(e.target.checked)}
               className="sr-only peer"
             />
             <div className="w-11 h-6 bg-[#E8E2D6] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#8c5000]"></div>
@@ -331,14 +429,23 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={createDonationMutation.isPending}
+          disabled={isProcessing}
           className="w-full text-white py-4 rounded-xl text-xs font-black uppercase tracking-wider hover:opacity-95 transition-all flex items-center justify-center gap-2 saffron-glow"
           style={{
             backgroundColor: primaryColor,
           }}
         >
-          <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>
-          {createDonationMutation.isPending ? "Processing Donation..." : "Proceed to Secure Payment"}
+          {isProcessing ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+              <span>Initiating Transaction...</span>
+            </>
+          ) : (
+            <>
+              <Heart className="w-4 h-4 fill-white" />
+              <span>Proceed to Secure Payment</span>
+            </>
+          )}
         </button>
 
         <p className="text-center text-[10px] text-[#554334] font-semibold leading-relaxed">
@@ -347,6 +454,48 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
           <a className="underline hover:text-[#8c5000]" href="#">Tax Exemption Policy (80G)</a>.
         </p>
       </form>
+
+      {/* Sandbox Simulator Modal */}
+      {mockOrderData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white border border-amber-500/30 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl text-center">
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-500 mx-auto animate-pulse">
+              <AlertCircle className="w-8 h-8 text-amber-600" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-gray-900 font-serif">Sandbox Payment Gateway</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                This Mandal is running in local developer mode. Click below to simulate Razorpay payment success and webhook delivery.
+              </p>
+            </div>
+
+            <div className="bg-neutral-50 border border-gray-200 p-4 rounded-xl text-left font-mono text-[10px] text-gray-600 space-y-1.5">
+              <div>ORDER ID: {mockOrderData.id}</div>
+              <div>AMOUNT: ₹{(mockOrderData.amount / 100).toLocaleString("en-IN")}</div>
+              <div>KEY ID: {mockOrderData.key_id}</div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setMockOrderData(null);
+                  setIsProcessing(false);
+                }}
+                className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 font-bold rounded-xl text-xs transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSimulateMockPayment}
+                className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+              >
+                Confirm Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

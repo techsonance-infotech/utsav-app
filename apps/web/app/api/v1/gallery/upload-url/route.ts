@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient } from "../../utils";
+import { checkRole, createServiceRoleClient } from "../../utils";
 
 export async function POST(req: Request) {
-  const { userId, error } = await verifySession(req);
-  if (error) {
-    return NextResponse.json({ message: error }, { status: 401 });
-  }
+  const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer", "committee_member"]);
+  if (!hasAccess) return errorResponse!;
 
-  const tenantId = req.headers.get("x-tenant-id");
-  if (!tenantId) {
-    return NextResponse.json({ message: "Missing x-tenant-id header" }, { status: 400 });
-  }
+  const tenantId = req.headers.get("x-tenant-id")!;
 
   try {
     const body = await req.json();
@@ -24,6 +19,36 @@ export async function POST(req: Request) {
     const allowedBuckets = ["receipts", "gallery", "avatars", "vendor-docs"];
     if (!allowedBuckets.includes(bucket)) {
       return NextResponse.json({ message: "Invalid bucket" }, { status: 400 });
+    }
+
+    // Validate file extensions and content-types to prevent unsafe uploads
+    const extension = filename.split(".").pop()?.toLowerCase();
+    const allowedExtensions: Record<string, string[]> = {
+      avatars: ["jpg", "jpeg", "png", "webp"],
+      gallery: ["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov"],
+      receipts: ["jpg", "jpeg", "png", "pdf"],
+      "vendor-docs": ["jpg", "jpeg", "png", "pdf", "docx", "xlsx"],
+    };
+
+    const allowedContentTypes: Record<string, string[]> = {
+      avatars: ["image/jpeg", "image/png", "image/webp"],
+      gallery: ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/quicktime"],
+      receipts: ["image/jpeg", "image/png", "application/pdf"],
+      "vendor-docs": [
+        "image/jpeg",
+        "image/png",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ],
+    };
+
+    if (!extension || !allowedExtensions[bucket]?.includes(extension)) {
+      return NextResponse.json({ message: `File extension .${extension} not allowed for bucket ${bucket}` }, { status: 400 });
+    }
+
+    if (!allowedContentTypes[bucket]?.includes(content_type)) {
+      return NextResponse.json({ message: `Content-type ${content_type} not allowed for bucket ${bucket}` }, { status: 400 });
     }
 
     // Generate a unique path

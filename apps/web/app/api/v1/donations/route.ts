@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifySession, createServiceRoleClient, logAuditEvent } from "../utils";
+import { z } from "zod";
 
 export async function GET(req: Request) {
   const { userId, error } = await verifySession(req);
@@ -84,12 +85,18 @@ export async function GET(req: Request) {
   return NextResponse.json(donations);
 }
 
-export async function POST(req: Request) {
-  const { userId, error } = await verifySession(req);
-  if (error) {
-    return NextResponse.json({ message: error }, { status: 401 });
-  }
+const CreateDonationSchema = z.object({
+  donor_name: z.string().min(1, "Donor name is required"),
+  donor_phone: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  donor_email: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  amount: z.number().positive("Amount must be a positive number"),
+  mode: z.string().default("online"),
+  campaign_id: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  is_anonymous: z.boolean().default(false),
+  note: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+});
 
+export async function POST(req: Request) {
   const tenantId = req.headers.get("x-tenant-id");
   if (!tenantId) {
     return NextResponse.json({ message: "Missing x-tenant-id header" }, { status: 400 });
@@ -97,41 +104,62 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const {
-      donor_name,
-      donor_phone,
-      donor_email,
-      amount,
-      mode = "online",
-      campaign_id,
-      is_anonymous = false,
-      note,
-    } = body;
 
-    if (!donor_name) {
-      return NextResponse.json({ message: "Donor name is required" }, { status: 400 });
+    const parsed = CreateDonationSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ message: "Validation error", errors: parsed.error.format() }, { status: 400 });
     }
 
-    if (!amount || amount <= 0) {
-      return NextResponse.json({ message: "Amount must be a positive number" }, { status: 400 });
+    const validatedData = parsed.data;
+
+    // Validate phone number format if provided
+    if (validatedData.donor_phone && !/^\d{10}$/.test(validatedData.donor_phone)) {
+      return NextResponse.json({ message: "Phone number must be exactly 10 digits" }, { status: 400 });
+    }
+
+    // Validate email format if provided
+    if (validatedData.donor_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(validatedData.donor_email)) {
+      return NextResponse.json({ message: "Invalid email address" }, { status: 400 });
+    }
+
+    const isOffline = ["cash", "cheque", "bank_transfer", "in_kind"].includes(validatedData.mode);
+
+    let userId: string | null = null;
+    let memberRole: string | null = null;
+
+    if (isOffline) {
+      const { userId: authedId, error } = await verifySession(req);
+      if (error) {
+        return NextResponse.json({ message: error }, { status: 401 });
+      }
+      userId = authedId;
+    } else {
+      const authHeader = req.headers.get("Authorization");
+      if (authHeader) {
+        const { userId: authedId } = await verifySession(req);
+        if (authedId) {
+          userId = authedId;
+        }
+      }
     }
 
     const supabase = createServiceRoleClient();
 
-    // Check user role
-    const { data: member } = await supabase
-      .from("tenant_members")
-      .select("role")
-      .eq("tenant_id", tenantId)
-      .eq("user_id", userId)
-      .single();
-
-    const isOffline = ["cash", "cheque", "bank_transfer", "in_kind"].includes(mode);
+    if (userId) {
+      const { data: member } = await supabase
+        .from("tenant_members")
+        .select("role")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId)
+        .single();
+      if (member) {
+        memberRole = member.role;
+      }
+    }
 
     if (isOffline) {
-      // Offline donations can only be recorded by owner, admin, treasurer, or committee_member
       const allowedRoles = ["owner", "admin", "treasurer", "committee_member"];
-      if (!member || !allowedRoles.includes(member.role)) {
+      if (!memberRole || !allowedRoles.includes(memberRole)) {
         return NextResponse.json({ message: "Forbidden: Only committee members can record offline donations" }, { status: 403 });
       }
 
@@ -139,18 +167,19 @@ export async function POST(req: Request) {
         .from("donations")
         .insert({
           tenant_id: tenantId,
-          campaign_id: campaign_id || null,
+          campaign_id: validatedData.campaign_id,
           recorded_by: userId,
-          donor_name,
-          donor_phone: donor_phone || null,
-          donor_email: donor_email || null,
-          amount,
+          donor_id: null,
+          donor_name: validatedData.donor_name,
+          donor_phone: validatedData.donor_phone,
+          donor_email: validatedData.donor_email,
+          amount: validatedData.amount,
           currency: "INR",
-          mode,
+          mode: validatedData.mode,
           status: "confirmed",
-          is_anonymous,
-          is_in_kind: mode === "in_kind",
-          note: note || null,
+          is_anonymous: validatedData.is_anonymous,
+          is_in_kind: validatedData.mode === "in_kind",
+          note: validatedData.note,
           paid_at: new Date().toISOString(),
         })
         .select()
@@ -160,11 +189,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: dbError.message }, { status: 500 });
       }
 
-      // Log audit trail
       await logAuditEvent({
         tenantId,
-        actorId: userId,
-        actorRole: member.role,
+        actorId: userId as string,
+        actorRole: memberRole as string,
         action: "record_cash_donation",
         entityType: "donation",
         entityId: donation.id,
@@ -173,21 +201,21 @@ export async function POST(req: Request) {
 
       return NextResponse.json(donation, { status: 201 });
     } else {
-      // Online donation (created by any user or visitor, marked pending)
       const { data: donation, error: dbError } = await supabase
         .from("donations")
         .insert({
           tenant_id: tenantId,
-          campaign_id: campaign_id || null,
-          donor_name,
-          donor_phone: donor_phone || null,
-          donor_email: donor_email || null,
-          amount,
+          campaign_id: validatedData.campaign_id,
+          donor_id: userId || null,
+          donor_name: validatedData.donor_name,
+          donor_phone: validatedData.donor_phone,
+          donor_email: validatedData.donor_email,
+          amount: validatedData.amount,
           currency: "INR",
           mode: "online",
           status: "pending",
-          is_anonymous,
-          note: note || null,
+          is_anonymous: validatedData.is_anonymous,
+          note: validatedData.note,
         })
         .select()
         .single();

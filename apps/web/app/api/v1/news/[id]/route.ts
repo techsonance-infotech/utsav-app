@@ -89,7 +89,7 @@ export async function PATCH(
     const allowedFields = [
       "title", "title_hi", "title_gu", "body", "body_hi", "body_gu",
       "excerpt", "category", "language", "banner_image_url", "tags",
-      "status", "allow_comments",
+      "status", "allow_comments", "scheduled_at",
     ];
 
     for (const field of allowedFields) {
@@ -131,3 +131,67 @@ export async function PATCH(
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  const articleId = params.id;
+  if (!articleId) {
+    return NextResponse.json({ message: "Missing article ID" }, { status: 400 });
+  }
+
+  const allowedRoles = ["owner", "admin", "committee_member"];
+  const { hasAccess, userId, errorResponse } = await checkRole(req, allowedRoles);
+  if (!hasAccess && errorResponse) {
+    return errorResponse;
+  }
+
+  const tenantId = req.headers.get("x-tenant-id")!;
+  const supabase = createServiceRoleClient();
+
+  try {
+    const { data: existing, error: fetchError } = await supabase
+      .from("news_articles")
+      .select("*")
+      .eq("id", articleId)
+      .eq("tenant_id", tenantId)
+      .single();
+
+    if (fetchError || !existing) {
+      return NextResponse.json({ message: "Article not found" }, { status: 404 });
+    }
+
+    const { data: actorMember } = await supabase
+      .from("tenant_members")
+      .select("role")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId)
+      .single();
+
+    const { error: deleteError } = await supabase
+      .from("news_articles")
+      .delete()
+      .eq("id", articleId)
+      .eq("tenant_id", tenantId);
+
+    if (deleteError) {
+      return NextResponse.json({ message: deleteError.message }, { status: 500 });
+    }
+
+    await logAuditEvent({
+      tenantId,
+      actorId: userId,
+      actorRole: actorMember?.role || "committee_member",
+      action: "news_article_delete",
+      entityType: "news_article",
+      entityId: articleId,
+      beforeData: existing,
+    });
+
+    return NextResponse.json({ message: "Article deleted successfully" });
+  } catch (err: any) {
+    return NextResponse.json({ message: err.message }, { status: 500 });
+  }
+}
+

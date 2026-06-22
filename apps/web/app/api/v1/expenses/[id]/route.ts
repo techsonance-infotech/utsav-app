@@ -1,5 +1,18 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient } from "../../utils";
+import { verifySession, createServiceRoleClient, logAuditEvent } from "../../utils";
+import { z } from "zod";
+
+const UpdateExpenseSchema = z.object({
+  title: z.string().min(1, "Title cannot be empty").optional(),
+  amount: z.number().positive("Amount must be a positive number").optional(),
+  category_id: z.string().uuid("Invalid category ID").optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  vendor_id: z.string().uuid("Invalid vendor ID").optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  description: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  receipt_url: z.string().url("Invalid receipt URL").optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  expense_date: z.string().optional(),
+  payment_mode: z.enum(["cash", "bank_transfer", "upi", "cheque"]).optional(),
+  gst_amount: z.number().nonnegative("GST amount must be a positive number").optional(),
+});
 
 export async function GET(
   req: Request,
@@ -36,6 +49,22 @@ export async function GET(
 
     if (dbError || !expense) {
       return NextResponse.json({ message: "Expense not found" }, { status: 404 });
+    }
+
+    // Fetch requester's member role
+    const { data: member } = await supabase
+      .from("tenant_members")
+      .select("role")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId)
+      .single();
+
+    const allowedRoles = ["owner", "admin", "treasurer", "committee_member"];
+    const isStaff = member && allowedRoles.includes(member.role);
+    const isSubmitter = expense.submitted_by === userId;
+
+    if (!isStaff && !isSubmitter) {
+      return NextResponse.json({ message: "Access denied: Insufficient privileges to view this expense record." }, { status: 403 });
     }
 
     return NextResponse.json(expense);
@@ -88,15 +117,33 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+    const parsed = UpdateExpenseSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ message: "Validation error", errors: parsed.error.format() }, { status: 400 });
+    }
+
+    const validatedData = parsed.data;
+
+    // Enforce receipt rule post-merge
+    const finalAmount = validatedData.amount !== undefined ? validatedData.amount : Number(existing.amount);
+    const finalReceipt = validatedData.receipt_url !== undefined ? validatedData.receipt_url : existing.receipt_url;
+
+    if (finalAmount > 500 && (!finalReceipt || finalReceipt.trim() === "")) {
+      return NextResponse.json({ message: "A digital receipt upload is mandatory for expenses exceeding ₹500." }, { status: 400 });
+    }
+
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString()
+    };
+
     const allowedFields = [
       "title", "amount", "category_id", "vendor_id", "description",
       "receipt_url", "expense_date", "payment_mode", "gst_amount",
     ];
 
     for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updatePayload[field] = body[field];
+      if (validatedData[field as keyof typeof validatedData] !== undefined) {
+        updatePayload[field] = validatedData[field as keyof typeof validatedData];
       }
     }
 
@@ -110,6 +157,25 @@ export async function PATCH(
     if (updateError || !updated) {
       return NextResponse.json({ message: updateError?.message || "Failed to update expense" }, { status: 500 });
     }
+
+    // Log audit log
+    const { data: member } = await supabase
+      .from("tenant_members")
+      .select("role")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId)
+      .single();
+
+    await logAuditEvent({
+      tenantId,
+      actorId: userId,
+      actorRole: member?.role || "committee_member",
+      action: "expense_update",
+      entityType: "expense",
+      entityId: expenseId,
+      beforeData: existing,
+      afterData: updated,
+    });
 
     return NextResponse.json(updated);
   } catch (err: any) {

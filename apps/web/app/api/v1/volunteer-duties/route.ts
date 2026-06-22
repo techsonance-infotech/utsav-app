@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, logAuditEvent, checkRole } from "../utils";
+import { verifySession, createServiceRoleClient, logAuditEvent, checkRole, sanitizeInputText } from "../utils";
 
 export async function GET(req: Request) {
   const { error } = await verifySession(req);
@@ -68,6 +68,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Title and Start time are required" }, { status: 400 });
     }
 
+    const sanitizedTitle = sanitizeInputText(title);
+    const sanitizedDescription = description ? sanitizeInputText(description) : null;
+    const sanitizedLocation = location ? sanitizeInputText(location) : null;
+
+    if (sanitizedTitle.length < 3 || sanitizedTitle.length > 100) {
+      return NextResponse.json({ message: "Title must be between 3 and 100 characters" }, { status: 400 });
+    }
+
     const { data: actorMember } = await supabase
       .from("tenant_members")
       .select("role")
@@ -83,9 +91,9 @@ export async function POST(req: Request) {
         created_by: userId,
         assigned_to: assigned_to || null,
         duty_type,
-        title,
-        description: description || null,
-        location: location || null,
+        title: sanitizedTitle,
+        description: sanitizedDescription,
+        location: sanitizedLocation,
         start_at,
         end_at: end_at || null,
         max_volunteers,

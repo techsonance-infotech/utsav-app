@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceRoleClient } from "../../utils";
+import { createServiceRoleClient, checkRole, logAuditEvent } from "../../utils";
 
 export async function GET(req: Request, { params }: { params: { token: string } }) {
   const { token } = params;

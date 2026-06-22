@@ -39,3 +39,45 @@ export function useRSVP() {
     },
   });
 }
+
+export function useUpdateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, input }: { eventId: string; input: Partial<CreateEventInput> & { status?: string } }) =>
+      apiClient<Event>(`/events/${eventId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["events"] });
+    },
+  });
+}
+
+export function useDeleteEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (eventId: string) =>
+      apiClient<{ success: boolean }>(`/events/${eventId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["events"] });
+    },
+  });
+}
+
+export interface EnrichedRSVP extends EventRSVP {
+  full_name: string;
+  avatar_url: string | null;
+  member_role: string;
+}
+
+export function useEventRSVPs(eventId: string) {
+  const { tenantId, userId } = useAuthStore();
+  return useQuery({
+    queryKey: ["event-rsvps", eventId],
+    queryFn: () => apiClient<EnrichedRSVP[]>(`/events/${eventId}/rsvp`),
+    enabled: !!tenantId && !!userId && !!eventId,
+  });
+}

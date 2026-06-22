@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, checkRole, logAuditEvent } from "../../utils";
+import { verifySession, createServiceRoleClient, checkRole, logAuditEvent, sanitizeInputText } from "../../utils";
+import { z } from "zod";
+
+const albumCreateSchema = z.object({
+  name: z.string().trim().min(3, "Album name must be at least 3 characters").max(100, "Album name too long").transform(val => sanitizeInputText(val)),
+  description: z.string().trim().max(1000).transform(val => sanitizeInputText(val)).optional().nullable(),
+  is_public: z.boolean().default(true),
+  cover_image_url: z.string().trim().optional().nullable().or(z.literal("")),
+});
 
 export async function GET(req: Request) {
-  const { userId, error } = await verifySession(req);
-  if (error) {
-    return NextResponse.json({ message: error }, { status: 401 });
-  }
+  const { hasAccess, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer", "committee_member"]);
+  if (!hasAccess) return errorResponse!;
 
-  const tenantId = req.headers.get("x-tenant-id");
-  if (!tenantId) {
-    return NextResponse.json({ message: "Missing x-tenant-id header" }, { status: 400 });
-  }
-
+  const tenantId = req.headers.get("x-tenant-id")!;
   const supabase = createServiceRoleClient();
 
   try {
@@ -25,25 +27,32 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: dbError.message }, { status: 500 });
     }
 
-    return NextResponse.json(albums || []);
+    // Map title to name for frontend compatibility
+    const mapped = (albums || []).map((album: any) => ({
+      ...album,
+      name: album.title,
+    }));
+
+    return NextResponse.json(mapped);
   } catch (err: any) {
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer", "committee_member"]);
+  const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer"]);
   if (!hasAccess) return errorResponse!;
 
   const tenantId = req.headers.get("x-tenant-id")!;
 
   try {
     const body = await req.json();
-    const { name, description, is_public = true, cover_image_url } = body;
-
-    if (!name) {
-      return NextResponse.json({ message: "Album name is required" }, { status: 400 });
+    const parsed = albumCreateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ message: parsed.error.errors[0].message }, { status: 400 });
     }
+
+    const { name, description, is_public, cover_image_url } = parsed.data;
 
     const supabase = createServiceRoleClient();
 
@@ -51,7 +60,7 @@ export async function POST(req: Request) {
       .from("gallery_albums")
       .insert({
         tenant_id: tenantId,
-        name,
+        title: name,
         description: description || null,
         is_public,
         cover_image_url: cover_image_url || null,
@@ -81,7 +90,12 @@ export async function POST(req: Request) {
       afterData: album,
     });
 
-    return NextResponse.json(album, { status: 201 });
+    const mapped = {
+      ...album,
+      name: album.title,
+    };
+
+    return NextResponse.json(mapped, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
