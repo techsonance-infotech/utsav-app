@@ -1,0 +1,86 @@
+export const colors = {
+  primary: {
+    50: "#FFF9E6",
+    100: "#FFE6B3",
+    200: "#FFD380",
+    300: "#FFC04D",
+    400: "#FFAD1A",
+    500: "#FF9500", // Saffron - Primary CTA
+    600: "#E07B00", // CTA pressed/hover
+    700: "#B86100",
+    800: "#8F4800",
+    900: "#663000",
+  },
+  secondary: {
+    50: "#FFEBEB",
+    100: "#FFC7C7",
+    200: "#FFA34D",
+    300: "#FF7E7E",
+    400: "#FF5A5A",
+    500: "#D92B2B", // Kumkum Red - Destructive / Alert
+    600: "#B82020",
+    700: "#961616",
+    800: "#740D0D",
+    900: "#520404",
+  },
+  success: {
+    50: "#F0FDF4",
+    100: "#DCFCE7",
+    200: "#BBF7D0",
+    300: "#86EFAC",
+    400: "#4ADE80",
+    500: "#22C55E", // Tulsi Green - Success / Confirmed
+    600: "#16A34A",
+    700: "#15803D",
+    800: "#166534",
+    900: "#14532D",
+  },
+  warning: {
+    50: "#FEFCE8",
+    100: "#FEF9C3",
+    200: "#FEF08A",
+    300: "#FDE047",
+    400: "#FACC15",
+    500: "#EAB308", // Haldi Yellow - Pending / Warning
+    600: "#CA8A04",
+    700: "#A16207",
+    800: "#854D0E",
+    900: "#713F12",
+  },
+  accent: {
+    50: "#FFFDF2",
+    100: "#FFF6CC",
+    200: "#FFEE99",
+    300: "#FFE666",
+    400: "#FFDD33",
+    500: "#C9921A", // Aarti Gold - Premium / Gold Donor
+    600: "#AA7A10",
+    700: "#8B6208",
+    800: "#6C4A00",
+    900: "#4D3200",
+  },
+  surface: {
+    50: "#FAFAF8", // Puja White - Default background
+    100: "#F5F5F0",
+    200: "#EAEAE0",
+    300: "#DADAD0",
+    400: "#BABAB0",
+    500: "#9A9A90",
+    600: "#7A7A70",
+    700: "#5A5A50",
+    800: "#3A3A30",
+    900: "#1A1A10",
+  },
+  neutral: {
+    50: "#F9FAFB",
+    100: "#F3F4F6",
+    200: "#E5E7EB",
+    300: "#D1D5DB",
+    400: "#9CA3AF",
+    500: "#6B7280",
+    600: "#4B5563",
+    700: "#374151",
+    800: "#1F2937",
+    900: "#111827",
+  },
+} as const;

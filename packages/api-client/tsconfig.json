@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "lib": ["es2022", "dom"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "declaration": true,
+    "outDir": "./dist",
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "react": ["../../apps/web/node_modules/react"],
+      "react/*": ["../../apps/web/node_modules/react/*"]
+    },
+    "typeRoots": [
+      "../../node_modules/@types",
+      "../../apps/web/node_modules/@types"
+    ]
+  },
+  "include": ["src/**/*"]
+}
