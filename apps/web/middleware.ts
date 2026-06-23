@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+// Polyfill for Edge Runtime environment where __dirname and __filename are not defined
+if (typeof (globalThis as any).__dirname === "undefined") {
+  (globalThis as any).__dirname = "/";
+}
+if (typeof (globalThis as any).__filename === "undefined") {
+  (globalThis as any).__filename = "/index.js";
+}
+
 async function checkRateLimit(ip: string, limit: number, windowSeconds: number): Promise<boolean> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
