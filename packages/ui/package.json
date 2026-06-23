@@ -1,0 +1,21 @@
+{
+  "name": "@utsav/ui",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@utsav/design-tokens": "workspace:*",
+    "@utsav/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18",
+    "@types/react": "^18"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}
