@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { useNotifications, useMarkNotificationRead } from "@utsav/api-client";
 import { router } from "expo-router";
+import { colors, fonts, spacing } from "../lib/theme";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function MobileNotificationsScreen() {
   const { data: notifications, isLoading, refetch } = useNotifications();
@@ -24,10 +26,8 @@ export default function MobileNotificationsScreen() {
       markRead.mutate({ id: notif.id });
     }
 
-    // Handle deep linking if present
     if (notif.deep_link) {
       try {
-        // e.g. deep_link = "/(dashboard)/expenses" or "/(dashboard)/events"
         router.push(notif.deep_link as any);
       } catch (err) {
         console.warn("Invalid deep link:", notif.deep_link);
@@ -35,20 +35,20 @@ export default function MobileNotificationsScreen() {
     }
   };
 
-  const getIcon = (type: string) => {
+  const getIconInfo = (type: string) => {
     switch (type) {
       case "donation_received":
       case "payment_received":
-        return "💖";
+        return { name: "heart-flash" as const, color: colors.secondaryBrand, bg: colors.secondaryFixed };
       case "expense_submitted":
       case "expense_status_change":
-        return "💵";
+        return { name: "cash-multiple" as const, color: colors.tertiary, bg: colors.tertiaryFixed };
       case "event_reminder":
-        return "📅";
+        return { name: "calendar-month-outline" as const, color: colors.primaryBrand, bg: colors.primaryFixed };
       case "volunteer_duty_assigned":
-        return "🤝";
+        return { name: "account-group-outline" as const, color: colors.tulsiGreen, bg: "rgba(34, 197, 94, 0.15)" };
       default:
-        return "📢";
+        return { name: "bell-outline" as const, color: colors.primaryBrand, bg: colors.primaryFixed };
     }
   };
 
@@ -70,7 +70,6 @@ export default function MobileNotificationsScreen() {
     }
   };
 
-  // Group notifications by date label
   const groupedNotifications = (() => {
     if (!notifications) return [];
     const groups: { [key: string]: any[] } = {};
@@ -95,13 +94,31 @@ export default function MobileNotificationsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          <Text style={styles.headerSub}>Stay updated with Mandal activities</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+            style={styles.backBtn}
+          >
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={24}
+              color={colors.primaryBrand}
+            />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Notifications</Text>
+            <Text style={styles.headerSub}>Stay updated with Mandal activities</Text>
+          </View>
         </View>
 
         {hasUnread && (
-          <TouchableOpacity style={styles.markAllBtn} onPress={handleMarkAllRead} disabled={markRead.isPending}>
+          <TouchableOpacity
+            style={styles.markAllBtn}
+            onPress={handleMarkAllRead}
+            disabled={markRead.isPending}
+            activeOpacity={0.7}
+          >
             <Text style={styles.markAllText}>Mark all read</Text>
           </TouchableOpacity>
         )}
@@ -110,7 +127,7 @@ export default function MobileNotificationsScreen() {
       {/* Main List */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF9500" />
+          <ActivityIndicator size="large" color={colors.primaryContainer} />
         </View>
       ) : groupedNotifications.length > 0 ? (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -118,42 +135,49 @@ export default function MobileNotificationsScreen() {
             <View key={group.label} style={styles.groupContainer}>
               <Text style={styles.groupLabel}>{group.label}</Text>
 
-              {group.data.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.notificationCard, !item.is_read && styles.unreadCard]}
-                  onPress={() => handleNotificationPress(item)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.iconContainer}>
-                    <Text style={styles.iconText}>{getIcon(item.type)}</Text>
-                  </View>
-
-                  <View style={styles.contentContainer}>
-                    <View style={styles.titleRow}>
-                      <Text style={[styles.cardTitle, !item.is_read && styles.unreadTitle]}>{item.title}</Text>
-                      {!item.is_read && <View style={styles.unreadDot} />}
+              {group.data.map((item) => {
+                const iconInfo = getIconInfo(item.type);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.notificationCard, !item.is_read && styles.unreadCard]}
+                    onPress={() => handleNotificationPress(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.iconContainer, { backgroundColor: iconInfo.bg }]}>
+                      <MaterialCommunityIcons name={iconInfo.name} size={22} color={iconInfo.color} />
                     </View>
 
-                    <Text style={styles.cardBody} numberOfLines={3}>
-                      {item.body}
-                    </Text>
+                    <View style={styles.contentContainer}>
+                      <View style={styles.titleRow}>
+                        <Text style={[styles.cardTitle, !item.is_read && styles.unreadTitle]} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        {!item.is_read && <View style={styles.unreadDot} />}
+                      </View>
 
-                    <Text style={styles.timeText}>
-                      {new Date(item.created_at).toLocaleTimeString("en-IN", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                      <Text style={styles.cardBody} numberOfLines={3}>
+                        {item.body}
+                      </Text>
+
+                      <Text style={styles.timeText}>
+                        {new Date(item.created_at).toLocaleTimeString("en-IN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           ))}
         </ScrollView>
       ) : (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🔔</Text>
+          <View style={styles.emptyIconBg}>
+            <MaterialCommunityIcons name="bell-off-outline" size={48} color={colors.outline} />
+          </View>
           <Text style={styles.emptyText}>All caught up! No notifications yet.</Text>
         </View>
       )}
@@ -164,40 +188,49 @@ export default function MobileNotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FAF9F6",
+    backgroundColor: colors.pujaWhite,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: colors.outlineVariant,
+    backgroundColor: colors.surface,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  backBtn: {
+    padding: 4,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
+    fontSize: 20,
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
   },
   headerSub: {
     fontSize: 11,
-    color: "#9CA3AF",
-    marginTop: 2,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurfaceVariant,
+    marginTop: -2,
   },
   markAllBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "#FFFBEB",
+    borderRadius: 20,
+    backgroundColor: "rgba(255,149,0,0.1)",
     borderWidth: 1,
-    borderColor: "#FEF3C7",
+    borderColor: "rgba(255,149,0,0.2)",
   },
   markAllText: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#FF9500",
+    fontSize: 12,
+    fontFamily: fonts.inter.semibold,
+    color: colors.primaryBrand,
   },
   loadingContainer: {
     flex: 1,
@@ -205,7 +238,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   scrollContent: {
-    padding: 20,
+    padding: spacing.md,
     gap: 20,
   },
   groupContainer: {
@@ -213,35 +246,32 @@ const styles = StyleSheet.create({
   },
   groupLabel: {
     fontSize: 11,
-    fontWeight: "bold",
-    color: "#9CA3AF",
+    fontFamily: fonts.inter.bold,
+    color: colors.onSurfaceVariant,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1.5,
     marginBottom: 4,
+    paddingLeft: 4,
   },
   notificationCard: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.sandstone,
     gap: 12,
   },
   unreadCard: {
-    borderColor: "#FF9500",
-    backgroundColor: "#FFFBEB",
+    borderColor: colors.primaryContainer,
+    backgroundColor: "rgba(255,149,0,0.04)",
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-  },
-  iconText: {
-    fontSize: 18,
   },
   contentContainer: {
     flex: 1,
@@ -251,32 +281,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingRight: 10,
   },
   cardTitle: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#4B5563",
+    fontSize: 14,
+    fontFamily: fonts.poppins.semibold,
+    color: colors.onSurface,
     flex: 1,
   },
   unreadTitle: {
-    fontWeight: "bold",
-    color: "#1F2937",
+    color: colors.primaryBrand,
   },
   unreadDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#FF9500",
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primaryContainer,
+    marginLeft: 8,
   },
   cardBody: {
-    fontSize: 12,
-    color: "#6B7280",
-    lineHeight: 18,
+    fontSize: 13,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurfaceVariant,
+    lineHeight: 20,
   },
   timeText: {
-    fontSize: 10,
-    color: "#9CA3AF",
+    fontSize: 11,
+    fontFamily: fonts.inter.medium,
+    color: colors.outline,
     marginTop: 4,
   },
   emptyContainer: {
@@ -284,14 +315,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 40,
-    gap: 10,
+    gap: 16,
   },
-  emptyEmoji: {
-    fontSize: 44,
+  emptyIconBg: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: colors.cream,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
   },
   emptyText: {
-    fontSize: 13,
-    color: "#9CA3AF",
-    fontStyle: "italic",
+    fontSize: 14,
+    fontFamily: fonts.inter.semibold,
+    color: colors.onSurfaceVariant,
+    textAlign: "center",
   },
 });

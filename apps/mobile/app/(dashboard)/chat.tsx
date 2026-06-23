@@ -1,147 +1,148 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
   StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TouchableOpacity,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   SafeAreaView,
+  TextInput,
 } from "react-native";
-import {
-  useChatChannels,
-  useChatMessages,
-  useSendMessage,
-} from "@utsav/api-client";
-import { useAuthStore } from "@utsav/stores";
+import { router } from "expo-router";
+import { useChatChannels } from "@utsav/api-client";
+import { colors, fonts, spacing } from "../lib/theme";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function ChatScreen() {
-  const { userId } = useAuthStore();
-  const { data: channels, isLoading: loadingChannels } = useChatChannels();
-  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const { data: channels = [], isLoading } = useChatChannels();
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: messagesData, isLoading: loadingMessages } = useChatMessages(
-    activeChannelId || undefined
+  const filteredChannels = channels.filter((ch) =>
+    ch.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const sendMessageMutation = useSendMessage();
-  const [messageText, setMessageText] = useState("");
 
-  const handleSend = () => {
-    if (!activeChannelId || !messageText.trim()) return;
-    sendMessageMutation.mutate({
-      channelId: activeChannelId,
-      text: messageText,
-    });
-    setMessageText("");
+  const getChannelIcon = (name: string) => {
+    const n = name?.toLowerCase() || "";
+    if (n.includes("announcement")) return "campaign";
+    if (n.includes("volunteer")) return "account-group";
+    if (n.includes("decoration")) return "palette";
+    if (n.includes("puja")) return "hinduism";
+    return "chat-processing";
   };
 
-  const activeChannel = channels?.find((c) => c.id === activeChannelId);
+  const getChannelIconBg = (name: string) => {
+    const n = name?.toLowerCase() || "";
+    if (n.includes("announcement")) return "rgba(255, 149, 0, 0.15)";
+    if (n.includes("volunteer")) return "rgba(34, 197, 94, 0.15)";
+    if (n.includes("decoration")) return "rgba(234, 179, 8, 0.15)";
+    return "rgba(140, 80, 0, 0.1)";
+  };
 
-  if (activeChannelId) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardContainer}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => setActiveChannelId(null)} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Back</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>{activeChannel?.name || "Group Chat"}</Text>
-          </View>
-
-          {/* Messages */}
-          {loadingMessages ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="small" color="#FF9500" />
-            </View>
-          ) : (
-            <FlatList
-              data={messagesData?.messages || []}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.messagesList}
-              renderItem={({ item }) => {
-                const isSelf = item.sender_id === userId;
-                return (
-                  <View
-                    style={[
-                      styles.messageRow,
-                      isSelf ? styles.messageRowSelf : styles.messageRowOther,
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.bubble,
-                        isSelf ? styles.bubbleSelf : styles.bubbleOther,
-                      ]}
-                    >
-                      <Text style={styles.senderName}>{item.sender_name}</Text>
-                      <Text style={[styles.messageText, isSelf && styles.textSelf]}>
-                        {item.message_text}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              }}
-            />
-          )}
-
-          {/* Input */}
-          <View style={styles.inputArea}>
-            <TextInput
-              style={styles.input}
-              value={messageText}
-              onChangeText={setMessageText}
-              placeholder="Type message..."
-              placeholderTextColor="#9CA3AF"
-            />
-            <TouchableOpacity onPress={handleSend} style={styles.sendBtn}>
-              <Text style={styles.sendBtnText}>Send</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    );
-  }
+  const getChannelIconColor = (name: string) => {
+    const n = name?.toLowerCase() || "";
+    if (n.includes("announcement")) return colors.primaryBrand;
+    if (n.includes("volunteer")) return colors.tulsiGreen;
+    if (n.includes("decoration")) return colors.haldiYellow;
+    return colors.primaryBrand;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Top Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Conversations</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerLogo}>UTSAV</Text>
+        </View>
+        <TouchableOpacity style={styles.headerNotifyBtn}>
+          <MaterialCommunityIcons name="bell-outline" size={22} color={colors.onSurfaceVariant} />
+          <View style={styles.notifyBadge} />
+        </TouchableOpacity>
       </View>
 
-      {loadingChannels ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="small" color="#FF9500" />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Title */}
+        <View style={styles.titleContainer}>
+          <Text style={styles.screenTitle}>Messages</Text>
         </View>
-      ) : (
-        <FlatList
-          data={channels || []}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => setActiveChannelId(item.id)}
-              style={styles.channelRow}
-            >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>👥</Text>
-              </View>
-              <View style={styles.channelInfo}>
-                <Text style={styles.channelName}>{item.name || "Group Chat"}</Text>
-                <Text style={styles.channelLastMsg} numberOfLines={1}>
-                  {item.last_message_text || "No messages yet"}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        />
-      )}
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <MaterialCommunityIcons name="magnify" size={22} color={colors.outline} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search channels..."
+            placeholderTextColor={colors.outline}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        {/* List content */}
+        {isLoading ? (
+          <ActivityIndicator color={colors.primaryContainer} size="large" style={{ marginTop: 40 }} />
+        ) : filteredChannels.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="forum-outline" size={48} color={colors.outlineVariant} />
+            <Text style={styles.emptyText}>No channels found.</Text>
+          </View>
+        ) : (
+          <View style={styles.listContainer}>
+            {filteredChannels.map((item) => {
+              const iconName = getChannelIcon(item.name || "");
+              const iconBg = getChannelIconBg(item.name || "");
+              const iconColor = getChannelIconColor(item.name || "");
+              
+              // Mock unread badges for visual excellence
+              const hasUnread = item.name?.toLowerCase().includes("announcement") || item.name?.toLowerCase().includes("volunteer");
+              const unreadCount = item.name?.toLowerCase().includes("announcement") ? 2 : 5;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.channelRow}
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/chat-room",
+                      params: { channelId: item.id, channelName: item.name },
+                    })
+                  }
+                >
+                  <View style={[styles.avatarFrame, { backgroundColor: iconBg }]}>
+                    <MaterialCommunityIcons name={iconName as any} size={24} color={iconColor} />
+                  </View>
+
+                  <View style={styles.channelInfo}>
+                    <View style={styles.infoTop}>
+                      <Text style={styles.channelName} numberOfLines={1}>
+                        {item.name || "Group Chat"}
+                      </Text>
+                      <Text style={styles.timeText}>10:42 AM</Text>
+                    </View>
+
+                    <View style={styles.infoBottom}>
+                      <Text style={styles.lastMessage} numberOfLines={1}>
+                        {item.last_message_text || "No messages yet"}
+                      </Text>
+                      {hasUnread && (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadText}>{unreadCount}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Floating Add Button */}
+      <TouchableOpacity style={styles.fab}>
+        <MaterialCommunityIcons name="message-plus" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -149,143 +150,177 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  keyboardContainer: {
-    flex: 1,
+    backgroundColor: colors.background,
   },
   header: {
     height: 56,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(232, 226, 214, 0.4)",
+    backgroundColor: "#FFFFFF",
   },
-  backButton: {
-    marginRight: 12,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  backButtonText: {
-    fontSize: 14,
-    color: "#FF9500",
-    fontWeight: "bold",
-  },
-  headerTitle: {
+  headerLogo: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#111827",
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
+    letterSpacing: 1.5,
   },
-  centered: {
-    flex: 1,
+  headerNotifyBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
+    position: "relative",
+  },
+  notifyBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.kumkumRed,
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+  },
+  scrollContent: {
+    paddingBottom: 95,
+  },
+  titleContainer: {
+    paddingHorizontal: spacing.md,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  screenTitle: {
+    fontSize: 22,
+    fontFamily: fonts.poppins.bold,
+    color: colors.charcoal,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.pujaWhite,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: 12,
+    marginHorizontal: spacing.md,
+    height: 48,
+    paddingHorizontal: 12,
+    marginBottom: 20,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurface,
   },
   listContainer: {
-    padding: 16,
+    paddingHorizontal: spacing.md,
   },
   channelRow: {
-    backgroundColor: "#FFFFFF",
-    padding: 16,
-    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: colors.sandstone,
+    padding: 12,
+    marginBottom: 12,
+    gap: 12,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FFEEDB",
-    alignItems: "center",
+  avatarFrame: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     justifyContent: "center",
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 16,
+    alignItems: "center",
   },
   channelInfo: {
     flex: 1,
+    justifyContent: "center",
+  },
+  infoTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
   },
   channelName: {
     fontSize: 14,
-    fontWeight: "bold",
-    color: "#111827",
-  },
-  channelLastMsg: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  messagesList: {
-    padding: 16,
-  },
-  messageRow: {
-    flexDirection: "row",
-    marginBottom: 12,
-  },
-  messageRowSelf: {
-    justifyContent: "flex-end",
-  },
-  messageRowOther: {
-    justifyContent: "flex-start",
-  },
-  bubble: {
-    padding: 12,
-    borderRadius: 16,
-    maxWidth: "80%",
-  },
-  bubbleSelf: {
-    backgroundColor: "#FF9500",
-  },
-  bubbleOther: {
-    backgroundColor: "#F3F4F6",
-  },
-  senderName: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginBottom: 4,
-    fontWeight: "semibold",
-  },
-  messageText: {
-    fontSize: 14,
-    color: "#111827",
-  },
-  textSelf: {
-    color: "#FFFFFF",
-  },
-  inputArea: {
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  input: {
+    fontFamily: fonts.poppins.bold,
+    color: colors.charcoal,
     flex: 1,
-    height: 40,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    fontSize: 14,
-    color: "#111827",
+  },
+  timeText: {
+    fontSize: 11,
+    fontFamily: fonts.inter.medium,
+    color: colors.outline,
+  },
+  infoBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  lastMessage: {
+    fontSize: 12,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurfaceVariant,
+    flex: 1,
     marginRight: 8,
   },
-  sendBtn: {
-    backgroundColor: "#FF9500",
-    paddingHorizontal: 16,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
+  unreadBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.kumkumRed,
     justifyContent: "center",
+    alignItems: "center",
   },
-  sendBtnText: {
+  unreadText: {
     color: "#FFFFFF",
-    fontWeight: "bold",
-    fontSize: 14,
+    fontSize: 9,
+    fontFamily: fonts.inter.bold,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    paddingVertical: 80,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 13,
+    fontFamily: fonts.inter.medium,
+    color: colors.outline,
+  },
+  fab: {
+    position: "absolute",
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: colors.primaryContainer,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: colors.primaryContainer,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

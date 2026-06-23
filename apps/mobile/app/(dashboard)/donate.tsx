@@ -1,8 +1,31 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, SafeAreaView } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  SafeAreaView,
+  Image,
+  Dimensions,
+  Modal,
+  Alert,
+} from "react-native";
 import { useAuthStore } from "@utsav/stores";
-import { useFetchCampaigns, useCreateRazorpayOrder, useCreateDonation } from "@utsav/api-client";
+import {
+  useFetchCampaigns,
+  useCreateRazorpayOrder,
+  useCreateDonation,
+  useFetchDonations,
+} from "@utsav/api-client";
 import { useLocalSearchParams, router } from "expo-router";
+import { colors, fonts, borderRadius, spacing } from "../lib/theme";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+
+const { width } = Dimensions.get("window");
 
 export default function MobileDonateScreen() {
   const params = useLocalSearchParams();
@@ -10,8 +33,16 @@ export default function MobileDonateScreen() {
 
   const { tenantId, role } = useAuthStore();
   const { data: campaigns } = useFetchCampaigns();
+  const { data: donations, isLoading: isLedgerLoading, refetch: refetchLedger } = useFetchDonations();
   const createOrderMutation = useCreateRazorpayOrder();
   const createOfflineMutation = useCreateDonation();
+
+  // Navigation tab state: "ledger" or "form"
+  const [activeTab, setActiveTab] = useState<"ledger" | "form">("ledger");
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedModeFilter, setSelectedModeFilter] = useState<string | null>(null);
 
   // Form states
   const [donorName, setDonorName] = useState("");
@@ -32,6 +63,7 @@ export default function MobileDonateScreen() {
   useEffect(() => {
     if (campaignIdParam) {
       setSelectedCampaign(campaignIdParam);
+      setActiveTab("form");
     }
   }, [campaignIdParam]);
 
@@ -65,6 +97,7 @@ export default function MobileDonateScreen() {
           donor_name: res.donor_name,
           mode: "Cash",
         });
+        refetchLedger();
       } else {
         // Online order
         const order = await createOrderMutation.mutateAsync({
@@ -124,6 +157,7 @@ export default function MobileDonateScreen() {
         payment_id: mockPaymentId,
       });
       setMockOrderData(null);
+      refetchLedger();
     } catch (err) {
       setErrorMsg("Simulation request failed.");
     } finally {
@@ -139,45 +173,236 @@ export default function MobileDonateScreen() {
     }).format(value);
   };
 
+  // Helper to get initials
+  const getInitials = (name: string) => {
+    if (!name) return "D";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].substring(0, 2).toUpperCase();
+  };
+
+  // Filter donations
+  const filteredDonations = donations?.filter((don) => {
+    const matchesSearch =
+      don.donor_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      don.receipt_number?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesMode = selectedModeFilter ? don.mode?.toLowerCase() === selectedModeFilter.toLowerCase() : true;
+    return matchesSearch && matchesMode;
+  }) || [];
+
   return (
     <SafeAreaView style={styles.container}>
-      {successReceipt ? (
-        /* SUCCESS VIEW */
-        <View style={styles.successContainer}>
-          <Text style={styles.successDiya}>🪔</Text>
-          <Text style={styles.successTitle}>Aarti / Donation Received!</Text>
-          <Text style={styles.successText}>May the divine blessings bring joy, peace, and abundance to you and your family.</Text>
+      {/* Top Header */}
+      <View style={styles.topHeader}>
+        <View style={styles.logoGroup}>
+          <View style={styles.logoBadgeContainer}>
+            <Text style={styles.logoBadgeText}>U</Text>
+          </View>
+          <Text style={styles.logoText}>UTSAV</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.bellButton}
+          onPress={() => router.push("/(dashboard)/notifications")}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
+        </TouchableOpacity>
+      </View>
 
-          <View style={styles.receiptCard}>
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Receipt Number:</Text>
-              <Text style={styles.receiptVal}>{successReceipt.receipt_number}</Text>
+      {/* Segmented Top Control Tab */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === "ledger" && styles.tabButtonActive]}
+          onPress={() => { setActiveTab("ledger"); setSuccessReceipt(null); }}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons
+            name="format-list-bulleted"
+            size={18}
+            color={activeTab === "ledger" ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+          />
+          <Text style={[styles.tabText, activeTab === "ledger" && styles.tabTextActive]}>Donation Ledger</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === "form" && styles.tabButtonActive]}
+          onPress={() => setActiveTab("form")}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons
+            name="plus-circle-outline"
+            size={18}
+            color={activeTab === "form" ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+          />
+          <Text style={[styles.tabText, activeTab === "form" && styles.tabTextActive]}>New Donation</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === "ledger" ? (
+        /* LEDGER VIEW */
+        <View style={{ flex: 1 }}>
+          {/* Search & Filters */}
+          <View style={styles.searchSection}>
+            <View style={styles.searchBar}>
+              <MaterialCommunityIcons name="magnify" size={20} color={colors.onSurfaceVariant} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search donors or receipt ID..."
+                placeholderTextColor={colors.onSurfaceVariant}
+              />
             </View>
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Donor Name:</Text>
-              <Text style={styles.receiptVal}>{successReceipt.donor_name}</Text>
-            </View>
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Contribution Amount:</Text>
-              <Text style={[styles.receiptVal, styles.receiptAmount]}>{formatRupee(successReceipt.amount)}</Text>
-            </View>
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptLabel}>Payment Mode:</Text>
-              <Text style={styles.receiptVal}>{successReceipt.mode}</Text>
+
+            <View style={styles.filterChipsRow}>
+              <TouchableOpacity
+                style={[styles.filterChip, !selectedModeFilter && styles.filterChipActive]}
+                onPress={() => setSelectedModeFilter(null)}
+              >
+                <Text style={[styles.filterChipText, !selectedModeFilter && styles.filterChipTextActive]}>All Modes</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterChip, selectedModeFilter === "cash" && styles.filterChipActive]}
+                onPress={() => setSelectedModeFilter("cash")}
+              >
+                <MaterialCommunityIcons name="cash" size={14} color={selectedModeFilter === "cash" ? "#FFFFFF" : colors.onSurfaceVariant} />
+                <Text style={[styles.filterChipText, selectedModeFilter === "cash" && styles.filterChipTextActive]}>Cash</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterChip, selectedModeFilter === "online" && styles.filterChipActive]}
+                onPress={() => setSelectedModeFilter("online")}
+              >
+                <MaterialCommunityIcons name="cellphone-nfc" size={14} color={selectedModeFilter === "online" ? "#FFFFFF" : colors.onSurfaceVariant} />
+                <Text style={[styles.filterChipText, selectedModeFilter === "online" && styles.filterChipTextActive]}>Online</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          <TouchableOpacity style={styles.backButton} onPress={() => { setSuccessReceipt(null); router.push("/(dashboard)/home"); }} activeOpacity={0.8}>
-            <Text style={styles.backButtonText}>Back to Home</Text>
+          {isLedgerLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color={colors.primaryContainer} />
+            </View>
+          ) : filteredDonations.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="cookie-clock-outline" size={48} color={colors.outline} />
+              <Text style={styles.emptyText}>No donations found matching criteria.</Text>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.ledgerScroll} showsVerticalScrollIndicator={false}>
+              {filteredDonations.map((don: any, index: number) => {
+                const isOnline = don.mode?.toLowerCase() !== "cash";
+                return (
+                  <View key={don.id || index} style={styles.rowCard}>
+                    <View style={[styles.avatarCircle, { backgroundColor: isOnline ? "rgba(201, 146, 26, 0.15)" : "rgba(217, 43, 43, 0.15)" }]}>
+                      <Text style={[styles.avatarText, { color: isOnline ? colors.aartiGold : colors.kumkumRed }]}>
+                        {getInitials(don.donor_name)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.rowMain}>
+                      <Text style={styles.rowName} numberOfLines={1}>{don.donor_name || "Anonymous"}</Text>
+                      <View style={styles.rowMeta}>
+                        <MaterialCommunityIcons name="clock-outline" size={12} color={colors.onSurfaceVariant} />
+                        <Text style={styles.rowMetaText}>
+                          {new Date(don.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
+                        </Text>
+                        <Text style={styles.bulletDot}>•</Text>
+                        <Text style={styles.rowMetaText}>{don.receipt_number || "RCPT-#"}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.rowPaymentType}>
+                      <MaterialCommunityIcons
+                        name={isOnline ? "credit-card-outline" : "cash"}
+                        size={16}
+                        color={colors.onSurfaceVariant}
+                      />
+                      <Text style={styles.rowPaymentTypeText}>{isOnline ? "Online" : "Cash"}</Text>
+                    </View>
+
+                    <View style={styles.rowRight}>
+                      <Text style={styles.rowAmount}>{formatRupee(don.amount)}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: isOnline ? "rgba(34, 197, 94, 0.1)" : "rgba(234, 179, 8, 0.1)" }]}>
+                        <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.tulsiGreen : colors.haldiYellow }]} />
+                        <Text style={[styles.statusBadgeText, { color: isOnline ? colors.tulsiGreen : colors.haldiYellow }]}>
+                          {isOnline ? "Confirmed" : "Pending"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {/* Quick Make Donation FAB */}
+          <TouchableOpacity style={styles.makeDonationFab} onPress={() => setActiveTab("form")} activeOpacity={0.9}>
+            <LinearGradient
+              colors={["#ff9500", "#b90d18"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.makeDonationFabGrad}
+            >
+              <MaterialCommunityIcons name="heart-plus" size={24} color="#FFFFFF" />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
+      ) : successReceipt ? (
+        /* SUCCESS RECEIPT VIEW */
+        <ScrollView contentContainerStyle={styles.successScroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.successCard}>
+            <Text style={styles.successDiya}>🪔</Text>
+            <Text style={styles.successTitle}>Aarti / Donation Received!</Text>
+            <Text style={styles.successText}>
+              May the divine blessings bring joy, peace, and abundance to you and your family.
+            </Text>
+
+            <View style={styles.receiptCard}>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Receipt Number:</Text>
+                <Text style={styles.receiptVal}>{successReceipt.receipt_number}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Donor Name:</Text>
+                <Text style={styles.receiptVal}>{successReceipt.donor_name}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Contribution Amount:</Text>
+                <Text style={[styles.receiptVal, styles.receiptAmount]}>{formatRupee(successReceipt.amount)}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Payment Mode:</Text>
+                <Text style={styles.receiptVal}>{successReceipt.mode}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => {
+                setSuccessReceipt(null);
+                setActiveTab("ledger");
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.backButtonText}>View Donation Ledger</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       ) : (
         /* FORM VIEW */
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>Make Contribution</Text>
-          <Text style={styles.subtitle}>Enter details to support your community initiatives.</Text>
+          <Text style={styles.formTitle}>Make Contribution</Text>
+          <Text style={styles.formSubtitle}>Enter details to support your community initiatives.</Text>
 
-          {errorMsg ? <Text style={styles.errorText}>⚠️ {errorMsg}</Text> : null}
+          {errorMsg ? (
+            <View style={styles.errorContainer}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.secondaryBrand} />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.formCard}>
             {/* Donor Name */}
@@ -188,7 +413,7 @@ export default function MobileDonateScreen() {
                 value={donorName}
                 onChangeText={setDonorName}
                 placeholder="e.g. Rajesh Kumar"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.onSurfaceVariant}
               />
             </View>
 
@@ -218,11 +443,11 @@ export default function MobileDonateScreen() {
                 onChangeText={setAmount}
                 keyboardType="numeric"
                 placeholder="e.g. 1500"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.onSurfaceVariant}
               />
             </View>
 
-            {/* Mode Selector (Role Restricted for Cash) */}
+            {/* Mode Selector */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Payment Method</Text>
               <View style={styles.modeContainer}>
@@ -248,13 +473,23 @@ export default function MobileDonateScreen() {
             {/* Campaign Selector */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Campaign Designation</Text>
-              <View style={styles.selectWrapper}>
-                <Text style={styles.selectText}>
-                  {selectedCampaign
-                    ? campaigns?.find((c) => c.id === selectedCampaign)?.name || "Selected Campaign"
-                    : "General Fund"}
-                </Text>
-              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.campaignList}>
+                <TouchableOpacity
+                  style={[styles.campaignChip, selectedCampaign === "" && styles.campaignChipActive]}
+                  onPress={() => setSelectedCampaign("")}
+                >
+                  <Text style={[styles.campaignChipText, selectedCampaign === "" && styles.campaignChipTextActive]}>General Fund</Text>
+                </TouchableOpacity>
+                {campaigns?.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.campaignChip, selectedCampaign === c.id && styles.campaignChipActive]}
+                    onPress={() => setSelectedCampaign(c.id)}
+                  >
+                    <Text style={[styles.campaignChipText, selectedCampaign === c.id && styles.campaignChipTextActive]}>{c.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             {/* Notes */}
@@ -265,7 +500,7 @@ export default function MobileDonateScreen() {
                 value={note}
                 onChangeText={setNote}
                 placeholder="Message for Aarti or general fund"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.onSurfaceVariant}
                 multiline
                 numberOfLines={2}
               />
@@ -284,26 +519,32 @@ export default function MobileDonateScreen() {
 
       {/* Mock payment modal overlay */}
       {mockOrderData && (
-        <View style={styles.overlay}>
-          <View style={styles.modal}>
-            <Text style={styles.modalTitle}>Sandbox Checkout Emulator</Text>
-            <Text style={styles.modalText}>Simulate transaction captures from your mobile device.</Text>
+        <Modal transparent={true} visible={!!mockOrderData} animationType="fade">
+          <View style={styles.overlay}>
+            <View style={styles.modal}>
+              <Text style={styles.modalTitle}>Sandbox Checkout Emulator</Text>
+              <Text style={styles.modalText}>Simulate transaction captures from your mobile device.</Text>
 
-            <View style={styles.modalDetails}>
-              <Text style={styles.modalDetailText}>Order: {mockOrderData.id}</Text>
-              <Text style={styles.modalDetailText}>Amount: {formatRupee(mockOrderData.amount / 100)}</Text>
-            </View>
+              <View style={styles.modalDetails}>
+                <Text style={styles.modalDetailText}>Order: {mockOrderData.id}</Text>
+                <Text style={styles.modalDetailText}>Amount: {formatRupee(mockOrderData.amount / 100)}</Text>
+              </View>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setMockOrderData(null)} activeOpacity={0.8}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={handleSimulatePayment} activeOpacity={0.8}>
-                <Text style={styles.modalConfirmText}>Simulate Success</Text>
-              </TouchableOpacity>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalCancel} onPress={() => setMockOrderData(null)} activeOpacity={0.8}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalPay} onPress={handleSimulatePayment} disabled={isProcessing} activeOpacity={0.8}>
+                  {isProcessing ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.modalPayText}>Simulate Capture</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </Modal>
       )}
     </SafeAreaView>
   );
@@ -312,178 +553,508 @@ export default function MobileDonateScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FAF9F6",
+    backgroundColor: colors.background,
+  },
+  topHeader: {
+    height: 64,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(232, 226, 214, 0.3)",
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+  },
+  logoGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  logoBadgeContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primaryContainer,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoBadgeText: {
+    color: colors.onPrimaryContainer,
+    fontFamily: fonts.poppins.bold,
+    fontSize: 15,
+  },
+  logoText: {
+    fontSize: 16,
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
+    letterSpacing: 1,
+  },
+  bellButton: {
+    padding: spacing.xs,
+  },
+  tabContainer: {
+    flexDirection: "row",
+    padding: 6,
+    backgroundColor: "rgba(232, 226, 214, 0.3)",
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    gap: 6,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: borderRadius.lg,
+    gap: 6,
+  },
+  tabButtonActive: {
+    backgroundColor: colors.primaryContainer,
+  },
+  tabText: {
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
+  },
+  tabTextActive: {
+    color: colors.onPrimaryContainer,
+  },
+  searchSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: borderRadius.xl,
+    height: 48,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurface,
+    paddingVertical: 8,
+  },
+  filterChipsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primaryBrand,
+    borderColor: colors.primaryBrand,
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
+  },
+  filterChipTextActive: {
+    color: "#FFFFFF",
+  },
+  ledgerScroll: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 110,
+    gap: spacing.sm,
+  },
+  rowCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(232, 226, 214, 0.4)",
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+  },
+  avatarCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  avatarText: {
+    fontSize: 14,
+    fontFamily: fonts.inter.bold,
+  },
+  rowMain: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  rowName: {
+    fontSize: 14,
+    color: colors.onSurface,
+    fontFamily: fonts.inter.bold,
+  },
+  rowMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+    gap: 4,
+  },
+  rowMetaText: {
+    fontSize: 11,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.regular,
+  },
+  bulletDot: {
+    color: colors.onSurfaceVariant,
+    fontSize: 8,
+  },
+  rowPaymentType: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginRight: spacing.md,
+  },
+  rowPaymentTypeText: {
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
+  },
+  rowRight: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  rowAmount: {
+    fontSize: 14,
+    color: colors.primaryBrand,
+    fontFamily: fonts.poppins.bold,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    gap: 4,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusBadgeText: {
+    fontSize: 9,
+    fontFamily: fonts.inter.bold,
+    textTransform: "uppercase",
+  },
+  makeDonationFab: {
+    position: "absolute",
+    bottom: 24,
+    right: 20,
+    zIndex: 100,
+  },
+  makeDonationFabGrad: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: colors.primaryContainer,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 40,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1F2937",
-    fontFamily: "System",
+  formTitle: {
+    fontSize: 22,
+    color: colors.onSurface,
+    fontFamily: fonts.poppins.bold,
   },
-  subtitle: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: "#EF4444",
-    backgroundColor: "#FEF2F2",
-    padding: 12,
-    borderRadius: 12,
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 20,
+  formSubtitle: {
+    fontSize: 14,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.regular,
+    marginTop: 2,
+    marginBottom: spacing.md,
   },
   formCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
-    gap: 16,
+    borderColor: "rgba(232, 226, 214, 0.4)",
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    gap: spacing.md,
   },
   inputGroup: {
-    gap: 8,
+    gap: spacing.xs,
   },
   label: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#4B5563",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
+    borderColor: colors.sandstone,
+    borderRadius: borderRadius.lg,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
-    color: "#1F2937",
-    backgroundColor: "#FAFAFA",
+    color: colors.onSurface,
+    fontFamily: fonts.inter.medium,
+    backgroundColor: colors.pujaWhite,
   },
   textArea: {
-    height: 60,
+    height: 64,
     textAlignVertical: "top",
   },
   quickGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: spacing.sm,
   },
   quickChip: {
-    backgroundColor: "#FAFAFA",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 20,
-    paddingVertical: 8,
+    backgroundColor: "rgba(232, 226, 214, 0.3)",
     paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.lg,
   },
   quickChipActive: {
-    backgroundColor: "#FF9500",
-    borderColor: "#FF9500",
+    backgroundColor: colors.primaryContainer,
   },
   quickText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#4B5563",
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
   },
   quickTextActive: {
-    color: "#FFFFFF",
+    color: colors.onPrimaryContainer,
   },
   modeContainer: {
     flexDirection: "row",
-    gap: 8,
+    gap: spacing.md,
   },
   modeButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
+    borderColor: colors.sandstone,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#FAFAFA",
+    borderRadius: borderRadius.lg,
+    backgroundColor: "#FFFFFF",
   },
   modeButtonActive: {
-    borderColor: "#FF9500",
-    backgroundColor: "#FFFBEB",
+    borderColor: colors.primaryBrand,
+    backgroundColor: "rgba(140, 80, 0, 0.05)",
   },
   modeText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#4B5563",
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
   },
   modeTextActive: {
-    color: "#FF9500",
+    color: colors.primaryBrand,
   },
-  selectWrapper: {
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: "#FAFAFA",
+  campaignList: {
+    gap: spacing.sm,
   },
-  selectText: {
-    fontSize: 14,
-    color: "#1F2937",
+  campaignChip: {
+    backgroundColor: "rgba(232, 226, 214, 0.3)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.lg,
+  },
+  campaignChipActive: {
+    backgroundColor: colors.primaryBrand,
+  },
+  campaignChipText: {
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
+  },
+  campaignChipTextActive: {
+    color: "#FFFFFF",
   },
   submitButton: {
-    backgroundColor: "#FF9500",
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: colors.primaryContainer,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
     alignItems: "center",
-    marginTop: 24,
-    shadowColor: "#FF9500",
+    marginTop: spacing.md,
+    shadowColor: colors.primaryContainer,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 3,
   },
   submitButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "bold",
+    color: colors.onPrimaryContainer,
+    fontSize: 15,
+    fontFamily: fonts.poppins.bold,
   },
-  successContainer: {
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  modal: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: fonts.poppins.bold,
+    color: colors.onSurface,
+  },
+  modalText: {
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.regular,
+    lineHeight: 18,
+  },
+  modalDetails: {
+    backgroundColor: colors.pujaWhite,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: 4,
+  },
+  modalDetailText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.semibold,
+    color: colors.onSurface,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  modalCancel: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: borderRadius.lg,
+  },
+  modalCancelText: {
+    fontSize: 14,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
+  },
+  modalPay: {
+    flex: 2,
+    backgroundColor: colors.primaryBrand,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: borderRadius.lg,
+  },
+  modalPayText: {
+    fontSize: 14,
+    color: "#FFFFFF",
+    fontFamily: fonts.inter.bold,
+  },
+  center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
+    textAlign: "center",
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.errorContainer,
+    padding: spacing.sm,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  errorText: {
+    color: colors.secondaryBrand,
+    fontSize: 12,
+    fontFamily: fonts.inter.semibold,
+    flex: 1,
+  },
+  successScroll: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: 40,
+  },
+  successCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: borderRadius["2xl"],
+    padding: spacing.lg,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(232, 226, 214, 0.4)",
+    shadowColor: colors.primaryBrand,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
   successDiya: {
-    fontSize: 72,
-    marginBottom: 20,
+    fontSize: 64,
+    marginBottom: spacing.sm,
   },
   successTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#1F2937",
+    fontSize: 20,
+    color: colors.onSurface,
+    fontFamily: fonts.poppins.bold,
     textAlign: "center",
   },
   successText: {
     fontSize: 13,
-    color: "#6B7280",
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.medium,
     textAlign: "center",
     lineHeight: 18,
-    marginTop: 8,
-    marginBottom: 30,
-    paddingHorizontal: 10,
+    marginTop: spacing.xs,
+    marginBottom: spacing.lg,
   },
   receiptCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
     width: "100%",
-    gap: 12,
-    marginBottom: 30,
+    backgroundColor: colors.pujaWhite,
+    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
   },
   receiptRow: {
     flexDirection: "row",
@@ -492,101 +1063,30 @@ const styles = StyleSheet.create({
   },
   receiptLabel: {
     fontSize: 12,
-    color: "#6B7280",
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.medium,
   },
   receiptVal: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#1F2937",
+    fontSize: 13,
+    color: colors.onSurface,
+    fontFamily: fonts.inter.semibold,
   },
   receiptAmount: {
-    color: "#FF9500",
-    fontWeight: "bold",
-    fontSize: 14,
+    fontSize: 15,
+    color: colors.tulsiGreen,
+    fontFamily: fonts.poppins.bold,
   },
   backButton: {
-    backgroundColor: "#1F2937",
+    backgroundColor: colors.primaryContainer,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: borderRadius.lg,
     width: "100%",
-    paddingVertical: 16,
-    borderRadius: 16,
     alignItems: "center",
   },
   backButtonText: {
-    color: "#FFFFFF",
+    color: colors.onPrimaryContainer,
     fontSize: 14,
-    fontWeight: "bold",
-  },
-  overlay: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modal: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 24,
-    width: "100%",
-    maxWidth: 320,
-    alignItems: "center",
-    gap: 16,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1F2937",
-  },
-  modalText: {
-    fontSize: 12,
-    color: "#6B7280",
-    textAlign: "center",
-    lineHeight: 16,
-  },
-  modalDetails: {
-    backgroundColor: "#F9FAFB",
-    padding: 12,
-    borderRadius: 12,
-    width: "100%",
-    gap: 4,
-  },
-  modalDetailText: {
-    fontSize: 10,
-    color: "#4B5563",
-    fontFamily: "System",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 10,
-    width: "100%",
-  },
-  modalCancel: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  modalCancelText: {
-    fontSize: 12,
-    color: "#4B5563",
-    fontWeight: "bold",
-  },
-  modalConfirm: {
-    flex: 1,
-    backgroundColor: "#FF9500",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  modalConfirmText: {
-    fontSize: 12,
-    color: "#FFFFFF",
-    fontWeight: "bold",
+    fontFamily: fonts.poppins.bold,
   },
 });
