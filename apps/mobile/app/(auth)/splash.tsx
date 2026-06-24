@@ -5,11 +5,11 @@ import {
   View,
   Animated,
   Dimensions,
+  Image,
 } from "react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, fonts, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
 
@@ -171,10 +171,10 @@ export default function SplashScreen() {
               },
             ]}
           >
-            <MaterialCommunityIcons
-              name="fire"
-              size={80}
-              color="#FFFFFF"
+            <Image
+              source={require("../../assets/logo.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
             />
           </Animated.View>
         </View>
@@ -245,6 +245,11 @@ const styles = StyleSheet.create({
     height: 192,
     alignItems: "center",
     justifyContent: "center",
+  },
+  logoImage: {
+    width: 140,
+    height: 140,
+    borderRadius: 24,
   },
   taglineFooter: {
     position: "absolute",
