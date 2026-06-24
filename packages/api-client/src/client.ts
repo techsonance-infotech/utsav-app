@@ -1,10 +1,13 @@
 import { useAuthStore } from "@utsav/stores";
 
 const API_BASE_URL = (() => {
-  if (typeof window !== "undefined" && !process.env.NEXT_PUBLIC_APP_URL) {
+  if (typeof window !== "undefined") {
     return `${window.location.origin}/api/v1`;
   }
-  const url = process.env.NEXT_PUBLIC_APP_URL || process.env.EXPO_PUBLIC_API_URL || "https://utsav.app/api/v1";
+  let url = process.env.NEXT_PUBLIC_APP_URL || process.env.EXPO_PUBLIC_API_URL || "https://utsav.app/api/v1";
+  if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
+    url = `https://${url}`;
+  }
   if (url && !url.endsWith("/api/v1")) {
     return `${url.replace(/\/$/, "")}/api/v1`;
   }
