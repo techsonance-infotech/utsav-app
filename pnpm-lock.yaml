@@ -38,6 +38,12 @@ importers:
       '@expo/vector-icons':
         specifier: ^14.1.0
         version: 14.1.0(expo-font@12.0.10(expo@51.0.39(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(react-native@0.74.5(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.3)(react@18.3.1))(react@18.3.1)))(react-native@0.74.5(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.3)(react@18.3.1))(react@18.3.1)
+      '@react-navigation/core':
+        specifier: ^6.4.17
+        version: 6.4.17(react@18.3.1)
+      '@react-navigation/native':
+        specifier: ^6.1.18
+        version: 6.1.18(react-native@0.74.5(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.3)(react@18.3.1))(react@18.3.1)
       '@tanstack/react-query':
         specifier: 5.51.1
         version: 5.51.1(react@18.3.1)

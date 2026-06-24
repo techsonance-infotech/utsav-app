@@ -13,6 +13,8 @@
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/poppins": "^0.4.1",
     "@expo/vector-icons": "^14.1.0",
+    "@react-navigation/core": "^6.4.17",
+    "@react-navigation/native": "^6.1.18",
     "@tanstack/react-query": "5.51.1",
     "@utsav/api-client": "workspace:*",
     "@utsav/design-tokens": "workspace:*",
