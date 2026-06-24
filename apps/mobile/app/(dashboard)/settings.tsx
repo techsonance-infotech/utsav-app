@@ -192,7 +192,8 @@ export default function MobileSettingsScreen() {
                 </View>
               </View>
             </View>
-          </View>          {/* Subscription Section */}
+          </View>
+          {/* Subscription Section */}
           <View style={styles.group}>
             <Text style={styles.groupLabel}>Subscription</Text>
             <View style={styles.groupCard}>
