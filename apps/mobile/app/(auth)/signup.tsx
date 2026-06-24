@@ -278,6 +278,13 @@ export default function MobileSignupScreen() {
         >
           <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.header}>
+              <View style={styles.logoWrapper}>
+                <Image
+                  source={require("../../assets/logo.png")}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
               <Text style={styles.title}>Create Account</Text>
               <Text style={styles.subtitle}>Join your Mandal community today.</Text>
             </View>
@@ -453,6 +460,13 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     marginBottom: spacing.lg,
+  },
+  logoWrapper: {
+    marginBottom: spacing.md,
+  },
+  logoImage: {
+    width: 140,
+    height: 60,
   },
   title: {
     fontSize: 28,

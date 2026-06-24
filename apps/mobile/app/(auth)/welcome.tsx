@@ -129,12 +129,12 @@ const styles = StyleSheet.create({
   logoHeader: {
     alignItems: "center",
     paddingTop: spacing.xs,
-    height: 60,
+    height: 80,
     justifyContent: "center",
   },
   logoImage: {
-    width: 130,
-    height: 50,
+    width: 160,
+    height: 68,
   },
   heroSection: {
     flex: 1,

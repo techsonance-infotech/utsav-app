@@ -378,8 +378,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   logoImage: {
-    width: 80,
-    height: 80,
+    width: 140,
+    height: 60,
   },
   title: {
     fontSize: 28,

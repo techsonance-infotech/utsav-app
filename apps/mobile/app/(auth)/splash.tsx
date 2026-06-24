@@ -241,15 +241,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 222, 169, 0.2)",
   },
   logoWrap: {
-    width: 192,
-    height: 192,
+    width: 260,
+    height: 120,
     alignItems: "center",
     justifyContent: "center",
   },
   logoImage: {
-    width: 140,
-    height: 140,
-    borderRadius: 24,
+    width: 220,
+    height: 94,
   },
   taglineFooter: {
     position: "absolute",
