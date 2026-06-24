@@ -35,7 +35,7 @@ export default function DashboardLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <MaterialCommunityIcons name="home-outline" size={size} color={color} />
           ),
         }}
@@ -44,7 +44,7 @@ export default function DashboardLayout() {
         name="events"
         options={{
           title: "Events",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <MaterialCommunityIcons name="calendar-month-outline" size={size} color={color} />
           ),
         }}
@@ -53,7 +53,7 @@ export default function DashboardLayout() {
         name="donate"
         options={{
           title: "Donate",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <MaterialCommunityIcons name="heart-flash" size={size} color={color} />
           ),
         }}
@@ -62,7 +62,7 @@ export default function DashboardLayout() {
         name="chat"
         options={{
           title: "Chat",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <MaterialCommunityIcons name="chat-processing-outline" size={size} color={color} />
           ),
         }}
@@ -71,7 +71,7 @@ export default function DashboardLayout() {
         name="settings"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <MaterialCommunityIcons name="account-outline" size={size} color={color} />
           ),
         }}
