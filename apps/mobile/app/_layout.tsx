@@ -17,6 +17,12 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 
+import { setApiBaseUrl } from "@utsav/api-client";
+
+// Set base API URL for the client using Metro-injected env variable
+const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://utsav.techsonance.co.in";
+setApiBaseUrl(apiUrl);
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 

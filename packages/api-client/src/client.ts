@@ -1,7 +1,20 @@
 import { useAuthStore } from "@utsav/stores";
 
+let customApiBaseUrl: string | null = null;
+
+export function setApiBaseUrl(url: string) {
+  if (url && !url.endsWith("/api/v1")) {
+    customApiBaseUrl = `${url.replace(/\/$/, "")}/api/v1`;
+  } else {
+    customApiBaseUrl = url;
+  }
+}
+
 function getApiBaseUrl(): string {
-  if (typeof window !== "undefined") {
+  if (customApiBaseUrl) {
+    return customApiBaseUrl;
+  }
+  if (typeof window !== "undefined" && window.location && window.location.origin) {
     return `${window.location.origin}/api/v1`;
   }
   let url = process.env.NEXT_PUBLIC_APP_URL || process.env.EXPO_PUBLIC_API_URL || "https://utsav.app/api/v1";
