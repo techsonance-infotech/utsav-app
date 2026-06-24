@@ -32,6 +32,50 @@ async function checkRateLimit(ip: string, limit: number, windowSeconds: number):
   }
 }
 
+function getSlugFromHost(hostName: string, baseDomain: string): string | null {
+  // Exclude Vercel preview system domains from being parsed as tenant subdomains
+  const isVercelPreview = hostName.endsWith(".vercel.app") && !hostName.includes("utsav.techsonance.co.in");
+  if (isVercelPreview) {
+    return null;
+  }
+
+  // Treat localhost, baseDomain and techsonance production domains as base main domain
+  const isBaseDomain = 
+    hostName === "utsav.techsonance.co.in" || 
+    hostName === "www.utsav.techsonance.co.in" ||
+    hostName === baseDomain || 
+    hostName === "localhost" || 
+    hostName === "127.0.0.1";
+
+  if (isBaseDomain) {
+    return null;
+  }
+
+  // 1. Check if it's a subdomain of the base domain or techsonance domain
+  const domains = [baseDomain, "utsav.techsonance.co.in"];
+  for (const domain of domains) {
+    if (domain && hostName.endsWith("." + domain)) {
+      const sub = hostName.slice(0, -(domain.length + 1));
+      if (sub && sub !== "www" && sub !== "admin" && sub !== "app") {
+        return sub;
+      }
+      return null;
+    }
+  }
+
+  // 2. For custom domains, extract the slug from the domain name (excluding TLD)
+  const parts = hostName.split(".");
+  if (parts.length >= 2) {
+    // If it starts with www, skip it (e.g. www.temple.com -> temple)
+    if (parts[0] === "www" && parts.length > 2) {
+      return parts[1];
+    }
+    return parts[0];
+  }
+
+  return null;
+}
+
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
   const host = req.headers.get("host") || "";
@@ -101,18 +145,15 @@ export async function middleware(req: NextRequest) {
   const baseDomain = (process.env.NEXT_PUBLIC_BASE_DOMAIN || "localhost:3000").split(":")[0].toLowerCase();
   const hostName = host.split(":")[0].toLowerCase();
 
-  let subdomain: string | null = null;
-  if (hostName.endsWith("." + baseDomain)) {
-    const sub = hostName.slice(0, -(baseDomain.length + 1));
-    if (sub && sub !== "www" && sub !== "admin" && sub !== "app") {
-      subdomain = sub;
-    }
-  }
+  // Extract slug/subdomain from hostname (handles subdomains and custom domains matching slug)
+  const subdomain = getSlugFromHost(hostName, baseDomain);
+  const isVercelPreview = hostName.endsWith(".vercel.app") && !hostName.includes("utsav.techsonance.co.in");
 
   const path = url.pathname;
+  console.log(`[Middleware Debug] Host: ${hostName}, Path: ${path}, BaseDomain: ${baseDomain}, Subdomain: ${subdomain}, isVercelPreview: ${isVercelPreview}`);
   const isInternalOrApi =
     path.startsWith("/api") ||
-    path.startsWith("/_next") ||
+    path.startsWith("/_") ||
     path.startsWith("/static") ||
     path.includes(".");
 
@@ -149,7 +190,40 @@ export async function middleware(req: NextRequest) {
 
     // Priority 1: Subdomain-based routing (Production)
     if (subdomain) {
-      url.pathname = `/public/${subdomain}${path}`;
+      const globalReservedRoots = new Set([
+        "auth",
+        "onboarding",
+        "join",
+        "login",
+        "register",
+        "forgot-password",
+        "verify-email",
+        "privacy-policy",
+        "terms-of-service",
+        "help-center",
+        "admin",
+        "api",
+        "assets",
+      ]);
+
+      if (firstSegment && globalReservedRoots.has(firstSegment)) {
+        // Do not rewrite global reserved roots (login, register, etc.) on subdomain
+        const res = NextResponse.next();
+        addSecurityHeaders(res);
+        return res;
+      }
+
+      // If the path already starts with the subdomain (e.g. /temple/about), strip it to avoid double prefixing
+      let cleanPath = path;
+      const subdomainPrefix = `/${subdomain}`;
+      if (path.toLowerCase().startsWith(subdomainPrefix + "/") || path.toLowerCase() === subdomainPrefix) {
+        cleanPath = path.slice(subdomainPrefix.length);
+        if (!cleanPath.startsWith("/")) {
+          cleanPath = "/" + cleanPath;
+        }
+      }
+
+      url.pathname = `/public/${subdomain}${cleanPath}`;
       const res = NextResponse.rewrite(url);
       addSecurityHeaders(res);
       return res;
