@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 
 export default function PortfolioManagementScreen() {
   const deliverables = [
@@ -89,7 +89,7 @@ export default function PortfolioManagementScreen() {
             <Text style={styles.headText}>Head: Rajesh Kumar</Text>
           </View>
           <View style={styles.decorIconBg}>
-            <MaterialCommunityIcons name="temple-hindu" size={96} color="rgba(255,255,255,0.12)" />
+            <MaterialIcons name="temple-hindu" size={96} color="rgba(255,255,255,0.12)" />
           </View>
         </View>
 

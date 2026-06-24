@@ -17,7 +17,7 @@ import { router } from "expo-router";
 import { useAuthStore } from "@utsav/stores";
 import { useFetchAlbums, useCreateAlbum } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 
 export default function GalleryHubScreen() {
   const { role: userRole } = useAuthStore();
@@ -94,7 +94,7 @@ export default function GalleryHubScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoBadge}>
-            <MaterialCommunityIcons name="temple-hindu" size={20} color="#FFFFFF" />
+            <MaterialIcons name="temple-hindu" size={20} color="#FFFFFF" />
           </View>
           <Text style={styles.headerLogo}>UTSAV</Text>
         </View>

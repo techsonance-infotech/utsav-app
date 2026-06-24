@@ -12,6 +12,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
+  Image,
 } from "react-native";
 import { useAuthStore } from "@utsav/stores";
 import { useSignUp, useLogin, supabase } from "@utsav/api-client";
@@ -339,8 +341,14 @@ export default function MobileSignupScreen() {
                   {agreeTerms && <MaterialCommunityIcons name="check" size={14} color="#FFFFFF" />}
                 </View>
                 <Text style={styles.termsText}>
-                  I agree to the <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
-                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                  I agree to the{" "}
+                  <Text style={styles.termsLink} onPress={() => Linking.openURL("https://utsav.app/terms-of-service")}>
+                    Terms of Service
+                  </Text>{" "}
+                  and{" "}
+                  <Text style={styles.termsLink} onPress={() => Linking.openURL("https://utsav.app/privacy-policy")}>
+                    Privacy Policy
+                  </Text>
                 </Text>
               </TouchableOpacity>
 
@@ -366,16 +374,19 @@ export default function MobileSignupScreen() {
                 <View style={styles.dividerLine} />
               </View>
 
+              {/* Google Auth */}
               <TouchableOpacity
                 style={styles.googleButton}
                 onPress={handleGoogleLogin}
                 disabled={isLoading}
                 activeOpacity={0.8}
               >
-                <View style={styles.googleIconContainer}>
-                  {/* Google Custom Minimal Vector representation */}
-                  <MaterialCommunityIcons name="google" size={20} color="#EA4335" />
-                </View>
+                <Image
+                  style={styles.googleIcon}
+                  source={{
+                    uri: "https://developers.google.com/static/identity/images/g-logo.png",
+                  }}
+                />
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </TouchableOpacity>
             </View>
@@ -437,16 +448,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    backgroundColor: "rgba(255, 255, 255, 0.65)",
-    borderRadius: borderRadius["2xl"],
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: "rgba(232, 226, 214, 0.4)",
-    shadowColor: colors.primaryBrand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
+    padding: spacing.md,
   },
   header: {
     alignItems: "center",
@@ -634,9 +636,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  googleIconContainer: {
-    justifyContent: "center",
-    alignItems: "center",
+  googleIcon: {
+    width: 20,
+    height: 20,
   },
   googleButtonText: {
     color: colors.onSurfaceVariant,

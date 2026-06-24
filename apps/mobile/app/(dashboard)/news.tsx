@@ -13,7 +13,7 @@ import { router } from "expo-router";
 import { useNewsArticles } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 
 export default function NewsFeedScreen() {
   const { role: userRole } = useAuthStore();
@@ -59,7 +59,7 @@ export default function NewsFeedScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoBadge}>
-            <MaterialCommunityIcons name="temple-hindu" size={20} color="#FFFFFF" />
+            <MaterialIcons name="temple-hindu" size={20} color="#FFFFFF" />
           </View>
           <Text style={styles.headerLogo}>UTSAV</Text>
         </View>

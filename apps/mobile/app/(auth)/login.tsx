@@ -13,12 +13,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
 } from "react-native";
 import { useAuthStore } from "@utsav/stores";
 import { useLogin, supabase } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
 
@@ -208,8 +209,12 @@ export default function MobileLoginScreen() {
           <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             {/* Logo Section */}
             <View style={styles.header}>
-              <Animated.View style={[styles.diyaGlow, { opacity: glowAnim }]}>
-                <Text style={styles.logoDiya}>🪔</Text>
+              <Animated.View style={[styles.logoWrapper, { opacity: glowAnim }]}>
+                <Image
+                  source={require("../../assets/logo.png")}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
               </Animated.View>
               <Text style={styles.title}>Welcome Back</Text>
               <Text style={styles.subtitle}>Sign in to manage your festival with ease.</Text>
@@ -280,7 +285,7 @@ export default function MobileLoginScreen() {
                 <Image
                   style={styles.googleIcon}
                   source={{
-                    uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuAvJeFZoMZVEFjM9EduXwhE5s1ZbkjRTahKm4bz9LOIiED_kWWFmq-6AP8OFJp1o9oxxK-onh0vcd3bwj_rA8fQjmHjySFjBJgGSZloG-WveADBWUvcx4XXWtfDOJ-6Vo77n3XOAOLcE5b20ijC7b6ungvD-qtWW1XCIKarrxXk5aYZFomV0NnMlvqZD7xhXQKdfhA9Tn29SveUsPNYG-vkB2Sh04qV4K0dJFKF11jmRjRFLzeSnPOV",
+                    uri: "https://developers.google.com/static/identity/images/g-logo.png",
                   }}
                 />
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
@@ -294,18 +299,33 @@ export default function MobileLoginScreen() {
                 <Text style={styles.footerLink}>Start here</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Footer Links */}
+            <View style={styles.footerLinks}>
+              <TouchableOpacity onPress={() => Linking.openURL("https://utsav.app/privacy-policy")}>
+                <Text style={styles.footerLinkText}>Privacy Policy</Text>
+              </TouchableOpacity>
+              <Text style={styles.footerLinkSeparator}>•</Text>
+              <TouchableOpacity onPress={() => Linking.openURL("https://utsav.app/terms-of-service")}>
+                <Text style={styles.footerLinkText}>Terms of Service</Text>
+              </TouchableOpacity>
+              <Text style={styles.footerLinkSeparator}>•</Text>
+              <TouchableOpacity onPress={() => Linking.openURL("https://utsav.app/help-center")}>
+                <Text style={styles.footerLinkText}>Help Center</Text>
+              </TouchableOpacity>
+            </View>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Decorative Bottom Cultural Icons Row */}
       <View style={styles.bottomIconsRow}>
-        <MaterialCommunityIcons name="home-map-marker" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="party-popper" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="flower" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="temple-hindu" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="flare" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="fire" size={32} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialIcons name="temple-hindu" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="party-popper" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="flower" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="church" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="flare" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="fire" size={54} color={colors.outline} style={styles.bottomIcon} />
       </View>
     </SafeAreaView>
   );
@@ -348,30 +368,18 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    backgroundColor: "rgba(255, 255, 255, 0.65)",
-    borderRadius: borderRadius["2xl"],
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: "rgba(232, 226, 214, 0.4)",
-    shadowColor: colors.primaryBrand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
+    padding: spacing.md,
   },
   header: {
     alignItems: "center",
     marginBottom: spacing.lg,
   },
-  diyaGlow: {
-    shadowColor: colors.primaryContainer,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 15,
-    shadowOpacity: 0.5,
-    marginBottom: spacing.xs,
+  logoWrapper: {
+    marginBottom: spacing.md,
   },
-  logoDiya: {
-    fontSize: 54,
+  logoImage: {
+    width: 80,
+    height: 80,
   },
   title: {
     fontSize: 28,
@@ -519,5 +527,22 @@ const styles = StyleSheet.create({
   },
   bottomIcon: {
     marginHorizontal: 4,
+  },
+  footerLinks: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: spacing.xl,
+    gap: spacing.sm,
+  },
+  footerLinkText: {
+    fontSize: 12,
+    color: colors.outline,
+    fontFamily: fonts.inter.medium,
+  },
+  footerLinkSeparator: {
+    fontSize: 12,
+    color: colors.outline,
+    opacity: 0.5,
   },
 });
