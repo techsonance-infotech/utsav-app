@@ -17,7 +17,7 @@ import { useAuthStore } from "@utsav/stores";
 import { useSignUp, useLogin, supabase } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
 
@@ -314,7 +314,7 @@ export default function MobileSignupScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
-                rightIcon={showPassword ? "visibility-off" : "visibility"}
+                rightIcon={showPassword ? "eye-off" : "eye"}
                 onRightIconPress={() => setShowPassword(!showPassword)}
                 editable={!isLoading}
               />
@@ -324,7 +324,7 @@ export default function MobileSignupScreen() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
-                rightIcon={showConfirmPassword ? "visibility-off" : "visibility"}
+                rightIcon={showConfirmPassword ? "eye-off" : "eye"}
                 onRightIconPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 editable={!isLoading}
               />
@@ -392,7 +392,7 @@ export default function MobileSignupScreen() {
 
       {/* Decorative Bottom Row */}
       <View style={styles.bottomIconsRow}>
-        <MaterialCommunityIcons name="temple-hindu" size={32} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialIcons name="temple-hindu" size={32} color={colors.outline} style={styles.bottomIcon} />
         <MaterialCommunityIcons name="flower" size={32} color={colors.outline} style={styles.bottomIcon} />
         <MaterialCommunityIcons name="fire" size={32} color={colors.outline} style={styles.bottomIcon} />
       </View>
