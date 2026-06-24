@@ -106,7 +106,7 @@ export default function VendorDirectoryScreen() {
         </View>
         <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(dashboard)/create-purchase-order")}>
           <MaterialCommunityIcons
-            name="file-document-plus-outline"
+            name="file-plus-outline"
             size={24}
             color={colors.primaryBrand}
           />

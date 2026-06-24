@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { colors, fonts, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 
 export default function OfflineModeScreen() {
   return (
@@ -31,7 +31,7 @@ export default function OfflineModeScreen() {
           <Text style={styles.headerTitle}>Utsav</Text>
         </View>
         <View style={styles.headerRight}>
-          <MaterialCommunityIcons
+          <MaterialIcons
             name="cloud-off"
             size={22}
             color={colors.primaryBrand}

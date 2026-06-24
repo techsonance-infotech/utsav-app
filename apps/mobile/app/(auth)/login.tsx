@@ -302,15 +302,15 @@ export default function MobileLoginScreen() {
 
             {/* Footer Links */}
             <View style={styles.footerLinks}>
-              <TouchableOpacity onPress={() => Linking.openURL("https://utsav.app/privacy-policy")}>
+              <TouchableOpacity onPress={() => router.push("/(dashboard)/privacy-policy")}>
                 <Text style={styles.footerLinkText}>Privacy Policy</Text>
               </TouchableOpacity>
               <Text style={styles.footerLinkSeparator}>•</Text>
-              <TouchableOpacity onPress={() => Linking.openURL("https://utsav.app/terms-of-service")}>
+              <TouchableOpacity onPress={() => router.push("/(dashboard)/terms-of-service")}>
                 <Text style={styles.footerLinkText}>Terms of Service</Text>
               </TouchableOpacity>
               <Text style={styles.footerLinkSeparator}>•</Text>
-              <TouchableOpacity onPress={() => Linking.openURL("https://utsav.app/help-center")}>
+              <TouchableOpacity onPress={() => router.push("/(dashboard)/help-center")}>
                 <Text style={styles.footerLinkText}>Help Center</Text>
               </TouchableOpacity>
             </View>

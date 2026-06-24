@@ -349,11 +349,11 @@ export default function MobileSignupScreen() {
                 </View>
                 <Text style={styles.termsText}>
                   I agree to the{" "}
-                  <Text style={styles.termsLink} onPress={() => Linking.openURL("https://utsav.app/terms-of-service")}>
+                  <Text style={styles.termsLink} onPress={() => router.push("/(dashboard)/terms-of-service")}>
                     Terms of Service
                   </Text>{" "}
                   and{" "}
-                  <Text style={styles.termsLink} onPress={() => Linking.openURL("https://utsav.app/privacy-policy")}>
+                  <Text style={styles.termsLink} onPress={() => router.push("/(dashboard)/privacy-policy")}>
                     Privacy Policy
                   </Text>
                 </Text>
