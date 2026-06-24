@@ -10,6 +10,7 @@ import {
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, fonts, spacing } from "../lib/theme";
+import { useAuthStore } from "@utsav/stores";
 
 const { width } = Dimensions.get("window");
 
@@ -95,7 +96,18 @@ export default function SplashScreen() {
 
     // Auto-navigate after 2.5s
     const timer = setTimeout(() => {
-      router.replace("/(auth)/welcome");
+      const { userId, role, tenantId } = useAuthStore.getState();
+      if (userId) {
+        if (role === "super_admin") {
+          router.replace("/(dashboard)/super-admin-dashboard");
+        } else if (tenantId) {
+          router.replace("/(dashboard)/home");
+        } else {
+          router.replace("/(auth)/tenant-setup");
+        }
+      } else {
+        router.replace("/(auth)/welcome");
+      }
     }, 2500);
 
     return () => clearTimeout(timer);
@@ -241,14 +253,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 222, 169, 0.2)",
   },
   logoWrap: {
-    width: 260,
-    height: 120,
+    width: 200,
+    height: 200,
     alignItems: "center",
     justifyContent: "center",
   },
   logoImage: {
-    width: 220,
-    height: 94,
+    width: 150,
+    height: 64,
   },
   taglineFooter: {
     position: "absolute",

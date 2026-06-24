@@ -22,22 +22,13 @@ export default function WelcomeScreen() {
     >
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.content}>
-          {/* Top: Logo */}
-          <View style={styles.logoHeader}>
-            <Image
-              source={require("../../assets/logo.png")}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-
-          {/* Middle: Illustration & Headlines */}
+          {/* Middle: Hero Section */}
           <View style={styles.heroSection}>
-            {/* Illustration Card */}
-            <View style={styles.illustrationContainer}>
+            {/* Logo Mark Container */}
+            <View style={styles.logoMarkContainer}>
               <Image
-                source={require("../../assets/welcome-banner.png")}
-                style={styles.bannerImage}
+                source={require("../../assets/image-only.png")}
+                style={styles.logoMarkImage}
                 resizeMode="contain"
               />
             </View>
@@ -126,32 +117,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  logoHeader: {
-    alignItems: "center",
-    paddingTop: spacing.xs,
-    height: 80,
-    justifyContent: "center",
-  },
-  logoImage: {
-    width: 160,
-    height: 68,
-  },
   heroSection: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
   },
-  illustrationContainer: {
-    width: "100%",
-    maxWidth: 340,
-    aspectRatio: 1.5,
+  logoMarkContainer: {
+    width: 140,
+    height: 168,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "transparent",
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
-  bannerImage: {
+  logoMarkImage: {
     width: "100%",
     height: "100%",
   },

@@ -18,6 +18,7 @@ import {
 } from "@expo-google-fonts/inter";
 
 import { setApiBaseUrl } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 
 // Set base API URL for the client using Metro-injected env variable
 const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://utsav.techsonance.co.in";
@@ -49,6 +50,10 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+
+  useEffect(() => {
+    useAuthStore.getState().initialize();
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
