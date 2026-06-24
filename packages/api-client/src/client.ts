@@ -1,6 +1,6 @@
 import { useAuthStore } from "@utsav/stores";
 
-const API_BASE_URL = (() => {
+function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
     return `${window.location.origin}/api/v1`;
   }
@@ -12,7 +12,7 @@ const API_BASE_URL = (() => {
     return `${url.replace(/\/$/, "")}/api/v1`;
   }
   return url;
-})();
+}
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
@@ -46,7 +46,7 @@ export async function apiClient<T>(
     },
   };
 
-  let url = `${API_BASE_URL}${endpoint}`;
+  let url = `${getApiBaseUrl()}${endpoint}`;
   if (params) {
     const searchParams = new URLSearchParams(params);
     url += `?${searchParams.toString()}`;
