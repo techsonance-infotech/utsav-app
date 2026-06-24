@@ -362,13 +362,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 12,
     paddingVertical: spacing.xl,
     zIndex: 1,
   },
   card: {
     width: "100%",
-    padding: spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: spacing.md,
   },
   header: {
     alignItems: "center",
@@ -537,8 +538,9 @@ const styles = StyleSheet.create({
   },
   footerLinkText: {
     fontSize: 12,
-    color: colors.outline,
-    fontFamily: fonts.inter.medium,
+    color: colors.primaryBrand,
+    fontFamily: fonts.inter.semibold,
+    textDecorationLine: "underline",
   },
   footerLinkSeparator: {
     fontSize: 12,

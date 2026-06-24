@@ -340,12 +340,14 @@ export default function DashboardLayout() {
         name="privacy-policy"
         options={{
           href: null,
+          tabBarStyle: { display: "none" },
         }}
       />
       <Tabs.Screen
         name="terms-of-service"
         options={{
           href: null,
+          tabBarStyle: { display: "none" },
         }}
       />
       <Tabs.Screen
@@ -436,6 +438,7 @@ export default function DashboardLayout() {
         name="help-center"
         options={{
           href: null,
+          tabBarStyle: { display: "none" },
         }}
       />
       <Tabs.Screen
