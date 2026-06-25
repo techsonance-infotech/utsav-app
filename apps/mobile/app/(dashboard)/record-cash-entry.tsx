@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useCreateDonation, useFetchCampaigns } from "@utsav/api-client";
+import { useCreateDonation, useFetchCampaigns, useFetchMyProfile, useFetchTenant } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 
 export default function RecordCashEntryScreen() {
   const [amount, setAmount] = useState("");
@@ -14,28 +15,54 @@ export default function RecordCashEntryScreen() {
   const [receiptRef, setReceiptRef] = useState("");
   const [notes, setNotes] = useState("");
 
+  const { tenantId, userFullName } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
+  const { data: myProfile } = useFetchMyProfile();
+
   const { data: campaigns } = useFetchCampaigns();
   const createDonationMutation = useCreateDonation();
 
   const handleConfirm = async () => {
-    if (!amount || !donorName) return;
+    if (!amount) {
+      Alert.alert("Error", "Please enter a donation amount.");
+      return;
+    }
+    const donationAmount = parseFloat(amount);
+    if (isNaN(donationAmount) || donationAmount <= 0) {
+      Alert.alert("Error", "Please enter a valid donation amount.");
+      return;
+    }
+    if (!donorName.trim()) {
+      Alert.alert("Error", "Please enter the donor name.");
+      return;
+    }
 
     try {
       await createDonationMutation.mutateAsync({
         donor_name: donorName,
         donor_phone: mobile ? `+91${mobile}` : undefined,
-        amount: parseFloat(amount),
+        amount: donationAmount,
         mode: "cash",
         campaign_id: selectedCampaign === "general" ? undefined : selectedCampaign,
-        note: notes || undefined,
+        note: notes ? `${notes} (Ref: ${receiptRef})` : receiptRef ? `Ref: ${receiptRef}` : undefined,
       });
 
-      alert("Donation Recorded Successfully! Opening digital receipt preview...");
-      router.back();
-    } catch (err) {
-      alert("Error recording donation. Please check details and try again.");
+      Alert.alert("Success", "Cash donation recorded successfully!", [
+        { text: "OK", onPress: () => router.back() }
+      ]);
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to record cash donation. Please try again.");
     }
   };
+
+  const profileName = myProfile?.full_name || userFullName || "Admin";
+  const avatarUrl = myProfile?.avatar_url || null;
+  const initials = profileName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -43,16 +70,34 @@ export default function RecordCashEntryScreen() {
       <View style={styles.appBar}>
         <View style={styles.appBarLeft}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="menu" size={24} color={colors.primaryBrand} />
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
           </TouchableOpacity>
-          <Text style={styles.appBarTitle}>Record Cash Donation</Text>
+          <View style={styles.logoAvatarWrapper}>
+            <Image
+              style={styles.logoAvatar}
+              source={require("../../assets/image-only.png")}
+            />
+          </View>
+          <Text style={styles.logoText}>UTSAV</Text>
         </View>
-        <TouchableOpacity style={styles.iconBtn}>
-          <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
+        <View style={styles.profileAvatar}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{initials}</Text>
+          )}
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Intro */}
+        <View style={styles.introSection}>
+          <Text style={styles.introTitle}>Record Cash</Text>
+          <Text style={styles.sectionSubtitle}>
+            Manually enter a physical cash donation collected at the Mandal desk.
+          </Text>
+        </View>
+
         {/* Transaction Status Banner */}
         <View style={styles.statusBanner}>
           <View style={styles.bannerLeft}>
@@ -65,7 +110,7 @@ export default function RecordCashEntryScreen() {
             </View>
           </View>
           <View style={styles.fixedBadge}>
-            <Text style={styles.fixedBadgeText}>Fixed</Text>
+            <Text style={styles.fixedBadgeText}>CONFIRMED</Text>
           </View>
         </View>
 
@@ -147,6 +192,7 @@ export default function RecordCashEntryScreen() {
                   selectedCampaign === "general" && styles.campaignChipActive,
                 ]}
                 onPress={() => setSelectedCampaign("general")}
+                activeOpacity={0.8}
               >
                 <Text style={styles.campaignChipText}>General Fund</Text>
               </TouchableOpacity>
@@ -158,6 +204,7 @@ export default function RecordCashEntryScreen() {
                     selectedCampaign === campaign.id && styles.campaignChipActive,
                   ]}
                   onPress={() => setSelectedCampaign(campaign.id)}
+                  activeOpacity={0.8}
                 >
                   <Text style={styles.campaignChipText}>{campaign.name}</Text>
                 </TouchableOpacity>
@@ -169,7 +216,7 @@ export default function RecordCashEntryScreen() {
             <Text style={styles.fieldLabel}>Receipt Book Reference (Optional)</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="Book A / Page 42"
+              placeholder="e.g. Book A / Page 42"
               placeholderTextColor={colors.outline}
               value={receiptRef}
               onChangeText={setReceiptRef}
@@ -208,14 +255,10 @@ export default function RecordCashEntryScreen() {
             )}
           </TouchableOpacity>
           <Text style={styles.disclaimerText}>
-            A digital receipt will be sent via SMS if mobile is provided.
+            A digital receipt SMS notification will be sent if mobile is provided.
           </Text>
         </View>
       </ScrollView>
-
-      {/* Decorative Background Glows */}
-      <View style={styles.glowTopRight} />
-      <View style={styles.glowBottomLeft} />
     </SafeAreaView>
   );
 }
@@ -231,7 +274,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: spacing.md,
     height: 56,
-    backgroundColor: "rgba(250, 250, 248, 0.9)",
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: colors.sandstone,
   },
@@ -243,21 +286,71 @@ const styles = StyleSheet.create({
   backBtn: {
     padding: spacing.xs,
   },
-  appBarTitle: {
-    fontSize: 18,
+  logoAvatarWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: colors.primaryBrand,
+    backgroundColor: colors.cream,
+  },
+  logoAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  logoText: {
+    fontSize: 22,
     fontFamily: fonts.poppins.bold,
     color: colors.primaryBrand,
+    letterSpacing: 1,
   },
-  iconBtn: {
-    padding: spacing.xs,
+  profileAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.sandstone,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
+  headerAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
+  },
+  avatarText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurfaceVariant,
+  },
+
   scrollContent: {
     padding: spacing.md,
     paddingBottom: 64,
   },
+  introSection: {
+    marginBottom: spacing.md,
+  },
+  introTitle: {
+    fontSize: 24,
+    fontFamily: fonts.poppins.bold,
+    color: colors.onSurface,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurfaceVariant,
+    lineHeight: 20,
+    marginTop: 4,
+  },
+
   statusBanner: {
     backgroundColor: colors.surfaceContainerLow,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.sandstone,
     padding: spacing.md,
@@ -287,15 +380,15 @@ const styles = StyleSheet.create({
     color: colors.primaryBrand,
   },
   fixedBadge: {
-    backgroundColor: colors.primaryContainer,
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 9999,
   },
   fixedBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: fonts.inter.bold,
-    color: colors.onPrimaryContainer,
+    color: colors.tulsiGreen,
     textTransform: "uppercase",
   },
   inputGroup: {
@@ -337,7 +430,7 @@ const styles = StyleSheet.create({
   },
   amountInput: {
     flex: 1,
-    fontSize: 32,
+    fontSize: 28,
     fontFamily: fonts.inter.regular,
     color: colors.primaryBrand,
     paddingVertical: spacing.md,
@@ -347,7 +440,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(244, 241, 235, 0.5)",
     borderWidth: 1,
     borderColor: colors.sandstone,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: spacing.md,
     marginBottom: spacing.lg,
     gap: spacing.md,
@@ -477,23 +570,5 @@ const styles = StyleSheet.create({
     fontFamily: fonts.inter.medium,
     color: colors.outline,
     textAlign: "center",
-  },
-  glowTopRight: {
-    position: "absolute",
-    top: 64,
-    right: -32,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "rgba(255, 149, 0, 0.04)",
-  },
-  glowBottomLeft: {
-    position: "absolute",
-    bottom: 32,
-    left: -32,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "rgba(201, 146, 26, 0.04)",
   },
 });

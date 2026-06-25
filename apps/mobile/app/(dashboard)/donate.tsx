@@ -7,6 +7,8 @@ import {
   useCreateRazorpayOrder,
   useCreateDonation,
   useFetchDonations,
+  useFetchMyProfile,
+  useFetchTenant,
 } from "@utsav/api-client";
 import { useLocalSearchParams, router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
@@ -19,7 +21,9 @@ export default function MobileDonateScreen() {
   const params = useLocalSearchParams();
   const campaignIdParam = (params.campaign_id as string) || "";
 
-  const { tenantId, role } = useAuthStore();
+  const { tenantId, role, userFullName } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
+  const { data: myProfile } = useFetchMyProfile();
   const { data: campaigns } = useFetchCampaigns();
   const { data: donations, isLoading: isLedgerLoading, refetch: refetchLedger } = useFetchDonations();
   const createOrderMutation = useCreateRazorpayOrder();
@@ -180,23 +184,38 @@ export default function MobileDonateScreen() {
     return matchesSearch && matchesMode;
   }) || [];
 
+  const profileName = myProfile?.full_name || userFullName || "Devotee";
+  const avatarUrl = myProfile?.avatar_url || null;
+  const initials = profileName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.topHeader}>
-        <View style={styles.logoGroup}>
-          <View style={styles.logoBadgeContainer}>
-            <Text style={styles.logoBadgeText}>U</Text>
+      {/* Top App Bar */}
+      <View style={styles.appBar}>
+        <View style={styles.appBarLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
+          </TouchableOpacity>
+          <View style={styles.logoAvatarWrapper}>
+            <Image
+              style={styles.logoAvatar}
+              source={require("../../assets/image-only.png")}
+            />
           </View>
           <Text style={styles.logoText}>UTSAV</Text>
         </View>
-        <TouchableOpacity
-          style={styles.bellButton}
-          onPress={() => router.push("/(dashboard)/notifications")}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
+        <View style={styles.profileAvatar}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
+          ) : (
+            <Text style={styles.headerAvatarText}>{initials}</Text>
+          )}
+        </View>
       </View>
 
       {/* Segmented Top Control Tab */}
@@ -543,42 +562,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  topHeader: {
-    height: 64,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(232, 226, 214, 0.3)",
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
+  appBar: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    height: 56,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.sandstone,
   },
-  logoGroup: {
+  appBarLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  logoBadgeContainer: {
+  backBtn: {
+    padding: spacing.xs,
+  },
+  logoAvatarWrapper: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primaryContainer,
-    justifyContent: "center",
-    alignItems: "center",
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: colors.primaryBrand,
+    backgroundColor: colors.cream,
   },
-  logoBadgeText: {
-    color: colors.onPrimaryContainer,
-    fontFamily: fonts.poppins.bold,
-    fontSize: 15,
+  logoAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
   logoText: {
-    fontSize: 16,
+    fontSize: 22,
     fontFamily: fonts.poppins.bold,
     color: colors.primaryBrand,
     letterSpacing: 1,
   },
-  bellButton: {
-    padding: spacing.xs,
+  profileAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.sandstone,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  headerAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
+  },
+  headerAvatarText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurfaceVariant,
   },
   tabContainer: {
     flexDirection: "row",

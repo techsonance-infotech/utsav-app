@@ -133,7 +133,32 @@ export default function MobileSettingsScreen() {
     },
   ];
 
-  const visibleAdminItems = adminItems.filter(item => item.roles.includes(role || ""));
+  const hasRoleAccess = (allowedRoles: string[]) => {
+    const currentRole = myProfile?.role || role || "";
+    if (allowedRoles.includes(currentRole)) return true;
+
+    const grantedRoles: Record<string, string[]> = {
+      owner: ["owner", "admin", "treasurer", "committee_member", "member", "volunteer", "super_admin"],
+      super_admin: ["owner", "admin", "treasurer", "committee_member", "member", "volunteer", "super_admin"],
+      president: ["admin", "treasurer", "committee_member", "member", "volunteer"],
+      secretary: ["admin", "treasurer", "committee_member", "member", "volunteer"],
+      admin: ["admin", "treasurer", "committee_member", "member", "volunteer"],
+      treasurer: ["treasurer", "committee_member", "member", "volunteer"],
+      committee_member: ["committee_member", "member", "volunteer"],
+      member: ["member"],
+      volunteer: ["volunteer"],
+    };
+
+    const roles = grantedRoles[currentRole] || [];
+    return roles.some((r) => allowedRoles.includes(r));
+  };
+
+  const formatRoleName = (r: string) => {
+    if (!r) return "Owner";
+    return r.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
+
+  const visibleAdminItems = adminItems.filter(item => hasRoleAccess(item.roles));
 
   // Change password states
   const [oldPassword, setOldPassword] = useState("");
@@ -350,7 +375,7 @@ export default function MobileSettingsScreen() {
 
           <View style={styles.profileBadgeRow}>
             <View style={styles.roleBadge}>
-              <Text style={styles.roleText}>{role || "Owner"}</Text>
+              <Text style={styles.roleText}>{formatRoleName(myProfile?.role || role || "")}</Text>
             </View>
             <Text style={styles.bulletSeparator}>•</Text>
             <Text style={styles.mandalName} numberOfLines={1} ellipsizeMode="tail">{tenant?.name || "Shree Siddhivinayak Mandal"}</Text>
@@ -441,7 +466,7 @@ export default function MobileSettingsScreen() {
                 </View>
               </View>
 
-              {["owner", "admin", "super_admin"].includes(role || "") && (
+              {hasRoleAccess(["owner", "admin", "super_admin"]) && (
                 <>
                   <View style={styles.itemSeparator} />
                   {/* Edit Detailed Onboarding Info Row */}
@@ -464,7 +489,7 @@ export default function MobileSettingsScreen() {
           </View>
 
           {/* Subscription Section */}
-          {["owner", "super_admin"].includes(role || "") && (
+          {hasRoleAccess(["owner", "super_admin"]) && (
             <View style={styles.group}>
               <Text style={styles.groupLabel}>Subscription</Text>
               <View style={styles.groupCard}>
