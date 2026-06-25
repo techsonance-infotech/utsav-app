@@ -1,17 +1,6 @@
 import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  SafeAreaView,
-  ActivityIndicator,
-  Image,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, ActivityIndicator, Image, TouchableOpacity, Modal, TextInput, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useFetchTenant, useLogout } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 import { router } from "expo-router";
