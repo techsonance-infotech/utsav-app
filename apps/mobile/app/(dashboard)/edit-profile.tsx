@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFetchMyProfile, useUpdateMyProfile } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import LoaderOverlay from "../components/LoaderOverlay";
 
 function CustomInput({
@@ -120,31 +121,44 @@ function DropdownSelect({
 }
 
 export default function EditProfileScreen() {
-  const { data: profile, isLoading: isFetching } = useFetchMyProfile();
+  const { data: profile, isLoading: isFetching, refetch } = useFetchMyProfile();
   const updateMutation = useUpdateMyProfile();
+  const { userFullName, userEmail } = useAuthStore();
 
-  // Form states
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState(""); // YYYY-MM-DD
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [membershipType, setMembershipType] = useState("annual");
-  const [preferredLanguage, setPreferredLanguage] = useState("en");
-  const [skills, setSkills] = useState("");
-  const [languages, setLanguages] = useState(""); // comma separated
-  const [emergencyContactName, setEmergencyContactName] = useState("");
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
-  const [notes, setNotes] = useState("");
-  const [dndStartTime, setDndStartTime] = useState(""); // HH:MM
-  const [dndEndTime, setDndEndTime] = useState(""); // HH:MM
+  // Helper to get initial value from profile or auth store
+  const initName = profile?.full_name || userFullName || "";
+  const initEmail = profile?.email || userEmail || "";
+  const initPhone = profile?.phone || "";
+
+  // Form states — initialize from profile cache when available
+  const [fullName, setFullName] = useState(initName);
+  const [phone, setPhone] = useState(initPhone);
+  const [email, setEmail] = useState(initEmail);
+  const [dateOfBirth, setDateOfBirth] = useState(profile?.date_of_birth || ""); // YYYY-MM-DD
+  const [city, setCity] = useState(profile?.city || "");
+  const [state, setState] = useState(profile?.state || "");
+  const [membershipType, setMembershipType] = useState(profile?.membership_type || "annual");
+  const [preferredLanguage, setPreferredLanguage] = useState(profile?.preferred_language || "en");
+  const [skills, setSkills] = useState(() => {
+    if (!profile?.skills) return "";
+    return Array.isArray(profile.skills) ? profile.skills.join(", ") : String(profile.skills);
+  });
+  const [languages, setLanguages] = useState(() => {
+    if (!profile?.languages) return "en";
+    return Array.isArray(profile.languages) ? profile.languages.join(", ") : "en";
+  });
+  const [emergencyContactName, setEmergencyContactName] = useState(profile?.emergency_contact_name || "");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState(profile?.emergency_contact_phone || "");
+  const [notes, setNotes] = useState(profile?.notes || "");
+  const [dndStartTime, setDndStartTime] = useState(profile?.dnd_start_time || ""); // HH:MM
+  const [dndEndTime, setDndEndTime] = useState(profile?.dnd_end_time || ""); // HH:MM
 
   const [errorMsg, setErrorMsg] = useState("");
+  const [hasBeenPrefilled, setHasBeenPrefilled] = useState(!!profile);
 
-  // Pre-fill form when profile data becomes available
+  // Pre-fill form when profile data becomes available (handles async fetch)
   useEffect(() => {
-    if (profile) {
+    if (profile && !hasBeenPrefilled) {
       setFullName(profile.full_name || "");
       setPhone(profile.phone || "");
       setEmail(profile.email || "");
@@ -171,8 +185,9 @@ export default function EditProfileScreen() {
       setNotes(profile.notes || "");
       setDndStartTime(profile.dnd_start_time || "");
       setDndEndTime(profile.dnd_end_time || "");
+      setHasBeenPrefilled(true);
     }
-  }, [profile]);
+  }, [profile, hasBeenPrefilled]);
 
   const handleSave = async () => {
     setErrorMsg("");

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -41,6 +41,22 @@ export default function MobileSettingsScreen() {
   // Modal states
   const [securityModalVisible, setSecurityModalVisible] = useState(false);
   const [langModalVisible, setLangModalVisible] = useState(false);
+
+  // Sync auth store when profile data arrives from backend
+  useEffect(() => {
+    if (myProfile) {
+      const updates: Record<string, string | null> = {};
+      if (myProfile.full_name && myProfile.full_name !== userFullName) {
+        updates.userFullName = myProfile.full_name;
+      }
+      if (myProfile.email && myProfile.email !== userEmail) {
+        updates.userEmail = myProfile.email;
+      }
+      if (Object.keys(updates).length > 0) {
+        useAuthStore.getState().setAuth(updates);
+      }
+    }
+  }, [myProfile]);
 
   // Change password states
   const [oldPassword, setOldPassword] = useState("");

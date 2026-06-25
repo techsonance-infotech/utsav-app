@@ -360,6 +360,14 @@ export default function DashboardLayout() {
         name="edit-profile"
         options={{
           href: null,
+          tabBarStyle: { display: "none" },
+        }}
+      />
+      <Tabs.Screen
+        name="edit-mandal"
+        options={{
+          href: null,
+          tabBarStyle: { display: "none" },
         }}
       />
       <Tabs.Screen
