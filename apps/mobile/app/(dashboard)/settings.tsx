@@ -58,6 +58,83 @@ export default function MobileSettingsScreen() {
     }
   }, [myProfile]);
 
+  const adminItems = [
+    {
+      title: "Owner Onboarding Checklist",
+      icon: "checkbox-marked-circle-outline",
+      iconBg: "rgba(140, 80, 0, 0.08)",
+      iconColor: colors.primaryBrand,
+      route: "/(dashboard)/owner-onboarding",
+      roles: ["owner", "super_admin"],
+    },
+    {
+      title: "Analytics Hub",
+      icon: "chart-bar",
+      iconBg: "rgba(201, 146, 26, 0.08)",
+      iconColor: colors.aartiGold,
+      route: "/(dashboard)/analytics-hub",
+      roles: ["owner", "admin", "super_admin"],
+    },
+    {
+      title: "Committee Directory",
+      icon: "account-group-outline",
+      iconBg: "rgba(34, 197, 94, 0.08)",
+      iconColor: colors.tulsiGreen,
+      route: "/(dashboard)/committee-directory",
+      roles: ["owner", "admin", "treasurer", "committee_member", "super_admin"],
+    },
+    {
+      title: "Assign Committee Position",
+      icon: "account-cog-outline",
+      iconBg: "rgba(140, 80, 0, 0.08)",
+      iconColor: colors.primaryBrand,
+      route: "/(dashboard)/assign-position",
+      roles: ["owner", "admin", "super_admin"],
+    },
+    {
+      title: "Launch Campaign",
+      icon: "bullhorn-outline",
+      iconBg: "rgba(255, 149, 0, 0.08)",
+      iconColor: colors.primaryContainer,
+      route: "/(dashboard)/create-campaign",
+      roles: ["owner", "admin", "treasurer", "super_admin"],
+    },
+    {
+      title: "Volunteer Duty Roster",
+      icon: "calendar-clock",
+      iconBg: "rgba(34, 197, 94, 0.08)",
+      iconColor: colors.tulsiGreen,
+      route: "/(dashboard)/volunteer-duty-roster",
+      roles: ["owner", "admin", "treasurer", "committee_member", "super_admin"],
+    },
+    {
+      title: "Volunteer Check-in",
+      icon: "qrcode-scan",
+      iconBg: "rgba(140, 80, 0, 0.08)",
+      iconColor: colors.primaryBrand,
+      route: "/(dashboard)/volunteer-check-in",
+      roles: ["owner", "admin", "treasurer", "committee_member", "super_admin"],
+    },
+    {
+      title: "Record Cash Donation",
+      icon: "cash-multiple",
+      iconBg: "rgba(255, 149, 0, 0.08)",
+      iconColor: colors.primaryContainer,
+      route: "/(dashboard)/record-cash-entry",
+      roles: ["owner", "admin", "treasurer", "super_admin"],
+    },
+    {
+      title: "Devotee Donation Flow",
+      icon: "gift-outline",
+      iconBg: "rgba(255, 149, 0, 0.08)",
+      iconColor: colors.primaryContainer,
+      route: "/(dashboard)/select-amount",
+      roles: ["owner", "admin", "treasurer", "committee_member", "super_admin"],
+    },
+  ];
+
+  const visibleAdminItems = adminItems.filter(item => item.roles.includes(role || ""));
+
   // Change password states
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -267,16 +344,16 @@ export default function MobileSettingsScreen() {
               <MaterialCommunityIcons name="camera" size={16} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.profileName}>{profileName}</Text>
-          <Text style={styles.profileEmailText}>{profileEmail}</Text>
-          {profilePhone ? <Text style={styles.profilePhoneText}>{profilePhone}</Text> : null}
+          <Text style={styles.profileName} numberOfLines={1} ellipsizeMode="tail">{profileName}</Text>
+          <Text style={styles.profileEmailText} numberOfLines={1} ellipsizeMode="tail">{profileEmail}</Text>
+          {profilePhone ? <Text style={styles.profilePhoneText} numberOfLines={1} ellipsizeMode="tail">{profilePhone}</Text> : null}
 
           <View style={styles.profileBadgeRow}>
             <View style={styles.roleBadge}>
               <Text style={styles.roleText}>{role || "Owner"}</Text>
             </View>
             <Text style={styles.bulletSeparator}>•</Text>
-            <Text style={styles.mandalName}>{tenant?.name || "Shree Siddhivinayak Mandal"}</Text>
+            <Text style={styles.mandalName} numberOfLines={1} ellipsizeMode="tail">{tenant?.name || "Shree Siddhivinayak Mandal"}</Text>
           </View>
         </View>
 
@@ -364,198 +441,80 @@ export default function MobileSettingsScreen() {
                 </View>
               </View>
 
-              <View style={styles.itemSeparator} />
-
-              {/* Edit Detailed Onboarding Info Row */}
-              <TouchableOpacity
-                style={styles.groupItem}
-                onPress={() => router.push("/(dashboard)/edit-mandal" as any)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.groupItemLeft}>
-                  <View style={[styles.iconContainer, { backgroundColor: "rgba(125, 88, 0, 0.08)" }]}>
-                    <MaterialCommunityIcons name="home-edit-outline" size={20} color={colors.tertiary} />
-                  </View>
-                  <Text style={styles.groupItemText}>Edit Mandal Details</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
+              {["owner", "admin", "super_admin"].includes(role || "") && (
+                <>
+                  <View style={styles.itemSeparator} />
+                  {/* Edit Detailed Onboarding Info Row */}
+                  <TouchableOpacity
+                    style={styles.groupItem}
+                    onPress={() => router.push("/(dashboard)/edit-mandal" as any)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.groupItemLeft}>
+                      <View style={[styles.iconContainer, { backgroundColor: "rgba(125, 88, 0, 0.08)" }]}>
+                        <MaterialCommunityIcons name="home-edit-outline" size={20} color={colors.tertiary} />
+                      </View>
+                      <Text style={styles.groupItemText}>Edit Mandal Details</Text>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
 
           {/* Subscription Section */}
-          <View style={styles.group}>
-            <Text style={styles.groupLabel}>Subscription</Text>
-            <View style={styles.groupCard}>
-              <TouchableOpacity
-                style={styles.groupItem}
-                onPress={() => router.push("/(dashboard)/manage-subscription")}
-                activeOpacity={0.7}
-              >
-                <View style={styles.groupItemLeft}>
-                  <View style={[styles.iconContainer, { backgroundColor: "rgba(217, 43, 43, 0.08)" }]}>
-                    <MaterialCommunityIcons name="card-bulleted-outline" size={20} color={colors.kumkumRed} />
-                  </View>
-                  <View>
-                    <Text style={styles.groupItemText}>Billing & Subscription</Text>
-                    <View style={styles.shimmerBadge}>
-                      <Text style={styles.shimmerBadgeText}>
-                        {`${(tenant?.plan || "TRIAL").toUpperCase()} PLAN • ACTIVE`}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Mandal Administration */}
-          {["owner", "admin", "treasurer", "committee_member", "super_admin"].includes(role || "") && (
+          {["owner", "super_admin"].includes(role || "") && (
             <View style={styles.group}>
-              <Text style={styles.groupLabel}>Mandal Administration</Text>
+              <Text style={styles.groupLabel}>Subscription</Text>
               <View style={styles.groupCard}>
                 <TouchableOpacity
                   style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/owner-onboarding")}
+                  onPress={() => router.push("/(dashboard)/manage-subscription")}
                   activeOpacity={0.7}
                 >
                   <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(140, 80, 0, 0.08)" }]}>
-                      <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={20} color={colors.primaryBrand} />
+                    <View style={[styles.iconContainer, { backgroundColor: "rgba(217, 43, 43, 0.08)" }]}>
+                      <MaterialCommunityIcons name="card-bulleted-outline" size={20} color={colors.kumkumRed} />
                     </View>
-                    <Text style={styles.groupItemText}>Owner Onboarding Checklist</Text>
+                    <View>
+                      <Text style={styles.groupItemText}>Billing & Subscription</Text>
+                      <View style={styles.shimmerBadge}>
+                        <Text style={styles.shimmerBadgeText}>
+                          {`${(tenant?.plan || "TRIAL").toUpperCase()} PLAN • ACTIVE`}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
                 </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
-                <View style={styles.itemSeparator} />
-
-                <TouchableOpacity
-                  style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/analytics-hub")}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(201, 146, 26, 0.08)" }]}>
-                      <MaterialCommunityIcons name="chart-bar" size={20} color={colors.aartiGold} />
-                    </View>
-                    <Text style={styles.groupItemText}>Analytics Hub</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-
-                <View style={styles.itemSeparator} />
-
-                <TouchableOpacity
-                  style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/committee-directory")}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(34, 197, 94, 0.08)" }]}>
-                      <MaterialCommunityIcons name="account-group-outline" size={20} color={colors.tulsiGreen} />
-                    </View>
-                    <Text style={styles.groupItemText}>Committee Directory</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-
-                <View style={styles.itemSeparator} />
-
-                <TouchableOpacity
-                  style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/assign-position")}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(140, 80, 0, 0.08)" }]}>
-                      <MaterialCommunityIcons name="account-cog-outline" size={20} color={colors.primaryBrand} />
-                    </View>
-                    <Text style={styles.groupItemText}>Assign Committee Position</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-
-                <View style={styles.itemSeparator} />
-
-                <TouchableOpacity
-                  style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/create-campaign")}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(255, 149, 0, 0.08)" }]}>
-                      <MaterialCommunityIcons name="bullhorn-outline" size={20} color={colors.primaryContainer} />
-                    </View>
-                    <Text style={styles.groupItemText}>Launch Campaign</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-
-                <View style={styles.itemSeparator} />
-
-                <TouchableOpacity
-                  style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/volunteer-duty-roster")}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(34, 197, 94, 0.08)" }]}>
-                      <MaterialCommunityIcons name="calendar-clock" size={20} color={colors.tulsiGreen} />
-                    </View>
-                    <Text style={styles.groupItemText}>Volunteer Duty Roster</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-
-                <View style={styles.itemSeparator} />
-
-                <TouchableOpacity
-                  style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/volunteer-check-in")}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(140, 80, 0, 0.08)" }]}>
-                      <MaterialCommunityIcons name="qrcode-scan" size={20} color={colors.primaryBrand} />
-                    </View>
-                    <Text style={styles.groupItemText}>Volunteer Check-in</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-
-                <View style={styles.itemSeparator} />
-
-                <TouchableOpacity
-                  style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/record-cash-entry")}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(255, 149, 0, 0.08)" }]}>
-                      <MaterialCommunityIcons name="cash-multiple" size={20} color={colors.primaryContainer} />
-                    </View>
-                    <Text style={styles.groupItemText}>Record Cash Donation</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
-
-                <View style={styles.itemSeparator} />
-
-                <TouchableOpacity
-                  style={styles.groupItem}
-                  onPress={() => router.push("/(dashboard)/select-amount")}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.groupItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: "rgba(255, 149, 0, 0.08)" }]}>
-                      <MaterialCommunityIcons name="gift-outline" size={20} color={colors.primaryContainer} />
-                    </View>
-                    <Text style={styles.groupItemText}>Devotee Donation Flow</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                </TouchableOpacity>
+          {/* Mandal Administration */}
+          {visibleAdminItems.length > 0 && (
+            <View style={styles.group}>
+              <Text style={styles.groupLabel}>Mandal Administration</Text>
+              <View style={styles.groupCard}>
+                {visibleAdminItems.map((item, idx) => (
+                  <React.Fragment key={idx}>
+                    <TouchableOpacity
+                      style={styles.groupItem}
+                      onPress={() => router.push(item.route as any)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.groupItemLeft}>
+                        <View style={[styles.iconContainer, { backgroundColor: item.iconBg }]}>
+                          <MaterialCommunityIcons name={item.icon as any} size={20} color={item.iconColor} />
+                        </View>
+                        <Text style={styles.groupItemText}>{item.title}</Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                    </TouchableOpacity>
+                    {idx < visibleAdminItems.length - 1 && <View style={styles.itemSeparator} />}
+                  </React.Fragment>
+                ))}
               </View>
             </View>
           )}
@@ -988,29 +947,39 @@ const styles = StyleSheet.create({
     borderColor: "#FFFFFF",
   },
   profileName: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: fonts.poppins.semibold,
     color: colors.onSurface,
+    textAlign: "center",
+    maxWidth: "90%",
   },
   profileEmailText: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.onSurfaceVariant,
     fontFamily: fonts.inter.medium,
     marginTop: 2,
     opacity: 0.8,
+    textAlign: "center",
+    maxWidth: "90%",
   },
   profilePhoneText: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.onSurfaceVariant,
     fontFamily: fonts.inter.medium,
     marginTop: 1,
     opacity: 0.8,
+    textAlign: "center",
+    maxWidth: "90%",
   },
   profileBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: spacing.xs,
     marginTop: 6,
+    maxWidth: "95%",
+    flexWrap: "wrap",
+    paddingHorizontal: spacing.sm,
   },
   roleBadge: {
     backgroundColor: "rgba(255, 149, 0, 0.08)",
@@ -1029,9 +998,10 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   mandalName: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.onSurfaceVariant,
     fontFamily: fonts.inter.semibold,
+    flexShrink: 1,
   },
   groupsContainer: {
     paddingHorizontal: spacing.lg,
