@@ -1,15 +1,6 @@
 import React from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  SafeAreaView,
-  ScrollView,
-  Image,
-  Dimensions,
-  Share,
-} from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Image, Dimensions, Share } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";

@@ -1,16 +1,6 @@
 import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-  ActivityIndicator,
-  TextInput,
-  Modal,
-  Alert,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useFetchVendorInvoices, useCreateVendorInvoice, useFetchPurchaseOrders } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";

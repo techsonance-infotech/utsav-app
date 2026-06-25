@@ -1,46 +1,49 @@
 import React from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-  Dimensions,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Image, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFinancialSummary, useFetchMembers } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 
 const { width } = Dimensions.get("window");
 
 export default function AnalyticsHubScreen() {
+  const { tenantId } = useAuthStore();
+  const { data: summary } = useFinancialSummary(tenantId);
+  const { data: members } = useFetchMembers();
+
+  const formatAmount = (num: number) => {
+    if (!num) return "₹0";
+    if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)} Cr`;
+    if (num >= 100000) return `₹${(num / 100000).toFixed(2)} L`;
+    return `₹${num.toLocaleString("en-IN")}`;
+  };
+
   const kpis = [
     {
       title: "Total Revenue",
-      value: "₹4.8 Cr.",
-      change: "+12.4%",
-      trend: "up",
+      value: formatAmount(summary?.total_donations || 0),
+      subtitle: `Net Balance: ${formatAmount(summary?.net_balance || 0)}`,
       icon: "currency-inr",
       iconColor: colors.tulsiGreen,
       bg: "rgba(34, 197, 94, 0.08)",
     },
     {
-      title: "Active Users (24h)",
-      value: "84.5k",
-      change: "+8.2%",
-      trend: "up",
+      title: "Committee Members",
+      value: String(members?.length || 0),
+      subtitle: `${members?.filter(m => m.status === "active").length || 0} active currently`,
       icon: "account-multiple",
       iconColor: colors.primaryBrand,
       bg: "rgba(140, 80, 0, 0.08)",
     },
     {
-      title: "Total Organizations",
-      value: "1,248",
-      change: "+15.0%",
-      trend: "up",
-      icon: "office-building",
+      title: "Donation Count",
+      value: String(summary?.donation_count || 0),
+      subtitle: `${summary?.expense_count || 0} recorded expenses`,
+      icon: "cash-multiple",
       iconColor: colors.aartiGold,
       bg: "rgba(201, 146, 26, 0.08)",
     },
@@ -71,7 +74,7 @@ export default function AnalyticsHubScreen() {
     {
       title: "Platform Health Stats",
       desc: "Diagnostics: latency, CPU footprint, nodes status",
-      icon: "shield-pulse",
+      icon: "shield-check",
       color: colors.secondaryBrand,
       route: "/(dashboard)/platform-health",
     },
@@ -85,15 +88,32 @@ export default function AnalyticsHubScreen() {
     <SafeAreaView style={styles.container}>
       {/* Top Header */}
       <View style={styles.topHeader}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
+          </TouchableOpacity>
+          <View style={styles.logoAvatarWrapper}>
+            <Image
+              style={styles.logoAvatar}
+              source={require("../../assets/image-only.png")}
+            />
+          </View>
+          <Text style={styles.logoText}>UTSAV</Text>
+        </View>
         <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
+          style={styles.infoButton}
           activeOpacity={0.8}
+          onPress={() =>
+            Alert.alert(
+              "Analytics Hub",
+              "Real-time overview of mandal collections, committee members activity, and operational reports."
+            )
+          }
         >
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Analytics Hub</Text>
-        <TouchableOpacity style={styles.infoButton} activeOpacity={0.8}>
           <MaterialCommunityIcons name="information-outline" size={24} color={colors.onSurfaceVariant} />
         </TouchableOpacity>
       </View>
@@ -101,9 +121,9 @@ export default function AnalyticsHubScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Subtitle intro */}
         <View style={styles.introSection}>
-          <Text style={styles.sectionTitle}>Real-time Platform Pulse</Text>
+          <Text style={styles.sectionTitle}>Real-time Mandal Pulse</Text>
           <Text style={styles.sectionSubtitle}>
-            Comprehensive operational and financial metrics across all mandals.
+            Comprehensive operational and financial metrics for your organization.
           </Text>
         </View>
 
@@ -118,8 +138,8 @@ export default function AnalyticsHubScreen() {
                 <Text style={styles.kpiTitle}>{kpi.title}</Text>
                 <Text style={styles.kpiValue}>{kpi.value}</Text>
                 <View style={styles.trendRow}>
-                  <MaterialCommunityIcons name="trending-up" size={14} color={colors.tulsiGreen} />
-                  <Text style={styles.trendText}>{kpi.change} from last month</Text>
+                  <MaterialCommunityIcons name="sync" size={12} color={colors.onSurfaceVariant} style={{ opacity: 0.7 }} />
+                  <Text style={styles.trendText}>{kpi.subtitle}</Text>
                 </View>
               </View>
             </View>
@@ -189,22 +209,42 @@ const styles = StyleSheet.create({
     backgroundColor: colors.pujaWhite,
   },
   topHeader: {
-    height: 56,
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: spacing.md,
+    height: 56,
     borderBottomWidth: 1,
     borderBottomColor: colors.sandstone,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(250, 250, 248, 0.9)",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   backButton: {
     padding: spacing.xs,
   },
-  headerTitle: {
-    fontSize: 18,
+  logoAvatarWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: colors.primaryBrand,
+    backgroundColor: colors.cream,
+  },
+  logoAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  logoText: {
+    fontSize: 22,
     fontFamily: fonts.poppins.bold,
     color: colors.primaryBrand,
+    letterSpacing: 1,
   },
   infoButton: {
     padding: spacing.xs,

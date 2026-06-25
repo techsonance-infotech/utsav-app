@@ -1,91 +1,82 @@
 import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-  Dimensions,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useFetchMembers, useFetchTenant, useFetchMyProfile } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-const TEAM_CATEGORIES = [
-  "Core Committee",
-  "Decoration Team",
-  "Volunteer Leads",
-  "Finance & Planning",
-];
-
-const sampleCoreMembers = [
-  {
-    id: "cm1",
-    name: "Smt. Rajeshwari Iyer",
-    role: "President",
-    meta: "15 Years of Service",
-    verified: true,
-  },
-  {
-    id: "cm2",
-    name: "Amitav Ganguly",
-    role: "Chief Coordinator",
-    meta: "Ops Management",
-    verified: false,
-  },
-  {
-    id: "cm3",
-    name: "Meera Deshmukh",
-    role: "Treasurer",
-    meta: "Financial Oversight",
-    verified: false,
-  },
-];
-
-const sampleDecorationMembers = [
-  {
-    id: "dm1",
-    name: "Sanjay Verma",
-    role: "Head of Design",
-    badge: "Aarti Lead",
-  },
-  {
-    id: "dm2",
-    name: "Ramanathan K.",
-    role: "Floral Sourcing",
-    badge: "Sevadhikari",
-  },
-];
-
 export default function CommitteeDirectoryScreen() {
-  const [activeTab, setActiveTab] = useState("Core Committee");
+  const { tenantId, userFullName } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
+  const { data: myProfile } = useFetchMyProfile();
+  const { data: members = [], isLoading: isMembersLoading } = useFetchMembers({ status: "active" });
+
+  const TEAM_CATEGORIES = [
+    "Core Leadership",
+    "Finance & Planning",
+    "Committee Coordinators",
+    "Volunteers",
+  ];
+
+  const [activeTab, setActiveTab] = useState("Core Leadership");
+
+  const coreLeadership = members.filter(m => ["owner", "president", "secretary", "admin", "super_admin"].includes(m.role?.toLowerCase() || ""));
+  const financePlanning = members.filter(m => ["treasurer"].includes(m.role?.toLowerCase() || ""));
+  const committeeCoordinators = members.filter(m => ["committee_member"].includes(m.role?.toLowerCase() || ""));
+  const volunteers = members.filter(m => ["volunteer"].includes(m.role?.toLowerCase() || ""));
+
+  const getFilteredMembers = () => {
+    switch (activeTab) {
+      case "Core Leadership":
+        return coreLeadership;
+      case "Finance & Planning":
+        return financePlanning;
+      case "Committee Coordinators":
+        return committeeCoordinators;
+      case "Volunteers":
+        return volunteers;
+      default:
+        return [];
+    }
+  };
+
+  const activeMembers = getFilteredMembers();
+  const currentYear = tenant?.founded_year || new Date().getFullYear();
+
+  const profileName = myProfile?.full_name || userFullName || "Mandal Owner";
+  const avatarUrl = myProfile?.avatar_url || null;
+  const initials = profileName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            style={styles.backBtn}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color={colors.primaryBrand}
-            />
+      {/* Top App Bar */}
+      <View style={styles.appBar}>
+        <View style={styles.appBarLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Committee Directory</Text>
+          <View style={styles.logoAvatarWrapper}>
+            <Image
+              style={styles.logoAvatar}
+              source={require("../../assets/image-only.png")}
+            />
+          </View>
+          <Text style={styles.logoText}>UTSAV</Text>
         </View>
-        <TouchableOpacity activeOpacity={0.7}>
-          <MaterialCommunityIcons
-            name="magnify"
-            size={24}
-            color={colors.primaryBrand}
-          />
-        </TouchableOpacity>
+        <View style={styles.profileAvatar}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{initials}</Text>
+          )}
+        </View>
       </View>
 
       <ScrollView
@@ -95,7 +86,7 @@ export default function CommitteeDirectoryScreen() {
       >
         {/* Intro Section */}
         <View style={styles.introBox}>
-          <Text style={styles.yearLabel}>FESTIVAL YEAR 2024</Text>
+          <Text style={styles.yearLabel}>FESTIVAL YEAR {currentYear}</Text>
           <Text style={styles.introTitle}>Meet the Committee</Text>
           <Text style={styles.introDesc}>
             Meet the dedicated team working tirelessly behind the scenes to make this year's Utsav a spiritual and cultural success.
@@ -103,7 +94,7 @@ export default function CommitteeDirectoryScreen() {
 
           <View style={styles.statChip}>
             <MaterialCommunityIcons name="account-group" size={16} color={colors.aartiGold} />
-            <Text style={styles.statChipText}>124 Members</Text>
+            <Text style={styles.statChipText}>{members.length} Members</Text>
           </View>
         </View>
 
@@ -130,72 +121,50 @@ export default function CommitteeDirectoryScreen() {
           })}
         </ScrollView>
 
-        {/* Conditionally render sections */}
-        {activeTab === "Core Committee" && (
+        {/* List of active category members */}
+        {isMembersLoading ? (
+          <View style={{ padding: 40, alignItems: "center" }}>
+            <ActivityIndicator size="large" color={colors.primaryBrand} />
+          </View>
+        ) : (
           <View style={styles.section}>
             <View style={styles.sectionDividerRow}>
-              <Text style={styles.sectionTitle}>Core Committee</Text>
+              <Text style={styles.sectionTitle}>{activeTab}</Text>
               <View style={styles.dividerLine} />
             </View>
 
             <View style={styles.memberGrid}>
-              {sampleCoreMembers.map((item) => (
+              {activeMembers.map((item) => (
                 <View key={item.id} style={styles.coreMemberCard}>
                   <View style={styles.avatarWrapper}>
-                    <View style={styles.avatarLarge}>
-                      <MaterialCommunityIcons name="account-tie" size={32} color={colors.outline} />
-                    </View>
-                    {item.verified && (
-                      <View style={styles.verifiedBadge}>
-                        <MaterialCommunityIcons name="check-decagram" size={12} color="#FFFFFF" />
+                    {item.avatar_url ? (
+                      <Image source={{ uri: item.avatar_url }} style={styles.avatarLarge} />
+                    ) : (
+                      <View style={styles.avatarLarge}>
+                        <MaterialCommunityIcons name="account" size={32} color={colors.outline} />
                       </View>
                     )}
                   </View>
                   <View style={styles.memberDetails}>
-                    <Text style={styles.memberName}>{item.name}</Text>
-                    <Text style={styles.memberRole}>{item.role}</Text>
+                    <Text style={styles.memberName}>{item.full_name}</Text>
+                    <Text style={styles.memberRole}>{item.role.replace("_", " ").toUpperCase()}</Text>
                     <View style={styles.metaRow}>
-                      <MaterialCommunityIcons name="shield-check-outline" size={14} color={colors.primaryBrand} />
-                      <Text style={styles.metaText}>{item.meta}</Text>
+                      <MaterialCommunityIcons name="map-marker-outline" size={14} color={colors.primaryBrand} />
+                      <Text style={styles.metaText}>{item.city || "Mumbai"}, {item.state || "Maharashtra"}</Text>
                     </View>
                   </View>
                 </View>
               ))}
-            </View>
-          </View>
-        )}
 
-        {activeTab === "Decoration Team" && (
-          <View style={styles.section}>
-            <View style={styles.sectionDividerRow}>
-              <Text style={styles.sectionTitle}>Decoration Team</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <View style={styles.teamGrid}>
-              {sampleDecorationMembers.map((item) => (
-                <View key={item.id} style={styles.decoCard}>
-                  <View style={styles.avatarMedium}>
-                    <MaterialCommunityIcons name="palette" size={24} color={colors.outline} />
-                  </View>
-                  <Text style={styles.decoName}>{item.name}</Text>
-                  <Text style={styles.decoRole}>{item.role}</Text>
-                  <View style={styles.badgeWrapper}>
-                    <Text style={styles.badgeText}>{item.badge}</Text>
-                  </View>
+              {activeMembers.length === 0 && (
+                <View style={styles.emptyTabWrapper}>
+                  <MaterialCommunityIcons name="account-multiple-outline" size={48} color={colors.outline} />
+                  <Text style={styles.emptyTabText}>
+                    No active members found in this category.
+                  </Text>
                 </View>
-              ))}
+              )}
             </View>
-          </View>
-        )}
-
-        {/* Fallback info for other tabs */}
-        {(activeTab === "Volunteer Leads" || activeTab === "Finance & Planning") && (
-          <View style={styles.emptyTabWrapper}>
-            <MaterialCommunityIcons name="account-multiple-outline" size={48} color={colors.outline} />
-            <Text style={styles.emptyTabText}>
-              Directory list updated. Select Core Committee or Decoration Team to preview members.
-            </Text>
           </View>
         )}
 
@@ -204,7 +173,7 @@ export default function CommitteeDirectoryScreen() {
           <View style={styles.promoContent}>
             <Text style={styles.promoTitle}>Join the Sevaks</Text>
             <Text style={styles.promoDesc}>
-              Interested in volunteering for the 2025 festival cycle? Enrollment opens in Dec.
+              Interested in volunteering for the {currentYear + 1} festival cycle? Enrollment opens in Dec.
             </Text>
             <TouchableOpacity style={styles.promoBtn} activeOpacity={0.8}>
               <Text style={styles.promoBtnText}>Read FAQs</Text>
@@ -221,28 +190,67 @@ export default function CommitteeDirectoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.pujaWhite },
-  header: {
+  appBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    height: 56,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    height: 56,
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: colors.outlineVariant,
+    borderBottomColor: colors.sandstone,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  appBarLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
   backBtn: { padding: 4 },
-  headerTitle: {
+  logoAvatarWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: colors.primaryBrand,
+    backgroundColor: colors.cream,
+  },
+  logoAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  logoText: {
+    fontSize: 22,
     fontFamily: fonts.poppins.bold,
-    fontSize: 20,
     color: colors.primaryBrand,
+    letterSpacing: 1,
+  },
+  profileAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.sandstone,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
+  },
+  avatarText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurfaceVariant,
   },
 
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.md, paddingBottom: 60, gap: 24 },
 
-  // Intro box
   introBox: { gap: 6 },
   yearLabel: {
     fontFamily: fonts.inter.bold,
@@ -280,7 +288,6 @@ const styles = StyleSheet.create({
     color: colors.charcoal,
   },
 
-  // Tabs scroll
   tabsScroll: { gap: 8, paddingBottom: 4 },
   tabChip: {
     paddingHorizontal: 16,
@@ -303,7 +310,6 @@ const styles = StyleSheet.create({
     color: colors.onPrimaryContainer,
   },
 
-  // Sections
   section: { gap: 16 },
   sectionDividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   sectionTitle: {
@@ -335,19 +341,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.aartiGold,
   },
-  verifiedBadge: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.aartiGold,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "#FFFFFF",
-  },
   memberDetails: { flex: 1, gap: 2 },
   memberName: {
     fontFamily: fonts.poppins.bold,
@@ -367,51 +360,6 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
   },
 
-  // Deco Grid
-  teamGrid: { flexDirection: "row", gap: 12 },
-  decoCard: {
-    flex: 1,
-    backgroundColor: colors.pujaWhite,
-    borderWidth: 1,
-    borderColor: colors.sandstone,
-    borderRadius: 16,
-    padding: 14,
-    alignItems: "center",
-    gap: 4,
-  },
-  avatarMedium: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: colors.cream,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  decoName: {
-    fontFamily: fonts.poppins.bold,
-    fontSize: 14,
-    color: colors.charcoal,
-  },
-  decoRole: {
-    fontFamily: fonts.inter.regular,
-    fontSize: 11,
-    color: colors.onSurfaceVariant,
-  },
-  badgeWrapper: {
-    backgroundColor: colors.cream,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginTop: 4,
-  },
-  badgeText: {
-    fontFamily: fonts.inter.bold,
-    fontSize: 9,
-    color: colors.primaryBrand,
-    textTransform: "uppercase",
-  },
-
   emptyTabWrapper: { padding: 40, alignItems: "center", gap: 8 },
   emptyTabText: {
     fontFamily: fonts.inter.semibold,
@@ -421,7 +369,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Promo Card
   promoCard: {
     backgroundColor: colors.primaryBrand,
     borderRadius: 20,
@@ -434,6 +381,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 4,
+    marginTop: 12,
   },
   promoContent: { flex: 1, gap: 6, zIndex: 10 },
   promoTitle: {

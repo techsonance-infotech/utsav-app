@@ -1,23 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-  Animated,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from "react-native";
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Animated, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Linking, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "@utsav/stores";
 import { useSignUp, useLogin, supabase } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { useTranslation } from "../lib/i18n";
+import LoaderOverlay from "../components/LoaderOverlay";
 
 const { width } = Dimensions.get("window");
 
@@ -106,6 +96,7 @@ function PhoneInput({
   onChangeText: (t: string) => void;
   editable?: boolean;
 }) {
+  const { t } = useTranslation();
   const [isFocused, setIsFocused] = useState(false);
   const animatedIsFocused = useRef(new Animated.Value(value === "" ? 0 : 1)).current;
 
@@ -141,7 +132,7 @@ function PhoneInput({
         <Text style={styles.countryCodeText}>+91</Text>
       </View>
       <View style={[styles.phoneNumContainer, isFocused && styles.inputFocused]}>
-        <Animated.Text style={labelStyle}>Phone Number</Animated.Text>
+        <Animated.Text style={labelStyle}>{t("phoneNumber")}</Animated.Text>
         <TextInput
           style={styles.phoneTextInput}
           value={value}
@@ -158,6 +149,7 @@ function PhoneInput({
 }
 
 export default function MobileSignupScreen() {
+  const { t } = useTranslation();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -193,18 +185,64 @@ export default function MobileSignupScreen() {
   const handleSignup = async () => {
     setErrorMsg("");
 
-    if (!fullName.trim() || !email.trim() || !phone.trim() || !password || !confirmPassword) {
+    const fullNameTrimmed = fullName.trim();
+    const emailTrimmed = email.trim();
+    const phoneTrimmed = phone.trim();
+
+    if (!fullNameTrimmed || !emailTrimmed || !phoneTrimmed || !password || !confirmPassword) {
       setErrorMsg("Please fill in all fields.");
+      return;
+    }
+
+    // Full name validation: only letters and spaces
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    if (!nameRegex.test(fullNameTrimmed)) {
+      setErrorMsg("Full name must contain only letters and spaces.");
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailTrimmed)) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
+
+    // Phone number validation: exactly 10 digits
+    const phoneRegex = /^\d{10}$/;
+    if (!phoneRegex.test(phoneTrimmed)) {
+      setErrorMsg("Phone number must be exactly 10 digits.");
+      return;
+    }
+
+    // Password validations: between 8 and 20 characters
+    if (password.length < 8 || password.length > 20) {
+      setErrorMsg("Password must be between 8 and 20 characters.");
+      return;
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      setErrorMsg("Password must contain at least one uppercase letter.");
+      return;
+    }
+
+    if (!/[a-z]/.test(password)) {
+      setErrorMsg("Password must contain at least one lowercase letter.");
+      return;
+    }
+
+    if (!/\d/.test(password)) {
+      setErrorMsg("Password must contain at least one number.");
+      return;
+    }
+
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      setErrorMsg("Password must contain at least one special character.");
       return;
     }
 
     if (password !== confirmPassword) {
       setErrorMsg("Passwords do not match.");
-      return;
-    }
-
-    if (password.length < 8) {
-      setErrorMsg("Password must be at least 8 characters.");
       return;
     }
 
@@ -259,6 +297,7 @@ export default function MobileSignupScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <LoaderOverlay visible={isLoading} message="Creating account..." />
       {/* Background Decorative Blur Blobs */}
       <View style={styles.bgBlobs}>
         <View style={styles.topRightBlob} />
@@ -276,8 +315,15 @@ export default function MobileSignupScreen() {
         >
           <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.header}>
-              <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>Join your Mandal community today.</Text>
+              <View style={styles.logoWrapper}>
+                <Image
+                  source={require("../../assets/logo.png")}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={styles.title}>{t("createAccount")}</Text>
+              <Text style={styles.subtitle}>{t("signupSubtitle")}</Text>
             </View>
 
             {errorMsg ? (
@@ -289,14 +335,14 @@ export default function MobileSignupScreen() {
 
             <View style={styles.form}>
               <FloatingLabelInput
-                label="Full Name"
+                label={t("fullName")}
                 value={fullName}
                 onChangeText={setFullName}
                 editable={!isLoading}
               />
 
               <FloatingLabelInput
-                label="Email"
+                label={t("emailAddress")}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -310,39 +356,45 @@ export default function MobileSignupScreen() {
               />
 
               <FloatingLabelInput
-                label="Password"
+                label={t("password")}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
-                rightIcon={showPassword ? "visibility-off" : "visibility"}
+                rightIcon={showPassword ? "eye-off" : "eye"}
                 onRightIconPress={() => setShowPassword(!showPassword)}
                 editable={!isLoading}
               />
 
               <FloatingLabelInput
-                label="Confirm Password"
+                label={t("confirmPassword")}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
-                rightIcon={showConfirmPassword ? "visibility-off" : "visibility"}
+                rightIcon={showConfirmPassword ? "eye-off" : "eye"}
                 onRightIconPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 editable={!isLoading}
               />
 
               {/* Terms Checkbox */}
-              <TouchableOpacity
-                style={styles.termsContainer}
-                activeOpacity={0.8}
-                onPress={() => setAgreeTerms(!agreeTerms)}
-              >
-                <View style={[styles.checkbox, agreeTerms && styles.checkboxActive]}>
+              <View style={styles.termsContainer}>
+                <TouchableOpacity
+                  style={[styles.checkbox, agreeTerms && styles.checkboxActive]}
+                  onPress={() => setAgreeTerms(!agreeTerms)}
+                  activeOpacity={0.8}
+                >
                   {agreeTerms && <MaterialCommunityIcons name="check" size={14} color="#FFFFFF" />}
-                </View>
+                </TouchableOpacity>
                 <Text style={styles.termsText}>
-                  I agree to the <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
-                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                  {t("agreeTo")}{" "}
+                  <Text style={styles.termsLink} onPress={() => router.push("/(dashboard)/terms-of-service?from=signup")}>
+                    {t("terms")}
+                  </Text>{" "}
+                  {t("and")}{" "}
+                  <Text style={styles.termsLink} onPress={() => router.push("/(dashboard)/privacy-policy?from=signup")}>
+                    {t("policy")}
+                  </Text>
                 </Text>
-              </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={[styles.submitButton, isLoading && { opacity: 0.8 }]}
@@ -354,7 +406,7 @@ export default function MobileSignupScreen() {
                   <ActivityIndicator color={colors.onPrimaryContainer} size="small" />
                 ) : (
                   <View style={styles.submitBtnContent}>
-                    <Text style={styles.submitButtonText}>Create Account</Text>
+                    <Text style={styles.submitButtonText}>{t("createAccount")}</Text>
                     <MaterialCommunityIcons name="arrow-right" size={20} color={colors.onPrimaryContainer} />
                   </View>
                 )}
@@ -362,28 +414,31 @@ export default function MobileSignupScreen() {
 
               <View style={styles.dividerContainer}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
+                <Text style={styles.dividerText}>{t("orText")}</Text>
                 <View style={styles.dividerLine} />
               </View>
 
+              {/* Google Auth */}
               <TouchableOpacity
                 style={styles.googleButton}
                 onPress={handleGoogleLogin}
                 disabled={isLoading}
                 activeOpacity={0.8}
               >
-                <View style={styles.googleIconContainer}>
-                  {/* Google Custom Minimal Vector representation */}
-                  <MaterialCommunityIcons name="google" size={20} color="#EA4335" />
-                </View>
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
+                <Image
+                  style={styles.googleIcon}
+                  source={{
+                    uri: "https://developers.google.com/static/identity/images/g-logo.png",
+                  }}
+                />
+                <Text style={styles.googleButtonText}>{t("googleSignIn")}</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Already have an account? </Text>
+              <Text style={styles.footerText}>{t("alreadyHaveAccountLink")} </Text>
               <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-                <Text style={styles.footerLink}>Sign In</Text>
+                <Text style={styles.footerLink}>{t("signInLink")}</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -391,8 +446,8 @@ export default function MobileSignupScreen() {
       </KeyboardAvoidingView>
 
       {/* Decorative Bottom Row */}
-      <View style={styles.bottomIconsRow}>
-        <MaterialCommunityIcons name="temple-hindu" size={32} color={colors.outline} style={styles.bottomIcon} />
+      <View style={styles.bottomIconsRow} pointerEvents="none">
+        <MaterialIcons name="temple-hindu" size={32} color={colors.outline} style={styles.bottomIcon} />
         <MaterialCommunityIcons name="flower" size={32} color={colors.outline} style={styles.bottomIcon} />
         <MaterialCommunityIcons name="fire" size={32} color={colors.outline} style={styles.bottomIcon} />
       </View>
@@ -431,26 +486,25 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 12,
     paddingVertical: spacing.xl,
     zIndex: 1,
   },
   card: {
     width: "100%",
-    backgroundColor: "rgba(255, 255, 255, 0.65)",
-    borderRadius: borderRadius["2xl"],
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: "rgba(232, 226, 214, 0.4)",
-    shadowColor: colors.primaryBrand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
+    paddingHorizontal: 12,
+    paddingVertical: spacing.md,
   },
   header: {
     alignItems: "center",
     marginBottom: spacing.lg,
+  },
+  logoWrapper: {
+    marginBottom: spacing.md,
+  },
+  logoImage: {
+    width: 140,
+    height: 60,
   },
   title: {
     fontSize: 28,
@@ -634,9 +688,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  googleIconContainer: {
-    justifyContent: "center",
-    alignItems: "center",
+  googleIcon: {
+    width: 20,
+    height: 20,
   },
   googleButtonText: {
     color: colors.onSurfaceVariant,

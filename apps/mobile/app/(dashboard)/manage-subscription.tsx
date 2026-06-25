@@ -1,28 +1,57 @@
 import React from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFetchTenant, useFetchMembers, useFetchCampaigns } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 
 export default function ManageSubscriptionScreen() {
+  const { tenantId } = useAuthStore();
+  const { data: tenant, isLoading: isTenantLoading } = useFetchTenant(tenantId);
+  const { data: members, isLoading: isMembersLoading } = useFetchMembers();
+  const { data: campaigns, isLoading: isCampaignsLoading } = useFetchCampaigns();
+
+  const plan = tenant?.plan || "trial";
+  const planDetails = {
+    trial: { members: 100, storage: 2, campaigns: 2, price: "Free", priceLabel: "Free" },
+    silver: { members: 500, storage: 10, campaigns: 5, price: "₹1,999/mo", priceLabel: "₹1,999/mo" },
+    gold: { members: 2000, storage: 50, campaigns: 20, price: "₹4,999/mo", priceLabel: "₹4,999/mo" },
+    platinum: { members: 10000, storage: 200, campaigns: 100, price: "₹9,999/mo", priceLabel: "₹9,999/mo" },
+  }[plan] || { members: 100, storage: 2, campaigns: 2, price: "Free", priceLabel: "Free" };
+
+  const membersCount = members?.length || 0;
+  const campaignsCount = campaigns?.length || 0;
+  const storageUsed = Number(Math.min((membersCount * 0.02 + campaignsCount * 0.1), planDetails.storage).toFixed(2));
+
   const usageMeters = [
-    { label: "Members Count", current: 124, limit: 500, icon: "account-group-outline" },
-    { label: "Storage Limit", current: 4.8, limit: 10, unit: "GB", icon: "database-outline" },
-    { label: "Active Campaigns", current: 3, limit: 5, icon: "bullhorn-outline" },
+    { label: "Members Count", current: membersCount, limit: planDetails.members, icon: "account-group-outline" },
+    { label: "Storage Limit", current: storageUsed, limit: planDetails.storage, unit: "GB", icon: "database-outline" },
+    { label: "Active Campaigns", current: campaignsCount, limit: planDetails.campaigns, icon: "bullhorn-outline" },
   ];
 
   const invoices = [
-    { date: "June 10, 2026", id: "#INV-9281", amt: "₹5,898.82", status: "Paid" },
-    { date: "May 10, 2026", id: "#INV-8176", amt: "₹5,898.82", status: "Paid" },
-    { date: "April 10, 2026", id: "#INV-7102", amt: "₹5,898.82", status: "Paid" },
+    { date: "June 10, 2026", id: "#INV-9281", amt: plan === "trial" ? "₹0.00" : planDetails.price, status: "Paid" },
+    { date: "May 10, 2026", id: "#INV-8176", amt: plan === "trial" ? "₹0.00" : planDetails.price, status: "Paid" },
   ];
+
+  const isLoading = isTenantLoading || isMembersLoading || isCampaignsLoading;
+
+  if (isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primaryBrand} />
+      </View>
+    );
+  }
+
+  let expiryLabel = "Trial period active";
+  if (tenant?.plan_expires_at) {
+    const d = new Date(tenant.plan_expires_at);
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    expiryLabel = `${plan === "trial" ? "Trial" : "Subscription"} expires on: ${d.toLocaleDateString('en-US', options as any)}`;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -38,18 +67,20 @@ export default function ManageSubscriptionScreen() {
         <Text style={styles.headerTitle}>Subscription Status</Text>
         <View style={{ width: 24 }} />
       </View>
-
+ 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Active Plan Detail Box */}
         <View style={styles.planCard}>
           <View style={styles.badgeRow}>
             <View style={styles.planBadge}>
-              <Text style={styles.planBadgeText}>GOLD PLAN</Text>
+              <Text style={styles.planBadgeText}>{(tenant?.plan || "TRIAL").toUpperCase()} PLAN</Text>
             </View>
-            <Text style={styles.planPrice}>₹4,999/mo</Text>
+            <Text style={styles.planPrice}>{plan === "trial" ? "Free" : planDetails.price}</Text>
           </View>
-          <Text style={styles.planTitle}>Siddhivinayak Mandal</Text>
-          <Text style={styles.planExpiry}>Next invoice date: July 10, 2026</Text>
+          <Text style={styles.planTitle}>{tenant?.name || "Utsav Mandal"}</Text>
+          <Text style={styles.planExpiry}>
+            {expiryLabel}
+          </Text>
 
           <TouchableOpacity
             style={styles.upgradeBtn}
@@ -302,5 +333,11 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: "rgba(232, 226, 214, 0.4)",
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.pujaWhite,
   },
 });

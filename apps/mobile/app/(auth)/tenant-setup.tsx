@@ -1,24 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  Dimensions,
-  Animated,
-  Modal,
-  Image,
-} from "react-native";
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Animated, Modal, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "@utsav/stores";
 import { useCreateTenant, useCreateEvent } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
 
@@ -162,7 +149,7 @@ export default function MobileTenantSetupScreen() {
       <View style={styles.header}>
         <View style={styles.logoRow}>
           <View style={styles.logoIcon}>
-            <MaterialCommunityIcons name="temple-hindu" size={20} color={colors.onPrimaryContainer} />
+            <MaterialIcons name="temple-hindu" size={20} color={colors.onPrimaryContainer} />
           </View>
           <Text style={styles.logoText}>UTSAV</Text>
         </View>
@@ -214,11 +201,19 @@ export default function MobileTenantSetupScreen() {
                     onPress={() => setVertical(item.id)}
                     activeOpacity={0.8}
                   >
-                    <MaterialCommunityIcons
-                      name={item.icon as any}
-                      size={28}
-                      color={isActive ? colors.primaryBrand : colors.onSurfaceVariant}
-                    />
+                    {item.icon === "temple-hindu" ? (
+                      <MaterialIcons
+                        name="temple-hindu"
+                        size={28}
+                        color={isActive ? colors.primaryBrand : colors.onSurfaceVariant}
+                      />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name={item.icon as any}
+                        size={28}
+                        color={isActive ? colors.primaryBrand : colors.onSurfaceVariant}
+                      />
+                    )}
                     <Text style={[styles.verticalLabel, isActive && styles.verticalLabelActive]}>
                       {item.label}
                     </Text>
@@ -435,7 +430,7 @@ export default function MobileTenantSetupScreen() {
                 {logoUri ? (
                   <Image source={{ uri: logoUri }} style={styles.summaryAvatarImg as any} />
                 ) : (
-                  <MaterialCommunityIcons name="temple-hindu" size={32} color={colors.primaryBrand} />
+                  <MaterialIcons name="temple-hindu" size={32} color={colors.primaryBrand} />
                 )}
               </View>
               <View style={styles.summaryDetails}>

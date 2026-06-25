@@ -1,24 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-  Animated,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from "react-native";
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Animated, Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, Linking } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "@utsav/stores";
 import { useLogin, supabase } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { useTranslation } from "../lib/i18n";
+import LoaderOverlay from "../components/LoaderOverlay";
 
 const { width } = Dimensions.get("window");
 
@@ -99,6 +88,7 @@ function FloatingLabelInput({
 }
 
 export default function MobileLoginScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -190,6 +180,7 @@ export default function MobileLoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <LoaderOverlay visible={isLoading} message="Signing in..." />
       {/* Background Decorative Blur Blobs */}
       <View style={styles.bgBlobs}>
         <View style={styles.topRightBlob} />
@@ -208,11 +199,15 @@ export default function MobileLoginScreen() {
           <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             {/* Logo Section */}
             <View style={styles.header}>
-              <Animated.View style={[styles.diyaGlow, { opacity: glowAnim }]}>
-                <Text style={styles.logoDiya}>🪔</Text>
+              <Animated.View style={[styles.logoWrapper, { opacity: glowAnim }]}>
+                <Image
+                  source={require("../../assets/logo.png")}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
               </Animated.View>
-              <Text style={styles.title}>Welcome Back</Text>
-              <Text style={styles.subtitle}>Sign in to manage your festival with ease.</Text>
+              <Text style={styles.title}>{t("welcomeBack")}</Text>
+              <Text style={styles.subtitle}>{t("loginSubtitle")}</Text>
             </View>
 
             {errorMsg ? (
@@ -225,7 +220,7 @@ export default function MobileLoginScreen() {
             {/* Form */}
             <View style={styles.form}>
               <FloatingLabelInput
-                label="Email or Phone Number"
+                label={t("emailOrPhone")}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -233,7 +228,7 @@ export default function MobileLoginScreen() {
               />
 
               <FloatingLabelInput
-                label="Password"
+                label={t("password")}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -245,9 +240,9 @@ export default function MobileLoginScreen() {
               {/* Forgot Password */}
               <TouchableOpacity
                 style={styles.forgotContainer}
-                onPress={() => router.push("/(auth)/welcome")}
+                onPress={() => router.push("/(auth)/forgot-password")}
               >
-                <Text style={styles.forgotText}>Forgot password?</Text>
+                <Text style={styles.forgotText}>{t("forgotPassword")}</Text>
               </TouchableOpacity>
 
               {/* Primary CTA */}
@@ -260,14 +255,14 @@ export default function MobileLoginScreen() {
                 {isLoading ? (
                   <ActivityIndicator color={colors.onPrimary} size="small" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Sign In</Text>
+                  <Text style={styles.submitButtonText}>{t("signIn")}</Text>
                 )}
               </TouchableOpacity>
 
               {/* Divider */}
               <View style={styles.dividerContainer}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
+                <Text style={styles.dividerText}>{t("orText")}</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -280,18 +275,33 @@ export default function MobileLoginScreen() {
                 <Image
                   style={styles.googleIcon}
                   source={{
-                    uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuAvJeFZoMZVEFjM9EduXwhE5s1ZbkjRTahKm4bz9LOIiED_kWWFmq-6AP8OFJp1o9oxxK-onh0vcd3bwj_rA8fQjmHjySFjBJgGSZloG-WveADBWUvcx4XXWtfDOJ-6Vo77n3XOAOLcE5b20ijC7b6ungvD-qtWW1XCIKarrxXk5aYZFomV0NnMlvqZD7xhXQKdfhA9Tn29SveUsPNYG-vkB2Sh04qV4K0dJFKF11jmRjRFLzeSnPOV",
+                    uri: "https://developers.google.com/static/identity/images/g-logo.png",
                   }}
                 />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
+                <Text style={styles.googleButtonText}>{t("googleSignIn")}</Text>
               </TouchableOpacity>
             </View>
 
             {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Text style={styles.footerText}>{t("dontHaveAccount")} </Text>
               <TouchableOpacity onPress={() => router.push("/(auth)/signup")}>
-                <Text style={styles.footerLink}>Start here</Text>
+                <Text style={styles.footerLink}>{t("startHere")}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Footer Links */}
+            <View style={styles.footerLinks}>
+              <TouchableOpacity onPress={() => router.push("/(dashboard)/privacy-policy?from=login")}>
+                <Text style={styles.footerLinkText}>{t("privacyPolicy")}</Text>
+              </TouchableOpacity>
+              <Text style={styles.footerLinkSeparator}>•</Text>
+              <TouchableOpacity onPress={() => router.push("/(dashboard)/terms-of-service?from=login")}>
+                <Text style={styles.footerLinkText}>{t("termsOfService")}</Text>
+              </TouchableOpacity>
+              <Text style={styles.footerLinkSeparator}>•</Text>
+              <TouchableOpacity onPress={() => router.push("/(dashboard)/help-center?from=login")}>
+                <Text style={styles.footerLinkText}>{t("helpCenter")}</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -299,13 +309,13 @@ export default function MobileLoginScreen() {
       </KeyboardAvoidingView>
 
       {/* Decorative Bottom Cultural Icons Row */}
-      <View style={styles.bottomIconsRow}>
-        <MaterialCommunityIcons name="home-map-marker" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="party-popper" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="flower" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="temple-hindu" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="flare" size={32} color={colors.outline} style={styles.bottomIcon} />
-        <MaterialCommunityIcons name="fire" size={32} color={colors.outline} style={styles.bottomIcon} />
+      <View style={styles.bottomIconsRow} pointerEvents="none">
+        <MaterialIcons name="temple-hindu" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="party-popper" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="flower" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="church" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="flare" size={54} color={colors.outline} style={styles.bottomIcon} />
+        <MaterialCommunityIcons name="fire" size={54} color={colors.outline} style={styles.bottomIcon} />
       </View>
     </SafeAreaView>
   );
@@ -342,36 +352,25 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 12,
     paddingVertical: spacing.xl,
     zIndex: 1,
   },
   card: {
     width: "100%",
-    backgroundColor: "rgba(255, 255, 255, 0.65)",
-    borderRadius: borderRadius["2xl"],
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: "rgba(232, 226, 214, 0.4)",
-    shadowColor: colors.primaryBrand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
+    paddingHorizontal: 12,
+    paddingVertical: spacing.md,
   },
   header: {
     alignItems: "center",
     marginBottom: spacing.lg,
   },
-  diyaGlow: {
-    shadowColor: colors.primaryContainer,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 15,
-    shadowOpacity: 0.5,
-    marginBottom: spacing.xs,
+  logoWrapper: {
+    marginBottom: spacing.md,
   },
-  logoDiya: {
-    fontSize: 54,
+  logoImage: {
+    width: 140,
+    height: 60,
   },
   title: {
     fontSize: 28,
@@ -519,5 +518,23 @@ const styles = StyleSheet.create({
   },
   bottomIcon: {
     marginHorizontal: 4,
+  },
+  footerLinks: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: spacing.xl,
+    gap: spacing.sm,
+  },
+  footerLinkText: {
+    fontSize: 12,
+    color: colors.primaryBrand,
+    fontFamily: fonts.inter.semibold,
+    textDecorationLine: "underline",
+  },
+  footerLinkSeparator: {
+    fontSize: 12,
+    color: colors.outline,
+    opacity: 0.5,
   },
 });

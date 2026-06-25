@@ -5,11 +5,12 @@ import {
   View,
   Animated,
   Dimensions,
+  Image,
 } from "react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, fonts, spacing } from "../lib/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAuthStore } from "@utsav/stores";
 
 const { width } = Dimensions.get("window");
 
@@ -95,7 +96,18 @@ export default function SplashScreen() {
 
     // Auto-navigate after 2.5s
     const timer = setTimeout(() => {
-      router.replace("/(auth)/welcome");
+      const { userId, role, tenantId } = useAuthStore.getState();
+      if (userId) {
+        if (role === "super_admin") {
+          router.replace("/(dashboard)/super-admin-dashboard");
+        } else if (tenantId) {
+          router.replace("/(dashboard)/home");
+        } else {
+          router.replace("/(auth)/tenant-setup");
+        }
+      } else {
+        router.replace("/(auth)/welcome");
+      }
     }, 2500);
 
     return () => clearTimeout(timer);
@@ -171,10 +183,10 @@ export default function SplashScreen() {
               },
             ]}
           >
-            <MaterialCommunityIcons
-              name="fire"
-              size={80}
-              color="#FFFFFF"
+            <Image
+              source={require("../../assets/logo.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
             />
           </Animated.View>
         </View>
@@ -241,10 +253,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 222, 169, 0.2)",
   },
   logoWrap: {
-    width: 192,
-    height: 192,
+    width: 200,
+    height: 200,
     alignItems: "center",
     justifyContent: "center",
+  },
+  logoImage: {
+    width: 150,
+    height: 64,
   },
   taglineFooter: {
     position: "absolute",
