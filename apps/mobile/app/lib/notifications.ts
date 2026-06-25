@@ -1,6 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { apiClient } from "@utsav/api-client";
+import Constants from "expo-constants";
 
 // Set default notification handler
 if (Platform.OS !== "web") {
@@ -30,8 +31,17 @@ export async function registerForPushNotifications() {
       return;
     }
 
-    // Try to get token. ProjectId is optional or can be passed if EAS setup is complete.
-    const tokenData = await Notifications.getExpoPushTokenAsync().catch((e: any) => {
+    // Try to get token. ProjectId is required.
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+
+    if (!projectId) {
+      console.log("No EAS projectId configured in app.json. Skipping push token retrieval.");
+      return;
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId }).catch((e: any) => {
       console.log("Expo token retrieval error (common in simulators/dev clients):", e.message);
       return null;
     });

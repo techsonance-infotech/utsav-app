@@ -14,7 +14,15 @@ export interface Member {
   avatar_url?: string | null;
   city?: string | null;
   state?: string | null;
+  date_of_birth?: string | null;
+  skills?: string[] | string | null;
+  languages?: string[] | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  notes?: string | null;
   preferred_language: string;
+  dnd_start_time?: string | null;
+  dnd_end_time?: string | null;
   joined_at: string;
   last_seen_at?: string | null;
 }
@@ -61,6 +69,56 @@ export function useRemoveMember() {
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+    },
+  });
+}
+
+export function useFetchMyProfile() {
+  const { tenantId, userId } = useAuthStore();
+  return useQuery({
+    queryKey: ["my-profile", tenantId, userId],
+    queryFn: async () => {
+      return apiClient<Member & { email: string }>("/members/me");
+    },
+    enabled: !!tenantId && !!userId,
+  });
+}
+
+export function useUpdateMyProfile() {
+  const queryClient = useQueryClient();
+  const { tenantId, userId } = useAuthStore();
+
+  return useMutation({
+    mutationFn: async (data: {
+      fullName?: string;
+      phone?: string;
+      avatarUrl?: string;
+      city?: string;
+      state?: string;
+      dateOfBirth?: string | null;
+      skills?: string[] | string | null;
+      languages?: string[] | null;
+      emergencyContactName?: string | null;
+      emergencyContactPhone?: string | null;
+      notes?: string | null;
+      preferredLanguage?: string | null;
+      membershipType?: string | null;
+      dndStartTime?: string | null;
+      dndEndTime?: string | null;
+    }) => {
+      return apiClient<Member>("/members/me", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (data) => {
+      if (data && data.full_name) {
+        useAuthStore.getState().setAuth({
+          userFullName: data.full_name,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["my-profile", tenantId, userId] });
       queryClient.invalidateQueries({ queryKey: ["members"] });
     },
   });

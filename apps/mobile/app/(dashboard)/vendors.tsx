@@ -1,13 +1,6 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  SafeAreaView,
-} from "react-native";
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   useFetchVendors,
   useFetchPurchaseOrders,

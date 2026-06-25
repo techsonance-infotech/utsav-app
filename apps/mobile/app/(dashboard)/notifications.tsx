@@ -1,13 +1,6 @@
 import React from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNotifications, useMarkNotificationRead } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, spacing } from "../lib/theme";

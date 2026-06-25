@@ -1,17 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { useChatMessages, useSendMessage } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";

@@ -1,17 +1,6 @@
 import React from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-  Image,
-  Dimensions,
-  Share,
-  Alert,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Image, Dimensions, Share, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { useFetchAlbumMedia } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";

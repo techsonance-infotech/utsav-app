@@ -1,22 +1,18 @@
 import React, { useEffect, useRef } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  Animated,
-  Image,
-} from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useFetchDonation } from "@utsav/api-client";
+import { useFetchDonation, useFetchMyProfile, useFetchTenant } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 
 export default function DonationConfirmedScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { data: donation } = useFetchDonation(id ?? "");
+  const { tenantId, userFullName } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
+  const { data: myProfile } = useFetchMyProfile();
 
   const diyaScale = useRef(new Animated.Value(0.9)).current;
   const diyaOpacity = useRef(new Animated.Value(0)).current;
@@ -36,18 +32,37 @@ export default function DonationConfirmedScreen() {
     ]).start();
   }, []);
 
+  const profileName = myProfile?.full_name || userFullName || "Devotee";
+  const avatarUrl = myProfile?.avatar_url || null;
+  const initials = profileName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Navigation Shell */}
+      {/* Top App Bar */}
       <View style={styles.appBar}>
-        <Text style={styles.appBarTitle}>Utsav</Text>
-        <View style={styles.appBarRight}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
+        <View style={styles.appBarLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn}>
-            <MaterialCommunityIcons name="menu" size={24} color={colors.onSurfaceVariant} />
-          </TouchableOpacity>
+          <View style={styles.logoAvatarWrapper}>
+            <Image
+              style={styles.logoAvatar}
+              source={require("../../assets/image-only.png")}
+            />
+          </View>
+          <Text style={styles.logoText}>UTSAV</Text>
+        </View>
+        <View style={styles.profileAvatar}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{initials}</Text>
+          )}
         </View>
       </View>
 
@@ -164,21 +179,58 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: spacing.md,
     height: 56,
-    backgroundColor: "rgba(250, 250, 248, 0.9)",
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: colors.sandstone,
   },
-  appBarTitle: {
-    fontSize: 24,
-    fontFamily: fonts.poppins.bold,
-    color: colors.primaryBrand,
-  },
-  appBarRight: {
+  appBarLeft: {
     flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
   },
-  iconBtn: {
+  backBtn: {
     padding: spacing.xs,
+  },
+  logoAvatarWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: colors.primaryBrand,
+    backgroundColor: colors.cream,
+  },
+  logoAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  logoText: {
+    fontSize: 22,
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
+    letterSpacing: 1,
+  },
+  profileAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.sandstone,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  headerAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
+  },
+  avatarText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurfaceVariant,
   },
   scrollContent: {
     paddingBottom: 64,
@@ -206,7 +258,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   heroTitle: {
-    fontSize: 32,
+    fontSize: 24,
     fontFamily: fonts.poppins.bold,
     color: colors.primaryBrand,
     marginBottom: 4,

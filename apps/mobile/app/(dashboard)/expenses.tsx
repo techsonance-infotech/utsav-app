@@ -1,15 +1,6 @@
 import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-  Modal,
-} from "react-native";
+import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "@utsav/stores";
 import {
   useExpenses,

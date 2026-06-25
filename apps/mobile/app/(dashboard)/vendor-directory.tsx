@@ -1,16 +1,6 @@
 import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
-  FlatList,
-  Dimensions,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, FlatList, Dimensions } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useFetchVendors, useCreateVendor, Vendor } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";
@@ -106,7 +96,7 @@ export default function VendorDirectoryScreen() {
         </View>
         <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(dashboard)/create-purchase-order")}>
           <MaterialCommunityIcons
-            name="file-document-plus-outline"
+            name="file-plus-outline"
             size={24}
             color={colors.primaryBrand}
           />

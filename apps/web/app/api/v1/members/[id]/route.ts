@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { checkRole, createServiceRoleClient, logAuditEvent } from "../../utils";
+import { PATCH as mePATCH } from "../me/route";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const { id } = params; // Member's unique id (tenant_members.id)
+
+  if (id === "me") {
+    return mePATCH(req);
+  }
 
   const tenantId = req.headers.get("x-tenant-id");
   if (!tenantId) {
@@ -121,6 +126,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const { id } = params;
+
+  if (id === "me") {
+    return NextResponse.json({ message: "Method not allowed" }, { status: 405 });
+  }
 
   const tenantId = req.headers.get("x-tenant-id");
   if (!tenantId) {

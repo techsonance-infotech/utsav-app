@@ -1,19 +1,9 @@
 import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-  TextInput,
-  Image,
-  ActivityIndicator,
-  Modal,
-  Alert,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, Image, ActivityIndicator, Modal, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useFetchMembers, useUpdateMemberRole, Member } from "@utsav/api-client";
+import { useFetchMembers, useUpdateMemberRole, useFetchTenant, useFetchMyProfile, Member } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -24,8 +14,20 @@ export default function AssignPositionScreen() {
   const [selectedRole, setSelectedRole] = useState("committee_member");
   const [selectedDept, setSelectedDept] = useState("Finance");
 
+  const { tenantId, userFullName } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
+  const { data: myProfile } = useFetchMyProfile();
   const { data: members, isLoading } = useFetchMembers({ search: searchQuery });
   const updateRoleMutation = useUpdateMemberRole();
+
+  const profileName = myProfile?.full_name || userFullName || "Mandal Owner";
+  const avatarUrl = myProfile?.avatar_url || null;
+  const initials = profileName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   const handleOpenAssign = (member: Member) => {
     setSelectedMember(member);
@@ -60,16 +62,26 @@ export default function AssignPositionScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Top App Bar */}
-      <View style={styles.topHeader}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Assign Position</Text>
-        <View style={{ width: 24 }} />
+      <View style={styles.appBar}>
+        <View style={styles.appBarLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
+          </TouchableOpacity>
+          <View style={styles.logoAvatarWrapper}>
+            <Image
+              style={styles.logoAvatar}
+              source={require("../../assets/image-only.png")}
+            />
+          </View>
+          <Text style={styles.logoText}>UTSAV</Text>
+        </View>
+        <View style={styles.profileAvatar}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{initials}</Text>
+          )}
+        </View>
       </View>
 
       {/* Header Info */}
@@ -237,23 +249,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.pujaWhite,
   },
-  topHeader: {
-    height: 56,
+  appBar: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: spacing.md,
+    height: 56,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: colors.sandstone,
   },
-  backButton: {
+  appBarLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  backBtn: {
     padding: spacing.xs,
   },
-  headerTitle: {
-    fontSize: 18,
+  logoAvatarWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: colors.primaryBrand,
+    backgroundColor: colors.cream,
+  },
+  logoAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  logoText: {
+    fontSize: 22,
     fontFamily: fonts.poppins.bold,
     color: colors.primaryBrand,
+    letterSpacing: 1,
+  },
+  profileAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.sandstone,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  headerAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
+  },
+  avatarText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurfaceVariant,
   },
   introSection: {
     paddingHorizontal: spacing.md,

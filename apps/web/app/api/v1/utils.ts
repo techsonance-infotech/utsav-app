@@ -94,7 +94,21 @@ export async function checkRole(
     };
   }
 
-  if (!allowedRoles.includes(member.role)) {
+  const grantedRoles: Record<string, string[]> = {
+    owner: ["owner", "admin", "treasurer", "committee_member", "member", "volunteer"],
+    president: ["admin", "treasurer", "committee_member", "member", "volunteer"],
+    secretary: ["admin", "treasurer", "committee_member", "member", "volunteer"],
+    admin: ["admin", "treasurer", "committee_member", "member", "volunteer"],
+    treasurer: ["treasurer", "committee_member", "member", "volunteer"],
+    committee_member: ["committee_member", "member", "volunteer"],
+    member: ["member"],
+    volunteer: ["volunteer"],
+  };
+
+  const userGranted = grantedRoles[member.role] || [member.role];
+  const hasPermission = allowedRoles.some((r) => userGranted.includes(r) || r === member.role);
+
+  if (!hasPermission) {
     return {
       hasAccess: false,
       userId,

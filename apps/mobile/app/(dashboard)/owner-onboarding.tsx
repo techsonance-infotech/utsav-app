@@ -1,16 +1,18 @@
 import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-} from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useFinancialSummary } from "@utsav/api-client";
+import {
+  useFinancialSummary,
+  useFetchTenant,
+  useFetchMyProfile,
+  useFetchMembers,
+  useEvents,
+  useFetchCampaigns,
+  useNewsArticles,
+} from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 
 interface OnboardingTask {
@@ -22,20 +24,79 @@ interface OnboardingTask {
   route?: string;
 }
 
-const ONBOARDING_TASKS: OnboardingTask[] = [
-  { id: "org", title: "Organisation created", subtitle: "Profile basics are ready", icon: "check-circle", status: "done" },
-  { id: "member", title: "First member invited", subtitle: "Collaboration is active", icon: "check-circle", status: "done" },
-  { id: "event", title: "First event published", subtitle: "Public visibility is live", icon: "check-circle", status: "done" },
-  { id: "campaign", title: "Set up a donation campaign", subtitle: "Enable devotees to contribute", icon: "cash-multiple", status: "active", route: "/(dashboard)/create-campaign" },
-  { id: "news", title: "Add a news update", subtitle: "Share latest mandal news", icon: "newspaper", status: "pending", route: "/(dashboard)/create-update" },
-];
-
 export default function OwnerOnboardingScreen() {
-  const { tenantId } = useAuthStore();
+  const { tenantId, userFullName } = useAuthStore();
+  
+  // Real backend queries
   const { data: summary } = useFinancialSummary(tenantId);
-  const completedCount = ONBOARDING_TASKS.filter((t) => t.status === "done").length;
-  const totalCount = ONBOARDING_TASKS.length;
+  const { data: tenant } = useFetchTenant(tenantId);
+  const { data: myProfile } = useFetchMyProfile();
+  const { data: members } = useFetchMembers();
+  const { data: events } = useEvents();
+  const { data: campaigns } = useFetchCampaigns();
+  const { data: newsArticles } = useNewsArticles();
+
+  // Dynamic conditions
+  const isOrgDone = !!tenant;
+  const isMemberDone = (members?.length || 0) > 1; // Owner is member #1
+  const isEventDone = (events?.length || 0) > 0;
+  const isCampaignDone = (campaigns?.length || 0) > 0;
+  const isNewsDone = (newsArticles?.length || 0) > 0;
+
+  const dynamicTasks: OnboardingTask[] = [
+    { 
+      id: "org", 
+      title: "Organisation created", 
+      subtitle: tenant?.name || "Profile basics are ready", 
+      icon: "check-circle", 
+      status: isOrgDone ? "done" : "active" 
+    },
+    { 
+      id: "member", 
+      title: "First member invited", 
+      subtitle: isMemberDone ? "Collaboration is active" : "Invite other committee members", 
+      icon: "account-plus", 
+      status: isOrgDone ? (isMemberDone ? "done" : "active") : "pending", 
+      route: "/(dashboard)/invite-member" 
+    },
+    { 
+      id: "event", 
+      title: "First event published", 
+      subtitle: isEventDone ? "Public visibility is live" : "Publish your first mandal event", 
+      icon: "calendar-plus", 
+      status: isMemberDone ? (isEventDone ? "done" : "active") : "pending", 
+      route: "/(dashboard)/create-event" 
+    },
+    { 
+      id: "campaign", 
+      title: "Set up a donation campaign", 
+      subtitle: isCampaignDone ? "Devotee payments enabled" : "Enable devotees to contribute", 
+      icon: "cash-multiple", 
+      status: isEventDone ? (isCampaignDone ? "done" : "active") : "pending", 
+      route: "/(dashboard)/create-campaign" 
+    },
+    { 
+      id: "news", 
+      title: "Add a news update", 
+      subtitle: isNewsDone ? "News feed populated" : "Share latest mandal news", 
+      icon: "newspaper", 
+      status: isCampaignDone ? (isNewsDone ? "done" : "active") : "pending", 
+      route: "/(dashboard)/create-update" 
+    },
+  ];
+
+  const completedCount = dynamicTasks.filter((t) => t.status === "done").length;
+  const totalCount = dynamicTasks.length;
   const progressPercent = Math.round((completedCount / totalCount) * 100);
+
+  const profileName = myProfile?.full_name || userFullName || "Mandal Owner";
+  const avatarUrl = myProfile?.avatar_url || null;
+  const initials = profileName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -45,17 +106,27 @@ export default function OwnerOnboardingScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
           </TouchableOpacity>
-          <Text style={styles.appBarTitle}>Utsav</Text>
+          <View style={styles.logoAvatarWrapper}>
+            <Image
+              style={styles.logoAvatar}
+              source={require("../../assets/image-only.png")}
+            />
+          </View>
+          <Text style={styles.logoText}>UTSAV</Text>
         </View>
         <View style={styles.profileAvatar}>
-          <Text style={styles.avatarText}>SM</Text>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{initials}</Text>
+          )}
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Welcome Header */}
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>Namaste, Mandal Owner</Text>
+          <Text style={styles.welcomeTitle}>Namaste, {profileName}</Text>
           <Text style={styles.welcomeSubtitle}>
             Welcome to your central management dashboard. Your preparations are underway.
           </Text>
@@ -80,7 +151,7 @@ export default function OwnerOnboardingScreen() {
 
           {/* Task List */}
           <View style={styles.taskList}>
-            {ONBOARDING_TASKS.map((task) => (
+            {dynamicTasks.map((task) => (
               <TouchableOpacity
                 key={task.id}
                 style={[
@@ -90,7 +161,7 @@ export default function OwnerOnboardingScreen() {
                 ]}
                 activeOpacity={task.route ? 0.7 : 1}
                 onPress={() => task.route && router.push(task.route as any)}
-                disabled={!task.route}
+                disabled={!task.route || task.status === "pending"}
               >
                 <View
                   style={[
@@ -126,10 +197,10 @@ export default function OwnerOnboardingScreen() {
                 {(task.status === "active" || task.status === "pending") && task.route && (
                   <View style={styles.taskArrow}>
                     <Text style={[styles.taskArrowText, task.status === "active" && { color: colors.primaryBrand }]}>
-                      {task.status === "active" ? "Set up" : "Write"}
+                      {task.status === "active" ? "Set up" : "Locked"}
                     </Text>
                     <MaterialCommunityIcons
-                      name="arrow-right"
+                      name={task.status === "active" ? "arrow-right" : "lock"}
                       size={16}
                       color={task.status === "active" ? colors.primaryBrand : colors.onSurfaceVariant}
                     />
@@ -167,35 +238,44 @@ export default function OwnerOnboardingScreen() {
               <View style={styles.metaDivider} />
               <View style={styles.metaItem}>
                 <Text style={styles.metaLabel}>Expenses</Text>
-                <Text style={styles.metaValue}>{summary?.expense_count ?? 0}</Text>
+                <Text style={styles.metaValue}>₹ {summary?.total_expenses?.toLocaleString("en-IN") ?? "0"}</Text>
               </View>
             </View>
           </View>
 
           {/* Small Stat Cards */}
-          <View style={styles.statRow}>
-            <View style={styles.statCard}>
-              <View style={[styles.statIconWrap, { backgroundColor: "rgba(140, 80, 0, 0.1)" }]}>
-                <MaterialCommunityIcons name="account-group" size={20} color={colors.primaryBrand} />
+          {(() => {
+            const activeMembers = members?.filter((m) => m.status === "active") || [];
+            const memberCount = members?.length || 0;
+            const activePercent = memberCount > 0 ? Math.round((activeMembers.length / memberCount) * 100) : 0;
+            const eventsCount = events?.length || 0;
+            const eventsCountStr = eventsCount < 10 ? `0${eventsCount}` : `${eventsCount}`;
+            return (
+              <View style={styles.statRow}>
+                <View style={styles.statCard}>
+                  <View style={[styles.statIconWrap, { backgroundColor: "rgba(140, 80, 0, 0.1)" }]}>
+                    <MaterialCommunityIcons name="account-group" size={20} color={colors.primaryBrand} />
+                  </View>
+                  <Text style={styles.statLabel}>Member Engagement</Text>
+                  <Text style={styles.statValue}>{activePercent}%</Text>
+                  <View style={styles.miniProgressBg}>
+                    <View style={[styles.miniProgressFill, { width: `${activePercent}%` }]} />
+                  </View>
+                </View>
+                <View style={styles.statCard}>
+                  <View style={[styles.statIconWrap, { backgroundColor: "rgba(34, 197, 94, 0.1)" }]}>
+                    <MaterialCommunityIcons name="party-popper" size={20} color={colors.tulsiGreen} />
+                  </View>
+                  <Text style={styles.statLabel}>Events Active</Text>
+                  <Text style={styles.statValue}>{eventsCountStr}</Text>
+                  <View style={styles.allLiveBadge}>
+                    <MaterialCommunityIcons name="trending-up" size={14} color={colors.tulsiGreen} />
+                    <Text style={styles.allLiveText}>All live</Text>
+                  </View>
+                </View>
               </View>
-              <Text style={styles.statLabel}>Member Engagement</Text>
-              <Text style={styles.statValue}>84%</Text>
-              <View style={styles.miniProgressBg}>
-                <View style={[styles.miniProgressFill, { width: "84%" }]} />
-              </View>
-            </View>
-            <View style={styles.statCard}>
-              <View style={[styles.statIconWrap, { backgroundColor: "rgba(34, 197, 94, 0.1)" }]}>
-                <MaterialCommunityIcons name="party-popper" size={20} color={colors.tulsiGreen} />
-              </View>
-              <Text style={styles.statLabel}>Events Active</Text>
-              <Text style={styles.statValue}>04</Text>
-              <View style={styles.allLiveBadge}>
-                <MaterialCommunityIcons name="trending-up" size={14} color={colors.tulsiGreen} />
-                <Text style={styles.allLiveText}>All live</Text>
-              </View>
-            </View>
-          </View>
+            );
+          })()}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -228,6 +308,26 @@ const styles = StyleSheet.create({
     fontFamily: fonts.poppins.bold,
     color: colors.primaryBrand,
   },
+  logoAvatarWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: colors.primaryBrand,
+    backgroundColor: colors.cream,
+  },
+  logoAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  logoText: {
+    fontSize: 22,
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
+    letterSpacing: 1,
+  },
   profileAvatar: {
     width: 32,
     height: 32,
@@ -237,6 +337,12 @@ const styles = StyleSheet.create({
     borderColor: colors.outlineVariant,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
   },
   avatarText: {
     fontSize: 12,

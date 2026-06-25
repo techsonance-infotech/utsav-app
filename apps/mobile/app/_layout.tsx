@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActivityIndicator, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   useFonts,
   Poppins_400Regular,
@@ -16,6 +17,13 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
+
+import { setApiBaseUrl } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
+
+// Set base API URL for the client using Metro-injected env variable
+const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://utsav.techsonance.co.in";
+setApiBaseUrl(apiUrl);
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -45,6 +53,10 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    useAuthStore.getState().initialize();
+  }, []);
+
+  useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync().catch(() => {});
     }
@@ -60,21 +72,23 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)/splash" />
-        <Stack.Screen name="(auth)/welcome" />
-        <Stack.Screen name="(auth)/login" />
-        <Stack.Screen name="(auth)/signup" />
-        <Stack.Screen name="(auth)/verify-phone" />
-        <Stack.Screen name="(auth)/otp-entry" />
-        <Stack.Screen name="(auth)/tenant-setup" />
-        <Stack.Screen name="(auth)/invitation-join" />
-        <Stack.Screen name="(auth)/expired-invitation" />
-        <Stack.Screen name="(auth)/add-phone" />
-        <Stack.Screen name="(auth)/account-locked" />
-      </Stack>
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)/splash" />
+          <Stack.Screen name="(auth)/welcome" />
+          <Stack.Screen name="(auth)/login" />
+          <Stack.Screen name="(auth)/signup" />
+          <Stack.Screen name="(auth)/verify-phone" />
+          <Stack.Screen name="(auth)/otp-entry" />
+          <Stack.Screen name="(auth)/tenant-setup" />
+          <Stack.Screen name="(auth)/invitation-join" />
+          <Stack.Screen name="(auth)/expired-invitation" />
+          <Stack.Screen name="(auth)/add-phone" />
+          <Stack.Screen name="(auth)/account-locked" />
+        </Stack>
+      </SafeAreaProvider>
     </QueryClientProvider>
   );
 }

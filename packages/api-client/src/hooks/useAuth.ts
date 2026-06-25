@@ -30,7 +30,7 @@ export function useLogin() {
       return apiClient<{
         accessToken: string;
         refreshToken: string;
-        user: { id: string; email: string };
+        user: { id: string; email: string; full_name: string };
         tenant: { id: string; name: string; slug: string; role: string } | null;
       }>("/auth/login", {
         method: "POST",
@@ -40,7 +40,10 @@ export function useLogin() {
     onSuccess: (data) => {
       setAuth({
         userId: data.user.id,
+        userEmail: data.user.email,
+        userFullName: data.user.full_name,
         accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
         tenantId: data.tenant?.id || null,
         tenantName: data.tenant?.name || null,
         tenantSlug: data.tenant?.slug || null,
@@ -120,6 +123,17 @@ export function useResendVerification() {
   return useMutation({
     mutationFn: async (data: { email: string }) => {
       return apiClient<{ success: boolean; message: string }>("/auth/resend-verification", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: async (data: { oldPassword: string; newPassword: string }) => {
+      return apiClient<{ success: boolean; message: string }>("/auth/change-password", {
         method: "POST",
         body: JSON.stringify(data),
       });
