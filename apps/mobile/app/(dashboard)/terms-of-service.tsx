@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -90,13 +90,25 @@ const SECTIONS: TosSection[] = [
 ];
 
 export default function TermsOfServiceScreen() {
+  const { from } = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = () => {
+    if (from === "signup") {
+      router.replace("/(auth)/signup");
+    } else if (from === "login") {
+      router.replace("/(auth)/login");
+    } else {
+      router.back();
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={handleBack}
             activeOpacity={0.7}
             style={styles.backBtn}
           >

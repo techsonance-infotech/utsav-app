@@ -6,6 +6,8 @@ import { useSignUp, useLogin, supabase } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { useTranslation } from "../lib/i18n";
+import LoaderOverlay from "../components/LoaderOverlay";
 
 const { width } = Dimensions.get("window");
 
@@ -94,6 +96,7 @@ function PhoneInput({
   onChangeText: (t: string) => void;
   editable?: boolean;
 }) {
+  const { t } = useTranslation();
   const [isFocused, setIsFocused] = useState(false);
   const animatedIsFocused = useRef(new Animated.Value(value === "" ? 0 : 1)).current;
 
@@ -129,7 +132,7 @@ function PhoneInput({
         <Text style={styles.countryCodeText}>+91</Text>
       </View>
       <View style={[styles.phoneNumContainer, isFocused && styles.inputFocused]}>
-        <Animated.Text style={labelStyle}>Phone Number</Animated.Text>
+        <Animated.Text style={labelStyle}>{t("phoneNumber")}</Animated.Text>
         <TextInput
           style={styles.phoneTextInput}
           value={value}
@@ -146,6 +149,7 @@ function PhoneInput({
 }
 
 export default function MobileSignupScreen() {
+  const { t } = useTranslation();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -181,18 +185,64 @@ export default function MobileSignupScreen() {
   const handleSignup = async () => {
     setErrorMsg("");
 
-    if (!fullName.trim() || !email.trim() || !phone.trim() || !password || !confirmPassword) {
+    const fullNameTrimmed = fullName.trim();
+    const emailTrimmed = email.trim();
+    const phoneTrimmed = phone.trim();
+
+    if (!fullNameTrimmed || !emailTrimmed || !phoneTrimmed || !password || !confirmPassword) {
       setErrorMsg("Please fill in all fields.");
+      return;
+    }
+
+    // Full name validation: only letters and spaces
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    if (!nameRegex.test(fullNameTrimmed)) {
+      setErrorMsg("Full name must contain only letters and spaces.");
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailTrimmed)) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
+
+    // Phone number validation: exactly 10 digits
+    const phoneRegex = /^\d{10}$/;
+    if (!phoneRegex.test(phoneTrimmed)) {
+      setErrorMsg("Phone number must be exactly 10 digits.");
+      return;
+    }
+
+    // Password validations: between 8 and 20 characters
+    if (password.length < 8 || password.length > 20) {
+      setErrorMsg("Password must be between 8 and 20 characters.");
+      return;
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      setErrorMsg("Password must contain at least one uppercase letter.");
+      return;
+    }
+
+    if (!/[a-z]/.test(password)) {
+      setErrorMsg("Password must contain at least one lowercase letter.");
+      return;
+    }
+
+    if (!/\d/.test(password)) {
+      setErrorMsg("Password must contain at least one number.");
+      return;
+    }
+
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      setErrorMsg("Password must contain at least one special character.");
       return;
     }
 
     if (password !== confirmPassword) {
       setErrorMsg("Passwords do not match.");
-      return;
-    }
-
-    if (password.length < 8) {
-      setErrorMsg("Password must be at least 8 characters.");
       return;
     }
 
@@ -247,6 +297,7 @@ export default function MobileSignupScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <LoaderOverlay visible={isLoading} message="Creating account..." />
       {/* Background Decorative Blur Blobs */}
       <View style={styles.bgBlobs}>
         <View style={styles.topRightBlob} />
@@ -271,8 +322,8 @@ export default function MobileSignupScreen() {
                   resizeMode="contain"
                 />
               </View>
-              <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>Join your Mandal community today.</Text>
+              <Text style={styles.title}>{t("createAccount")}</Text>
+              <Text style={styles.subtitle}>{t("signupSubtitle")}</Text>
             </View>
 
             {errorMsg ? (
@@ -284,14 +335,14 @@ export default function MobileSignupScreen() {
 
             <View style={styles.form}>
               <FloatingLabelInput
-                label="Full Name"
+                label={t("fullName")}
                 value={fullName}
                 onChangeText={setFullName}
                 editable={!isLoading}
               />
 
               <FloatingLabelInput
-                label="Email"
+                label={t("emailAddress")}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -305,7 +356,7 @@ export default function MobileSignupScreen() {
               />
 
               <FloatingLabelInput
-                label="Password"
+                label={t("password")}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -315,7 +366,7 @@ export default function MobileSignupScreen() {
               />
 
               <FloatingLabelInput
-                label="Confirm Password"
+                label={t("confirmPassword")}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
@@ -325,25 +376,25 @@ export default function MobileSignupScreen() {
               />
 
               {/* Terms Checkbox */}
-              <TouchableOpacity
-                style={styles.termsContainer}
-                activeOpacity={0.8}
-                onPress={() => setAgreeTerms(!agreeTerms)}
-              >
-                <View style={[styles.checkbox, agreeTerms && styles.checkboxActive]}>
+              <View style={styles.termsContainer}>
+                <TouchableOpacity
+                  style={[styles.checkbox, agreeTerms && styles.checkboxActive]}
+                  onPress={() => setAgreeTerms(!agreeTerms)}
+                  activeOpacity={0.8}
+                >
                   {agreeTerms && <MaterialCommunityIcons name="check" size={14} color="#FFFFFF" />}
-                </View>
+                </TouchableOpacity>
                 <Text style={styles.termsText}>
-                  I agree to the{" "}
-                  <Text style={styles.termsLink} onPress={() => router.push("/(dashboard)/terms-of-service")}>
-                    Terms of Service
+                  {t("agreeTo")}{" "}
+                  <Text style={styles.termsLink} onPress={() => router.push("/(dashboard)/terms-of-service?from=signup")}>
+                    {t("terms")}
                   </Text>{" "}
-                  and{" "}
-                  <Text style={styles.termsLink} onPress={() => router.push("/(dashboard)/privacy-policy")}>
-                    Privacy Policy
+                  {t("and")}{" "}
+                  <Text style={styles.termsLink} onPress={() => router.push("/(dashboard)/privacy-policy?from=signup")}>
+                    {t("policy")}
                   </Text>
                 </Text>
-              </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={[styles.submitButton, isLoading && { opacity: 0.8 }]}
@@ -355,7 +406,7 @@ export default function MobileSignupScreen() {
                   <ActivityIndicator color={colors.onPrimaryContainer} size="small" />
                 ) : (
                   <View style={styles.submitBtnContent}>
-                    <Text style={styles.submitButtonText}>Create Account</Text>
+                    <Text style={styles.submitButtonText}>{t("createAccount")}</Text>
                     <MaterialCommunityIcons name="arrow-right" size={20} color={colors.onPrimaryContainer} />
                   </View>
                 )}
@@ -363,7 +414,7 @@ export default function MobileSignupScreen() {
 
               <View style={styles.dividerContainer}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
+                <Text style={styles.dividerText}>{t("orText")}</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -380,14 +431,14 @@ export default function MobileSignupScreen() {
                     uri: "https://developers.google.com/static/identity/images/g-logo.png",
                   }}
                 />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
+                <Text style={styles.googleButtonText}>{t("googleSignIn")}</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Already have an account? </Text>
+              <Text style={styles.footerText}>{t("alreadyHaveAccountLink")} </Text>
               <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-                <Text style={styles.footerLink}>Sign In</Text>
+                <Text style={styles.footerLink}>{t("signInLink")}</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -395,7 +446,7 @@ export default function MobileSignupScreen() {
       </KeyboardAvoidingView>
 
       {/* Decorative Bottom Row */}
-      <View style={styles.bottomIconsRow}>
+      <View style={styles.bottomIconsRow} pointerEvents="none">
         <MaterialIcons name="temple-hindu" size={32} color={colors.outline} style={styles.bottomIcon} />
         <MaterialCommunityIcons name="flower" size={32} color={colors.outline} style={styles.bottomIcon} />
         <MaterialCommunityIcons name="fire" size={32} color={colors.outline} style={styles.bottomIcon} />

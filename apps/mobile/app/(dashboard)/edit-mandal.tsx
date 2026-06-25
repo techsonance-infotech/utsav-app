@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, Switch, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useFetchMyProfile, useUpdateMyProfile } from "@utsav/api-client";
+import { useFetchTenant, useUpdateTenant } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import LoaderOverlay from "../components/LoaderOverlay";
 
 function CustomInput({
@@ -119,116 +120,121 @@ function DropdownSelect({
   );
 }
 
-export default function EditProfileScreen() {
-  const { data: profile, isLoading: isFetching } = useFetchMyProfile();
-  const updateMutation = useUpdateMyProfile();
+function ToggleRow({
+  label,
+  description,
+  value,
+  onValueChange,
+  disabled = false,
+}: {
+  label: string;
+  description: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={styles.toggleRowContainer}>
+      <View style={{ flex: 1, marginRight: spacing.md }}>
+        <Text style={styles.toggleLabel}>{label}</Text>
+        <Text style={styles.toggleDescription}>{description}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        trackColor={{ false: colors.sandstone, true: colors.primaryContainer }}
+        thumbColor="#FFFFFF"
+      />
+    </View>
+  );
+}
+
+export default function EditMandalScreen() {
+  const { tenantId } = useAuthStore();
+  const { data: tenant, isLoading: isFetching } = useFetchTenant(tenantId);
+  const updateMutation = useUpdateTenant();
 
   // Form states
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState(""); // YYYY-MM-DD
+  const [name, setName] = useState("");
+  const [foundedYear, setFoundedYear] = useState("");
+  const [vertical, setVertical] = useState("ganpati");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
+  const [facebookUrl, setFacebookUrl] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
-  const [membershipType, setMembershipType] = useState("annual");
-  const [preferredLanguage, setPreferredLanguage] = useState("en");
-  const [skills, setSkills] = useState("");
-  const [languages, setLanguages] = useState(""); // comma separated
-  const [emergencyContactName, setEmergencyContactName] = useState("");
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
-  const [notes, setNotes] = useState("");
-  const [dndStartTime, setDndStartTime] = useState(""); // HH:MM
-  const [dndEndTime, setDndEndTime] = useState(""); // HH:MM
+  const [country, setCountry] = useState("IN");
+  const [address, setAddress] = useState("");
+  const [defaultLanguage, setDefaultLanguage] = useState("en");
+  const [timezone, setTimezone] = useState("Asia/Kolkata");
+  const [isPublicDonations, setIsPublicDonations] = useState(true);
+  const [isPublicExpenses, setIsPublicExpenses] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Pre-fill form when profile data becomes available
+  // Pre-fill form when tenant data becomes available
   useEffect(() => {
-    if (profile) {
-      setFullName(profile.full_name || "");
-      setPhone(profile.phone || "");
-      setEmail(profile.email || "");
-      setDateOfBirth(profile.date_of_birth || "");
-      setCity(profile.city || "");
-      setState(profile.state || "");
-      setMembershipType(profile.membership_type || "annual");
-      setPreferredLanguage(profile.preferred_language || "en");
-      
-      // Skills is text[] in postgres but we convert to comma separated string for easy typing
-      const skillsVal = Array.isArray(profile.skills)
-        ? profile.skills.join(", ")
-        : (typeof profile.skills === "string" ? profile.skills : "");
-      setSkills(skillsVal);
-
-      // Languages is text[] in postgres
-      const langsVal = Array.isArray(profile.languages)
-        ? profile.languages.join(", ")
-        : "en";
-      setLanguages(langsVal);
-
-      setEmergencyContactName(profile.emergency_contact_name || "");
-      setEmergencyContactPhone(profile.emergency_contact_phone || "");
-      setNotes(profile.notes || "");
-      setDndStartTime(profile.dnd_start_time || "");
-      setDndEndTime(profile.dnd_end_time || "");
+    if (tenant) {
+      setName(tenant.name || "");
+      setFoundedYear(tenant.founded_year ? tenant.founded_year.toString() : "");
+      setVertical(tenant.vertical || "ganpati");
+      setWebsiteUrl(tenant.website_url || "");
+      setWhatsappGroupUrl(tenant.whatsapp_group_url || "");
+      setFacebookUrl(tenant.facebook_url || "");
+      setInstagramUrl(tenant.instagram_url || "");
+      setCity(tenant.city || "");
+      setState(tenant.state || "");
+      setCountry(tenant.country || "IN");
+      setAddress(tenant.address || "");
+      setDefaultLanguage(tenant.default_language || "en");
+      setTimezone(tenant.timezone || "Asia/Kolkata");
+      setIsPublicDonations(tenant.is_public_donations);
+      setIsPublicExpenses(tenant.is_public_expenses);
     }
-  }, [profile]);
+  }, [tenant]);
 
   const handleSave = async () => {
     setErrorMsg("");
 
-    if (!fullName.trim()) {
-      setErrorMsg("Full Name is required.");
+    if (!name.trim()) {
+      setErrorMsg("Mandal Name is required.");
       return;
     }
 
-    if (!phone.trim()) {
-      setErrorMsg("Phone Number is required.");
-      return;
-    }
-
-    // Optional validations
-    if (dateOfBirth.trim()) {
-      const dobRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dobRegex.test(dateOfBirth.trim())) {
-        setErrorMsg("Date of Birth must be in YYYY-MM-DD format.");
+    let parsedFoundedYear: number | undefined;
+    if (foundedYear.trim()) {
+      parsedFoundedYear = parseInt(foundedYear.trim(), 10);
+      if (isNaN(parsedFoundedYear)) {
+        setErrorMsg("Founded Year must be a number.");
         return;
       }
     }
 
-    if (dndStartTime.trim() && !/^\d{2}:\d{2}(:\d{2})?$/.test(dndStartTime.trim())) {
-      setErrorMsg("DND Start Time must be in HH:MM format.");
-      return;
-    }
-    if (dndEndTime.trim() && !/^\d{2}:\d{2}(:\d{2})?$/.test(dndEndTime.trim())) {
-      setErrorMsg("DND End Time must be in HH:MM format.");
-      return;
-    }
-
-    const skillsArray = skills.split(",").map((s) => s.trim()).filter(Boolean);
-    const languagesArray = languages.split(",").map((l) => l.trim()).filter(Boolean);
-
     try {
       await updateMutation.mutateAsync({
-        fullName: fullName.trim(),
-        phone: phone.trim(),
-        city: city.trim() || undefined,
-        state: state.trim() || undefined,
-        dateOfBirth: dateOfBirth.trim() || null,
-        skills: skillsArray.length > 0 ? skillsArray : null,
-        languages: languagesArray.length > 0 ? languagesArray : null,
-        emergencyContactName: emergencyContactName.trim() || null,
-        emergencyContactPhone: emergencyContactPhone.trim() || null,
-        notes: notes.trim() || null,
-        preferredLanguage,
-        membershipType,
-        dndStartTime: dndStartTime.trim() || null,
-        dndEndTime: dndEndTime.trim() || null,
+        id: tenantId!,
+        name: name.trim(),
+        founded_year: parsedFoundedYear || null,
+        vertical,
+        website_url: websiteUrl.trim() || null,
+        whatsapp_group_url: whatsappGroupUrl.trim() || null,
+        facebook_url: facebookUrl.trim() || null,
+        instagram_url: instagramUrl.trim() || null,
+        city: city.trim() || null,
+        state: state.trim() || null,
+        country: country.trim(),
+        address: address.trim() || null,
+        default_language: defaultLanguage,
+        timezone: timezone.trim(),
+        is_public_donations: isPublicDonations,
+        is_public_expenses: isPublicExpenses,
       });
 
       router.back();
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to update profile. Please try again.");
+      setErrorMsg(err.message || "Failed to update Mandal details. Please try again.");
     }
   };
 
@@ -244,7 +250,7 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LoaderOverlay visible={isSaving} message="Saving Profile..." />
+      <LoaderOverlay visible={isSaving} message="Saving Mandal Details..." />
 
       {/* Header */}
       <View style={styles.header}>
@@ -259,7 +265,7 @@ export default function EditProfileScreen() {
             color={colors.primaryBrand}
           />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <Text style={styles.headerTitle}>Edit Mandal</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -280,50 +286,86 @@ export default function EditProfileScreen() {
             </View>
           ) : null}
 
-          {/* Section 1: Personal Details */}
+          {/* Section 1: General Info */}
           <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="account-circle-outline" size={20} color={colors.primaryBrand} />
-            <Text style={styles.sectionTitle}>Personal Details</Text>
+            <MaterialCommunityIcons name="home-city" size={20} color={colors.primaryBrand} />
+            <Text style={styles.sectionTitle}>General Info</Text>
           </View>
-          
+
           <View style={styles.formCard}>
             <CustomInput
-              label="Full Name *"
-              value={fullName}
-              onChangeText={setFullName}
+              label="Mandal Name *"
+              value={name}
+              onChangeText={setName}
               editable={!isSaving}
-              placeholder="e.g. Sajesh Adeya"
+              placeholder="e.g. Truptinagarcharaja"
+            />
+
+            <DropdownSelect
+              label="Mandal Category / Vertical"
+              value={vertical}
+              options={[
+                { label: "Ganesh Chaturthi (Ganpati)", value: "ganpati" },
+                { label: "Navratri (Durga Puja)", value: "durga" },
+                { label: "General Festival Community", value: "general" },
+              ]}
+              onSelect={setVertical}
             />
 
             <CustomInput
-              label="Email (Verified)"
-              value={email}
-              onChangeText={() => {}}
-              editable={false}
-            />
-
-            <CustomInput
-              label="Phone Number *"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
+              label="Founded Year"
+              value={foundedYear}
+              onChangeText={setFoundedYear}
+              keyboardType="numeric"
               editable={!isSaving}
-              placeholder="e.g. 9845012345"
-            />
-
-            <CustomInput
-              label="Date of Birth"
-              value={dateOfBirth}
-              onChangeText={setDateOfBirth}
-              placeholder="YYYY-MM-DD"
-              editable={!isSaving}
+              placeholder="e.g. 2016"
             />
           </View>
 
-          {/* Section 2: Address & Preferences */}
+          {/* Section 2: Contact & Social URLs */}
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="earth" size={20} color={colors.primaryBrand} />
+            <Text style={styles.sectionTitle}>Social & Contact URLs</Text>
+          </View>
+
+          <View style={styles.formCard}>
+            <CustomInput
+              label="Website Link"
+              value={websiteUrl}
+              onChangeText={setWebsiteUrl}
+              editable={!isSaving}
+              placeholder="e.g. https://yoursite.com"
+            />
+
+            <CustomInput
+              label="WhatsApp Group Invite Link"
+              value={whatsappGroupUrl}
+              onChangeText={setWhatsappGroupUrl}
+              editable={!isSaving}
+              placeholder="e.g. https://chat.whatsapp.com/..."
+            />
+
+            <CustomInput
+              label="Facebook URL"
+              value={facebookUrl}
+              onChangeText={setFacebookUrl}
+              editable={!isSaving}
+              placeholder="e.g. https://facebook.com/..."
+            />
+
+            <CustomInput
+              label="Instagram URL"
+              value={instagramUrl}
+              onChangeText={setInstagramUrl}
+              editable={!isSaving}
+              placeholder="e.g. https://instagram.com/..."
+            />
+          </View>
+
+          {/* Section 3: Address & Location */}
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="map-marker-radius-outline" size={20} color={colors.primaryBrand} />
-            <Text style={styles.sectionTitle}>Address & Preferences</Text>
+            <Text style={styles.sectionTitle}>Address & Location</Text>
           </View>
 
           <View style={styles.formCard}>
@@ -348,107 +390,66 @@ export default function EditProfileScreen() {
               </View>
             </View>
 
-            <DropdownSelect
-              label="Membership Type"
-              value={membershipType}
-              options={[
-                { label: "Annual Member", value: "annual" },
-                { label: "Lifetime Member", value: "lifetime" },
-                { label: "Patron Member", value: "patron" },
-              ]}
-              onSelect={setMembershipType}
+            <CustomInput
+              label="Country"
+              value={country}
+              onChangeText={setCountry}
+              editable={!isSaving}
+              placeholder="e.g. IN"
             />
 
+            <CustomInput
+              label="Mandal Detailed Address"
+              value={address}
+              onChangeText={setAddress}
+              multiline
+              numberOfLines={3}
+              editable={!isSaving}
+              placeholder="Enter building number, street, landmark details..."
+            />
+          </View>
+
+          {/* Section 4: Settings & Visibility */}
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="cog-outline" size={20} color={colors.primaryBrand} />
+            <Text style={styles.sectionTitle}>Visibility & Localizations</Text>
+          </View>
+
+          <View style={styles.formCard}>
             <DropdownSelect
-              label="Preferred App Language"
-              value={preferredLanguage}
+              label="Default Language"
+              value={defaultLanguage}
               options={[
                 { label: "English", value: "en" },
                 { label: "Hindi (हिंदी)", value: "hi" },
                 { label: "Gujarati (ગુજરાતી)", value: "gu" },
               ]}
-              onSelect={setPreferredLanguage}
-            />
-          </View>
-
-          {/* Section 3: Skills & Notes */}
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="brain" size={20} color={colors.primaryBrand} />
-            <Text style={styles.sectionTitle}>Skills & Skills Info</Text>
-          </View>
-
-          <View style={styles.formCard}>
-            <CustomInput
-              label="Skills (Comma Separated)"
-              value={skills}
-              onChangeText={setSkills}
-              editable={!isSaving}
-              placeholder="e.g. Decoration, Management, Singing"
+              onSelect={setDefaultLanguage}
             />
 
             <CustomInput
-              label="Languages Known (Comma Separated)"
-              value={languages}
-              onChangeText={setLanguages}
+              label="Timezone"
+              value={timezone}
+              onChangeText={setTimezone}
               editable={!isSaving}
-              placeholder="e.g. en, hi, gu"
+              placeholder="e.g. Asia/Kolkata"
             />
 
-            <CustomInput
-              label="Personal Biography / Notes"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={4}
-              editable={!isSaving}
-              placeholder="Write a brief bio or description..."
-            />
-          </View>
-
-          {/* Section 4: Emergency Contacts & DND */}
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="shield-alert-outline" size={20} color={colors.primaryBrand} />
-            <Text style={styles.sectionTitle}>Emergency Contact & DND Settings</Text>
-          </View>
-
-          <View style={styles.formCard}>
-            <CustomInput
-              label="Emergency Contact Name"
-              value={emergencyContactName}
-              onChangeText={setEmergencyContactName}
-              editable={!isSaving}
-              placeholder="e.g. Ramesh Adeya"
+            <ToggleRow
+              label="Public Donation Feed"
+              description="Allow public visitors to see donation feed details."
+              value={isPublicDonations}
+              onValueChange={setIsPublicDonations}
+              disabled={isSaving}
             />
 
-            <CustomInput
-              label="Emergency Contact Phone"
-              value={emergencyContactPhone}
-              onChangeText={setEmergencyContactPhone}
-              keyboardType="phone-pad"
-              editable={!isSaving}
-              placeholder="e.g. 9876543210"
+            <ToggleRow
+              label="Public Expense Feed"
+              description="Allow public visitors to review mandal expense reports."
+              value={isPublicExpenses}
+              onValueChange={setIsPublicExpenses}
+              disabled={isSaving}
             />
-
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <CustomInput
-                  label="DND Start Time"
-                  value={dndStartTime}
-                  onChangeText={setDndStartTime}
-                  placeholder="HH:MM"
-                  editable={!isSaving}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <CustomInput
-                  label="DND End Time"
-                  value={dndEndTime}
-                  onChangeText={setDndEndTime}
-                  placeholder="HH:MM"
-                  editable={!isSaving}
-                />
-              </View>
-            </View>
           </View>
 
         </ScrollView>
@@ -559,7 +560,7 @@ const styles = StyleSheet.create({
     borderColor: colors.outlineVariant,
   },
   textArea: {
-    height: 100,
+    height: 80,
     paddingTop: 12,
     paddingBottom: 12,
   },
@@ -610,6 +611,27 @@ const styles = StyleSheet.create({
   dropdownItemTextActive: {
     color: colors.primaryBrand,
     fontFamily: fonts.inter.bold,
+  },
+
+  // Toggle row styles
+  toggleRowContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.pujaWhite,
+    borderRadius: 12,
+    paddingVertical: 4,
+  },
+  toggleLabel: {
+    fontFamily: fonts.inter.semibold,
+    fontSize: 13,
+    color: colors.charcoal,
+  },
+  toggleDescription: {
+    fontFamily: fonts.inter.regular,
+    fontSize: 11,
+    color: colors.onSurfaceVariant,
+    marginTop: 2,
   },
 
   errorContainer: {

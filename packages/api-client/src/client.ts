@@ -35,9 +35,9 @@ export async function apiClient<T>(
   endpoint: string,
   { params, ...customConfig }: RequestOptions = {}
 ): Promise<T> {
-  const { accessToken, tenantId, userId } = useAuthStore.getState();
+  const { accessToken, tenantId, userId, refreshToken } = useAuthStore.getState();
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
@@ -65,7 +65,52 @@ export async function apiClient<T>(
     url += `?${searchParams.toString()}`;
   }
 
-  const response = await fetch(url, config);
+  let response = await fetch(url, config);
+
+  // If response is 401 Unauthorized, try to refresh token and retry
+  if (
+    !response.ok &&
+    response.status === 401 &&
+    refreshToken &&
+    endpoint !== "/auth/refresh"
+  ) {
+    try {
+      const refreshUrl = `${getApiBaseUrl()}/auth/refresh`;
+      const refreshRes = await fetch(refreshUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        const newAccessToken = refreshData.accessToken;
+        const newRefreshToken = refreshData.refreshToken;
+
+        // Update auth store with new tokens
+        useAuthStore.getState().setAuth({
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+        });
+
+        // Retry the original request with the new access token
+        const retryHeaders = {
+          ...headers,
+          "Authorization": `Bearer ${newAccessToken}`,
+          ...customConfig.headers,
+        };
+
+        const retryConfig: RequestInit = {
+          ...customConfig,
+          headers: retryHeaders,
+        };
+
+        response = await fetch(url, retryConfig);
+      }
+    } catch (refreshErr) {
+      console.error("Failed to automatically refresh token:", refreshErr);
+    }
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

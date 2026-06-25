@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { logSecurityEvent } from "../../utils";
+import { createServiceRoleClient, logSecurityEvent } from "../../utils";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -19,11 +19,46 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Email and password are required" }, { status: 400 });
     }
 
+    let loginEmail = (email || "").trim();
+
+    // Check if the input is a phone number (10 digits, not containing '@')
+    const cleanInput = loginEmail.replace(/\D/g, "");
+    if (cleanInput.length === 10 && !loginEmail.includes("@")) {
+      const serviceClient = createServiceRoleClient();
+      const { data: member, error: dbError } = await serviceClient
+        .from("tenant_members")
+        .select("user_id")
+        .eq("phone", cleanInput)
+        .limit(1)
+        .maybeSingle();
+
+      if (member && member.user_id) {
+        const { data: userData, error: userError } = await serviceClient.auth.admin.getUserById(member.user_id);
+        if (userData && userData.user && userData.user.email) {
+          loginEmail = userData.user.email;
+        } else {
+          await logSecurityEvent(req, {
+            action: "auth_login_failed",
+            status: "failure",
+            details: { phone: cleanInput, reason: "User record not found in Auth" },
+          });
+          return NextResponse.json({ message: "No user found associated with this phone number." }, { status: 401 });
+        }
+      } else {
+        await logSecurityEvent(req, {
+          action: "auth_login_failed",
+          status: "failure",
+          details: { phone: cleanInput, reason: "No account found with this phone number" },
+        });
+        return NextResponse.json({ message: "No account found with this phone number." }, { status: 401 });
+      }
+    }
+
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false },
     });
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
 
     if (error || !data.session) {
       const msg = error?.message || "Invalid credentials";
@@ -34,18 +69,18 @@ export async function POST(req: Request) {
         await logSecurityEvent(req, {
           action: "auth_login_unverified",
           status: "warning",
-          details: { email },
+          details: { email: loginEmail },
         });
         return NextResponse.json({
           message: "Your email address is not verified. Please check your inbox for the verification link.",
           isUnverified: true,
-          email: email
+          email: loginEmail
         }, { status: 403 });
       }
       await logSecurityEvent(req, {
         action: "auth_login_failed",
         status: "failure",
-        details: { email, reason: msg },
+        details: { email: loginEmail, reason: msg },
       });
       return NextResponse.json({ message: msg }, { status: 401 });
     }
@@ -58,19 +93,17 @@ export async function POST(req: Request) {
       await logSecurityEvent(req, {
         action: "auth_login_unverified",
         status: "warning",
-        details: { email, userId: data.user.id },
+        details: { email: loginEmail, userId: data.user.id },
       });
       return NextResponse.json({
         message: "Your email address is not verified. Please check your inbox for the verification link.",
         isUnverified: true,
-        email: email
+        email: loginEmail
       }, { status: 403 });
     }
 
     // Fetch user's active tenant membership
-    const serviceClient = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey, {
-      auth: { persistSession: false },
-    });
+    const serviceClient = createServiceRoleClient();
 
     // Auto-associate user with tenant if not already a member
     if (tenantId) {
@@ -87,7 +120,7 @@ export async function POST(req: Request) {
           user_id: data.user.id,
           role: "member",
           status: "active",
-          full_name: data.user.user_metadata?.full_name || email.split("@")[0],
+          full_name: data.user.user_metadata?.full_name || loginEmail.split("@")[0],
           phone: data.user.user_metadata?.phone || null,
         });
         if (linkError) {
@@ -132,7 +165,7 @@ export async function POST(req: Request) {
       userId: data.user.id,
       tenantId: tenant?.id || null,
       status: "success",
-      details: { email },
+      details: { email: loginEmail },
     });
 
     return NextResponse.json({

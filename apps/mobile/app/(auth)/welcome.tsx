@@ -5,9 +5,17 @@ import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTranslation } from "../lib/i18n";
 
 export default function WelcomeScreen() {
-  const [activeLang, setActiveLang] = React.useState("EN");
+  const { t, language, setLanguage } = useTranslation();
+  
+  const activeLang = language === "en" ? "EN" : language === "hi" ? "हि" : "ગુ";
+  
+  const handleLangSelect = (langLabel: string) => {
+    const langCode = langLabel === "EN" ? "en" : langLabel === "हि" ? "hi" : "gu";
+    setLanguage(langCode);
+  };
 
   return (
     <LinearGradient
@@ -34,7 +42,7 @@ export default function WelcomeScreen() {
                 <Text style={styles.hindiTitle}>उत्सव</Text>
               </View>
               <Text style={styles.tagline}>
-                Celebrate Together. Manage Everything.
+                {t("tagline")}
               </Text>
             </View>
           </View>
@@ -49,7 +57,7 @@ export default function WelcomeScreen() {
                 activeOpacity={0.8}
                 onPress={() => router.push("/(auth)/signup")}
               >
-                <Text style={styles.primaryButtonText}>Start Your Festival</Text>
+                <Text style={styles.primaryButtonText}>{t("startFestival")}</Text>
                 <MaterialCommunityIcons
                   name="arrow-right"
                   size={20}
@@ -65,8 +73,8 @@ export default function WelcomeScreen() {
                 onPress={() => router.push("/(auth)/login")}
               >
                 <Text style={styles.secondaryLinkText}>
-                  Already have an account?{" "}
-                  <Text style={styles.signInText}>Sign In</Text>
+                  {t("alreadyHaveAccount")}{" "}
+                  <Text style={styles.signInText}>{t("signInText")}</Text>
                 </Text>
               </TouchableOpacity>
             </View>
@@ -78,7 +86,7 @@ export default function WelcomeScreen() {
                   {idx > 0 && <View style={styles.langDivider} />}
                   <TouchableOpacity
                     style={styles.langButton}
-                    onPress={() => setActiveLang(lang)}
+                    onPress={() => handleLangSelect(lang)}
                     activeOpacity={0.7}
                   >
                     <Text

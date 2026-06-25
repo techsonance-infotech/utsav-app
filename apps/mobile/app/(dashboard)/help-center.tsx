@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, LayoutAnimation, Platform, UIManager, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -124,13 +124,25 @@ export default function HelpCenterScreen() {
       .filter((cat) => cat.faqs.length > 0);
   };
 
+  const { from } = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = () => {
+    if (from === "signup") {
+      router.replace("/(auth)/signup");
+    } else if (from === "login") {
+      router.replace("/(auth)/login");
+    } else {
+      router.back();
+    }
+  };
+
   const filteredCategories = getFilteredCategories();
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
           <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Help Center</Text>

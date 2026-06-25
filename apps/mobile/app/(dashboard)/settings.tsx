@@ -1,25 +1,66 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, ScrollView, ActivityIndicator, Image, TouchableOpacity, Modal, TextInput, Alert } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  ActivityIndicator,
+  Image,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  Alert,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFetchTenant, useLogout } from "@utsav/api-client";
+import {
+  useFetchTenant,
+  useLogout,
+  useFetchMyProfile,
+  useUpdateMyProfile,
+  useChangePassword,
+} from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTranslation } from "../lib/i18n";
+import LoaderOverlay from "../components/LoaderOverlay";
+import * as ImagePicker from "expo-image-picker";
 
 export default function MobileSettingsScreen() {
-  const { tenantId, role, tenantName } = useAuthStore();
-  const { data: tenant, isLoading } = useFetchTenant(tenantId);
+  const { t, language, setLanguage } = useTranslation();
+  const { tenantId, role, userEmail, userFullName } = useAuthStore();
+
+  // Queries & Mutations
+  const { data: tenant, isLoading: isTenantLoading } = useFetchTenant(tenantId);
+  const { data: myProfile, isLoading: isProfileLoading } = useFetchMyProfile();
   const logoutMutation = useLogout();
+  const updateProfileMutation = useUpdateMyProfile();
+  const changePasswordMutation = useChangePassword();
 
-  // Modal states for simulated drawers
-  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  // Modal states
   const [securityModalVisible, setSecurityModalVisible] = useState(false);
+  const [langModalVisible, setLangModalVisible] = useState(false);
 
-  // Edit profile form states
-  const [nameInput, setNameInput] = useState("Rajesh Varma");
-  const [emailInput, setEmailInput] = useState("rajesh@utsav.app");
-  const [phoneInput, setPhoneInput] = useState("+91 98765 43210");
+  // Change password states
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+
+
+
+  // Password rules validation
+  const rules = {
+    length: newPassword.length >= 8,
+    upper: /[A-Z]/.test(newPassword),
+    lower: /[a-z]/.test(newPassword),
+    number: /[0-9]/.test(newPassword),
+    symbol: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword),
+  };
+  const isPasswordValid = Object.values(rules).every(Boolean);
 
   const handleLogout = async () => {
     Alert.alert("Sign Out", "Are you sure you want to log out from Utsav?", [
@@ -39,7 +80,108 @@ export default function MobileSettingsScreen() {
     ]);
   };
 
-  if (isLoading) {
+  const openEditProfile = () => {
+    router.push("/(dashboard)/edit-profile");
+  };
+
+
+
+  const handleEditAvatar = () => {
+    Alert.alert(
+      "Profile Photo",
+      "Choose an option to update your profile photo:",
+      [
+        {
+          text: "Take Photo",
+          onPress: () => pickImage(true),
+        },
+        {
+          text: "Choose from Gallery",
+          onPress: () => pickImage(false),
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ]
+    );
+  };
+
+  const pickImage = async (useCamera: boolean) => {
+    try {
+      let result;
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "We need camera permission to take a picture.");
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.3,
+          base64: true,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "We need gallery permissions to select a photo.");
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.3,
+          base64: true,
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets[0].base64) {
+        const base64Uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        await updateProfileMutation.mutateAsync({ avatarUrl: base64Uri });
+        Alert.alert("Success", "Profile photo updated successfully!");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to pick/upload image.");
+    }
+  };
+
+  const handleSavePassword = async () => {
+    if (!oldPassword || !newPassword) {
+      Alert.alert("Validation Error", "Current password and new password are required.");
+      return;
+    }
+    if (!isPasswordValid) {
+      Alert.alert("Validation Error", "New password does not meet complexity rules.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      Alert.alert("Validation Error", "Passwords do not match.");
+      return;
+    }
+    try {
+      await changePasswordMutation.mutateAsync({
+        oldPassword,
+        newPassword,
+      });
+      setSecurityModalVisible(false);
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      Alert.alert("Success", "Password updated successfully!");
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to change password. Make sure current password is correct.");
+    }
+  };
+
+
+  const handleSelectLanguage = (lang: "en" | "hi" | "gu") => {
+    setLanguage(lang);
+    setLangModalVisible(false);
+  };
+
+  if (isTenantLoading || isProfileLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primaryContainer} />
@@ -47,17 +189,29 @@ export default function MobileSettingsScreen() {
     );
   }
 
+  const profileName = myProfile?.full_name || userFullName || "Utsav User";
+  const avatarUrl = myProfile?.avatar_url || "";
+  const profileEmail = myProfile?.email || userEmail || "";
+  const profilePhone = myProfile?.phone || "";
+
+  const isPending =
+    logoutMutation.isPending ||
+    updateProfileMutation.isPending ||
+    changePasswordMutation.isPending;
+
   return (
     <SafeAreaView style={styles.container}>
+      <LoaderOverlay visible={isPending} message="Please wait..." />
+
       {/* Top App Bar */}
       <View style={styles.topHeader}>
         <View style={styles.logoGroup}>
-          <Image
-            style={styles.logoAvatar}
-            source={{
-              uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuAirm3wYwR2haolgiXhjaLZgwSGYHF_FTD9RKQofQm9GFmwKa4rWXwddtyOpTB7W3NRbnOJzRxAd1a_IJqrnRzWXX6G5BZ0KZ41Xe7B6Ys6KutHCfY59-rdqa0-waHl_H6yWr_rbnsRgakc12aQYw-yApo-VtWljq_COjAjJjjnO86jPd3mAO9bG4KE106lTn_9ikcnA9wEzRpHWrCHXCxvSClONeeGEIo0en5YyJcqCkPa5bzTR39l",
-            }}
-          />
+          <View style={styles.logoAvatarWrapper}>
+            <Image
+              style={styles.logoAvatar}
+              source={require("../../assets/image-only.png")}
+            />
+          </View>
           <Text style={styles.logoText}>UTSAV</Text>
         </View>
         <TouchableOpacity
@@ -74,22 +228,33 @@ export default function MobileSettingsScreen() {
         <View style={styles.profileHeader}>
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarBorder}>
-              <Image
-                style={styles.avatarImage}
-                source={{
-                  uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuCVwDCt1yy22Wc84oZNEU1_vqmpWO3s9-1h55IqexzFaHlUeQppZUMoxCnwkDYEngaLHMAfHUgdcoOWQ2l6iK6naKYk17lE00JkxhA-9vq2RVy3tMVG3PrqduyGdyDETD2cjkQgbtICtTYhxucW6ESTtnaMOHtSayWklmIyMmhQVhlLuskMckn1REG2g1LDlN_h1iiR5JJBji8ylSgq83nVPB1HAh8YTCwiLldXtIe503SLkkBAP9ZU",
-                }}
-              />
+              {avatarUrl ? (
+                <Image style={styles.avatarImage} source={{ uri: avatarUrl }} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarInitials}>
+                    {profileName
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2)}
+                  </Text>
+                </View>
+              )}
             </View>
             <TouchableOpacity
               style={styles.avatarEditButton}
-              onPress={() => setProfileModalVisible(true)}
+              onPress={handleEditAvatar}
               activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="pencil" size={16} color="#FFFFFF" />
+              <MaterialCommunityIcons name="camera" size={16} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.profileName}>{nameInput}</Text>
+          <Text style={styles.profileName}>{profileName}</Text>
+          <Text style={styles.profileEmailText}>{profileEmail}</Text>
+          {profilePhone ? <Text style={styles.profilePhoneText}>{profilePhone}</Text> : null}
+
           <View style={styles.profileBadgeRow}>
             <View style={styles.roleBadge}>
               <Text style={styles.roleText}>{role || "Owner"}</Text>
@@ -103,18 +268,18 @@ export default function MobileSettingsScreen() {
         <View style={styles.groupsContainer}>
           {/* Account Section */}
           <View style={styles.group}>
-            <Text style={styles.groupLabel}>Account</Text>
+            <Text style={styles.groupLabel}>{t("accountLabel")}</Text>
             <View style={styles.groupCard}>
               <TouchableOpacity
                 style={styles.groupItem}
-                onPress={() => setProfileModalVisible(true)}
+                onPress={openEditProfile}
                 activeOpacity={0.7}
               >
                 <View style={styles.groupItemLeft}>
                   <View style={[styles.iconContainer, { backgroundColor: "rgba(140, 80, 0, 0.08)" }]}>
                     <MaterialCommunityIcons name="account-outline" size={20} color={colors.primaryBrand} />
                   </View>
-                  <Text style={styles.groupItemText}>Edit Profile</Text>
+                  <Text style={styles.groupItemText}>{t("editProfile")}</Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
@@ -130,7 +295,7 @@ export default function MobileSettingsScreen() {
                   <View style={[styles.iconContainer, { backgroundColor: "rgba(140, 80, 0, 0.08)" }]}>
                     <MaterialCommunityIcons name="shield-check-outline" size={20} color={colors.primaryBrand} />
                   </View>
-                  <Text style={styles.groupItemText}>Security Settings</Text>
+                  <Text style={styles.groupItemText}>{t("securitySettings")}</Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
@@ -139,16 +304,16 @@ export default function MobileSettingsScreen() {
 
           {/* Mandal Details */}
           <View style={styles.group}>
-            <Text style={styles.groupLabel}>Mandal</Text>
+            <Text style={styles.groupLabel}>{t("mandalLabel")}</Text>
             <View style={styles.groupCard}>
               <View style={styles.groupItemStatic}>
                 <View style={styles.groupItemLeft}>
                   <View style={[styles.iconContainer, { backgroundColor: "rgba(125, 88, 0, 0.08)" }]}>
                     <MaterialCommunityIcons name="home-city-outline" size={20} color={colors.tertiary} />
                   </View>
-                  <View>
-                    <Text style={styles.staticLabel}>Mandal Name</Text>
-                    <Text style={styles.staticValue}>{tenant?.name || "Utsav Mandal"}</Text>
+                  <View style={{ flexShrink: 1 }}>
+                    <Text style={styles.staticLabel}>{t("mandalName")}</Text>
+                    <Text style={styles.staticValue}>{tenant?.name || "Shree Siddhivinayak Mandal"}</Text>
                   </View>
                 </View>
               </View>
@@ -160,9 +325,11 @@ export default function MobileSettingsScreen() {
                   <View style={[styles.iconContainer, { backgroundColor: "rgba(125, 88, 0, 0.08)" }]}>
                     <MaterialCommunityIcons name="domain" size={20} color={colors.tertiary} />
                   </View>
-                  <View>
-                    <Text style={styles.staticLabel}>Subdomain</Text>
-                    <Text style={styles.staticValue}>{tenant?.slug || "sai"}.techsonance.co.in</Text>
+                  <View style={{ flex: 1, flexWrap: "wrap", flexDirection: "column" }}>
+                    <Text style={styles.staticLabel}>{t("subdomain")}</Text>
+                    <Text style={[styles.staticValue, { flexWrap: "wrap" }]} numberOfLines={2}>
+                      {tenant?.slug || "sai"}.techsonance.co.in
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -175,13 +342,31 @@ export default function MobileSettingsScreen() {
                     <MaterialCommunityIcons name="tag-outline" size={20} color={colors.tertiary} />
                   </View>
                   <View>
-                    <Text style={styles.staticLabel}>Category</Text>
+                    <Text style={styles.staticLabel}>{t("category")}</Text>
                     <Text style={styles.staticValue}>{tenant?.vertical?.toUpperCase() || "GANPATI"}</Text>
                   </View>
                 </View>
               </View>
+
+              <View style={styles.itemSeparator} />
+
+              {/* Edit Detailed Onboarding Info Row */}
+              <TouchableOpacity
+                style={styles.groupItem}
+                onPress={() => router.push("/(dashboard)/edit-mandal" as any)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.groupItemLeft}>
+                  <View style={[styles.iconContainer, { backgroundColor: "rgba(125, 88, 0, 0.08)" }]}>
+                    <MaterialCommunityIcons name="home-edit-outline" size={20} color={colors.tertiary} />
+                  </View>
+                  <Text style={styles.groupItemText}>Edit Mandal Details</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
             </View>
           </View>
+
           {/* Subscription Section */}
           <View style={styles.group}>
             <Text style={styles.groupLabel}>Subscription</Text>
@@ -198,7 +383,9 @@ export default function MobileSettingsScreen() {
                   <View>
                     <Text style={styles.groupItemText}>Billing & Subscription</Text>
                     <View style={styles.shimmerBadge}>
-                      <Text style={styles.shimmerBadgeText}>GOLD PLAN • ACTIVE</Text>
+                      <Text style={styles.shimmerBadgeText}>
+                        {`${(tenant?.plan || "TRIAL").toUpperCase()} PLAN • ACTIVE`}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -207,7 +394,7 @@ export default function MobileSettingsScreen() {
             </View>
           </View>
 
-          {/* Mandal Administration (Visible to Admins / Committee members / Super Admin for testing) */}
+          {/* Mandal Administration */}
           {["owner", "admin", "treasurer", "committee_member", "super_admin"].includes(role || "") && (
             <View style={styles.group}>
               <Text style={styles.groupLabel}>Mandal Administration</Text>
@@ -443,7 +630,6 @@ export default function MobileSettingsScreen() {
             </View>
           )}
 
-
           {/* System Section */}
           <View style={styles.group}>
             <Text style={styles.groupLabel}>System</Text>
@@ -465,7 +651,11 @@ export default function MobileSettingsScreen() {
 
               <View style={styles.itemSeparator} />
 
-              <TouchableOpacity style={styles.groupItem} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.groupItem}
+                onPress={() => setLangModalVisible(true)}
+                activeOpacity={0.7}
+              >
                 <View style={styles.groupItemLeft}>
                   <View style={[styles.iconContainer, { backgroundColor: colors.surfaceContainer }]}>
                     <MaterialCommunityIcons name="translate" size={20} color={colors.onSurfaceVariant} />
@@ -489,66 +679,6 @@ export default function MobileSettingsScreen() {
         </View>
       </ScrollView>
 
-      {/* Edit Profile Modal / Bottom Sheet */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={profileModalVisible}
-        onRequestClose={() => setProfileModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-              <TouchableOpacity onPress={() => setProfileModalVisible(false)}>
-                <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalForm}>
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Full Name</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={nameInput}
-                  onChangeText={setNameInput}
-                  placeholder="e.g. Rajesh Kumar"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Email Address</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={emailInput}
-                  onChangeText={setEmailInput}
-                  keyboardType="email-address"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Phone Number</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={phoneInput}
-                  onChangeText={setPhoneInput}
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.modalSaveButton}
-                onPress={() => {
-                  setProfileModalVisible(false);
-                  Alert.alert("Success", "Profile updated successfully!");
-                }}
-              >
-                <Text style={styles.modalSaveButtonText}>Save Changes</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* Security Modal / Bottom Sheet */}
       <Modal
@@ -566,44 +696,177 @@ export default function MobileSettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalForm}>
+            <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Current Password</Text>
-                <TextInput
-                  style={styles.formInput}
-                  secureTextEntry
-                  placeholder="••••••••"
-                />
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.passwordTextInput}
+                    secureTextEntry={!showOldPassword}
+                    value={oldPassword}
+                    onChangeText={setOldPassword}
+                    placeholder="••••••••"
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity onPress={() => setShowOldPassword(!showOldPassword)}>
+                    <MaterialCommunityIcons
+                      name={showOldPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color={colors.onSurfaceVariant}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>New Password</Text>
-                <TextInput
-                  style={styles.formInput}
-                  secureTextEntry
-                  placeholder="••••••••"
-                />
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.passwordTextInput}
+                    secureTextEntry={!showNewPassword}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="••••••••"
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
+                    <MaterialCommunityIcons
+                      name={showNewPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color={colors.onSurfaceVariant}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Confirm New Password</Text>
-                <TextInput
-                  style={styles.formInput}
-                  secureTextEntry
-                  placeholder="••••••••"
-                />
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.passwordTextInput}
+                    secureTextEntry={!showConfirmNewPassword}
+                    value={confirmNewPassword}
+                    onChangeText={setConfirmNewPassword}
+                    placeholder="••••••••"
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity onPress={() => setShowConfirmNewPassword(!showConfirmNewPassword)}>
+                    <MaterialCommunityIcons
+                      name={showConfirmNewPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color={colors.onSurfaceVariant}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Password complexity checklist */}
+              <View style={styles.checklist}>
+                <View style={styles.checkRow}>
+                  <MaterialCommunityIcons
+                    name={rules.length ? "check-circle" : "circle-outline"}
+                    size={16}
+                    color={rules.length ? colors.tulsiGreen : colors.onSurfaceVariant}
+                  />
+                  <Text style={[styles.checkText, rules.length && styles.checkTextActive]}>
+                    At least 8 characters
+                  </Text>
+                </View>
+                <View style={styles.checkRow}>
+                  <MaterialCommunityIcons
+                    name={rules.upper && rules.lower ? "check-circle" : "circle-outline"}
+                    size={16}
+                    color={rules.upper && rules.lower ? colors.tulsiGreen : colors.onSurfaceVariant}
+                  />
+                  <Text style={[styles.checkText, rules.upper && rules.lower && styles.checkTextActive]}>
+                    Uppercase & lowercase letters
+                  </Text>
+                </View>
+                <View style={styles.checkRow}>
+                  <MaterialCommunityIcons
+                    name={rules.number ? "check-circle" : "circle-outline"}
+                    size={16}
+                    color={rules.number ? colors.tulsiGreen : colors.onSurfaceVariant}
+                  />
+                  <Text style={[styles.checkText, rules.number && styles.checkTextActive]}>
+                    At least one number
+                  </Text>
+                </View>
+                <View style={styles.checkRow}>
+                  <MaterialCommunityIcons
+                    name={rules.symbol ? "check-circle" : "circle-outline"}
+                    size={16}
+                    color={rules.symbol ? colors.tulsiGreen : colors.onSurfaceVariant}
+                  />
+                  <Text style={[styles.checkText, rules.symbol && styles.checkTextActive]}>
+                    At least one special character
+                  </Text>
+                </View>
               </View>
 
               <TouchableOpacity
-                style={styles.modalSaveButton}
-                onPress={() => {
-                  setSecurityModalVisible(false);
-                  Alert.alert("Success", "Password updated successfully!");
-                }}
+                style={[
+                  styles.modalSaveButton,
+                  (!isPasswordValid || newPassword !== confirmNewPassword) && styles.btnDisabled,
+                ]}
+                onPress={handleSavePassword}
+                disabled={!isPasswordValid || newPassword !== confirmNewPassword}
               >
                 <Text style={styles.modalSaveButtonText}>Update Password</Text>
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+
+      {/* Language Switcher Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={langModalVisible}
+        onRequestClose={() => setLangModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t("selectLanguageTitle")}</Text>
+              <TouchableOpacity onPress={() => setLangModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: spacing.md, paddingVertical: spacing.md }}>
+              <TouchableOpacity
+                style={[styles.langOption, language === "en" && styles.langOptionActive]}
+                onPress={() => handleSelectLanguage("en")}
+              >
+                <Text style={[styles.langOptionText, language === "en" && styles.langOptionTextActive]}>
+                  English
+                </Text>
+                {language === "en" && <MaterialCommunityIcons name="check" size={20} color={colors.primaryBrand} />}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.langOption, language === "hi" && styles.langOptionActive]}
+                onPress={() => handleSelectLanguage("hi")}
+              >
+                <Text style={[styles.langOptionText, language === "hi" && styles.langOptionTextActive]}>
+                  Hindi / हिंदी
+                </Text>
+                {language === "hi" && <MaterialCommunityIcons name="check" size={20} color={colors.primaryBrand} />}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.langOption, language === "gu" && styles.langOptionActive]}
+                onPress={() => handleSelectLanguage("gu")}
+              >
+                <Text style={[styles.langOptionText, language === "gu" && styles.langOptionTextActive]}>
+                  Gujarati / ગુજરાતી
+                </Text>
+                {language === "gu" && <MaterialCommunityIcons name="check" size={20} color={colors.primaryBrand} />}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -631,12 +894,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  logoAvatar: {
+  logoAvatarWrapper: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: colors.primaryContainer,
+    borderColor: "rgba(255, 149, 0, 0.2)",
+    overflow: "hidden",
+  },
+  logoAvatar: {
+    width: 22,
+    height: 22,
+    resizeMode: "contain",
   },
   logoText: {
     fontSize: 16,
@@ -673,6 +945,19 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     backgroundColor: colors.cream,
   },
+  avatarPlaceholder: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 50,
+    backgroundColor: colors.cream,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    fontSize: 36,
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
+  },
   avatarEditButton: {
     position: "absolute",
     bottom: 2,
@@ -685,54 +970,64 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 2,
     borderColor: "#FFFFFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
   },
   profileName: {
-    fontSize: 22,
-    color: colors.onSurface,
+    fontSize: 20,
     fontFamily: fonts.poppins.semibold,
+    color: colors.onSurface,
+  },
+  profileEmailText: {
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.medium,
+    marginTop: 2,
+    opacity: 0.8,
+  },
+  profilePhoneText: {
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.medium,
+    marginTop: 1,
+    opacity: 0.8,
   },
   profileBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     gap: spacing.xs,
-    marginTop: 4,
+    marginTop: 6,
   },
   roleBadge: {
-    backgroundColor: "rgba(255, 149, 0, 0.15)",
-    paddingHorizontal: 10,
+    backgroundColor: "rgba(255, 149, 0, 0.08)",
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: borderRadius.full,
+    borderRadius: 4,
   },
   roleText: {
-    color: colors.primaryBrand,
     fontSize: 11,
+    color: colors.primaryBrand,
     fontFamily: fonts.inter.bold,
-    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   bulletSeparator: {
     color: colors.onSurfaceVariant,
-    fontSize: 12,
+    opacity: 0.5,
   },
   mandalName: {
-    color: colors.onSurfaceVariant,
     fontSize: 13,
+    color: colors.onSurfaceVariant,
     fontFamily: fonts.inter.semibold,
   },
   groupsContainer: {
     paddingHorizontal: spacing.lg,
     gap: spacing.lg,
+    marginTop: spacing.md,
   },
   group: {
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   groupLabel: {
-    fontSize: 11,
+    fontSize: 12,
+    fontFamily: fonts.inter.bold,
     color: colors.onSurfaceVariant,
     opacity: 0.7,
     textTransform: "uppercase",
@@ -923,5 +1218,68 @@ const styles = StyleSheet.create({
     color: colors.onPrimaryContainer,
     fontSize: 15,
     fontFamily: fonts.poppins.bold,
+  },
+  passwordInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.pujaWhite,
+    paddingHorizontal: spacing.md,
+    height: 50,
+  },
+  passwordTextInput: {
+    flex: 1,
+    height: "100%",
+    fontSize: 14,
+    color: colors.onSurface,
+    fontFamily: fonts.inter.medium,
+  },
+  checklist: {
+    gap: 4,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  checkText: {
+    fontSize: 11,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.regular,
+  },
+  checkTextActive: {
+    color: colors.onSurface,
+    fontFamily: fonts.inter.medium,
+  },
+  btnDisabled: {
+    backgroundColor: colors.sandstone,
+  },
+  langOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    backgroundColor: colors.pujaWhite,
+  },
+  langOptionActive: {
+    borderColor: colors.primaryBrand,
+    backgroundColor: "rgba(255, 149, 0, 0.05)",
+  },
+  langOptionText: {
+    fontSize: 15,
+    color: colors.onSurface,
+    fontFamily: fonts.inter.medium,
+  },
+  langOptionTextActive: {
+    color: colors.primaryBrand,
+    fontFamily: fonts.inter.bold,
   },
 });

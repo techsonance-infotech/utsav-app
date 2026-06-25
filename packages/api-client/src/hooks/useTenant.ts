@@ -8,6 +8,7 @@ export interface TenantDetails {
   slug: string;
   vertical: string;
   plan: string;
+  plan_expires_at?: string | null;
   logo_url?: string | null;
   banner_url?: string | null;
   primary_color: string;
@@ -23,6 +24,8 @@ export interface TenantDetails {
   address?: string | null;
   website_url?: string | null;
   whatsapp_group_url?: string | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
   razorpay_key_id?: string | null;
 }
 
