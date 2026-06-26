@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Image, Dimensions, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "@utsav/stores";
@@ -22,6 +22,24 @@ export default function MobileHomeScreen() {
   const { data: events, isLoading: isEventsLoading } = useEvents();
   const { data: donations } = useFetchDonations();
   const { data: expenses } = useExpenses();
+
+  const pendingExpensesAmount = (expenses || []).reduce((sum: number, exp: any) => {
+    if (exp.status === "pending_approval" || exp.status === "submitted" || exp.status === "pending") {
+      return sum + Number(exp.amount || 0);
+    }
+    return sum;
+  }, 0);
+
+  const pendingExpensesCount = (expenses || []).filter(
+    (exp: any) => exp.status === "pending_approval" || exp.status === "submitted" || exp.status === "pending"
+  ).length;
+
+  const totalExpensesAmount = (expenses || []).reduce((sum: number, exp: any) => {
+    if (exp.status === "approved" || exp.status === "paid") {
+      return sum + Number(exp.amount || 0);
+    }
+    return sum;
+  }, 0);
 
   // State for FAB expansion
   const [fabOpen, setFabOpen] = useState(false);
@@ -68,24 +86,83 @@ export default function MobileHomeScreen() {
     }).format(value);
   };
 
-  // Derive countdown from the nearest upcoming event
-  const upcomingEvent = events?.find((e: any) => new Date(e.start_at) > new Date());
-  let daysRemaining: number | null = null;
-  let countdownText = "12 Days to Ganesh Chaturthi";
-  let countdownSubtitle = "The preparations are in full swing. Keep it up!";
+  // Filter events to find all upcoming/ongoing events, or fallback to all events if empty
+  const upcomingEvents = useMemo(() => {
+    if (!events) return [];
+    const now = new Date();
+    // Sort events by start_at ascending
+    const sorted = [...events].sort((a: any, b: any) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+    const upcoming = sorted.filter((e: any) => new Date(e.start_at) >= now || (e.end_at && new Date(e.end_at) >= now));
+    return upcoming.length > 0 ? upcoming : sorted;
+  }, [events]);
+
+  const fallbackEventImages = [
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuDkaGZlWcWVao1wOw9nnmiyw1Sjc4dUKoqHFv4USXLKIzzs56UTJxFYKLSudOs1UCUTkODyZUtvnrdNkFvgOfYiZ4dGJZ9_tyo14Bm641x49TqKJKWHCPAmnPDUgDy7sSwByNnv_jNVG6fOM7oYRiK5ru9goAgM9y_OfFAWYypAEderPMlvdbQm0uW1H_2_mVW3NWLlzkixffoMHhCu6_CrUP4G9_ZRNGQVh4Zt53xrPzSZ6Ot6pC5u",
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuBkA6EgiZ3X3xQP-c3TZEhiPM34Yin0b-I-PgNzhYBew44TCm4vKuXGCS-Qspzm_10Wa_wJ9kaTx6PziDypmRvy0uLSnqpxqU8k653pQXoYqn_VJcLpaSwMkdF1DDGiQIDlcCtuEA5-Pwl51BTmfRk8sXJiLixTHNpLPblGc9FoRjOG_W7WEMygHnUjFvJfogRdr1gC6Sft5X18UyykEMcoUu2UOlNWF8ur6iA7NgQ78XKtsyhnZQf5",
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuA4GiiqBDc0H0NFYbxy_Qcom3kL91fTvxrR34B78NLR9HV5841DKM54iSf1YtYu7wnhCPpaMkrrJUF5GuzwqcU1vHwFFb8ZMZwonUxRT7nxMMg1D7zvcD66-Jv6whsFsFFnJbYmXaPXPG8JiIb9iJPJfDaOSKd5UE0C1jCqENIyuRBiRDemCdLVs-sTYGaLNTuYM7ZpAPMmbbIV4tNEgTgt3eF8-Rim-v2cIns_5xPM0OnnXiqFZRpI"
+  ];
+
+  // Find the nearest upcoming puja or festival event, or fall back to any upcoming event
+  const upcomingEvent = events?.find((e: any) => e.category === "puja" && new Date(e.start_at) > new Date()) ||
+                        events?.find((e: any) => new Date(e.start_at) > new Date()) ||
+                        (events && events.length > 0 ? events[0] : null);
+
+  let countdownText = "No Upcoming Festivals";
+  let countdownSubtitle = "Add your mandal's first celebration event to get started.";
 
   if (upcomingEvent) {
-    const diffTime = new Date(upcomingEvent.start_at).getTime() - new Date().getTime();
-    daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-    countdownText = `${daysRemaining} Days to ${upcomingEvent.title}`;
-    countdownSubtitle = upcomingEvent.description || "Festival preparations are underway. Tap to check details.";
+    const eventStartDate = new Date(upcomingEvent.start_at);
+    const diffTime = eventStartDate.getTime() - new Date().getTime();
+    const daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+    if (diffTime > 0) {
+      countdownText = `${daysRemaining} Days to ${upcomingEvent.title}`;
+      countdownSubtitle = upcomingEvent.description || "Festival preparations are underway. Tap to check details.";
+    } else {
+      countdownText = `${upcomingEvent.title} is Ongoing!`;
+      countdownSubtitle = upcomingEvent.description || "Celebrate and record activities on the go.";
+    }
+  }
+
+  // Helper date formatter for upcoming festival range
+  const formatEventDateRange = (startStr: string, endStr?: string | null) => {
+    if (!startStr) return "";
+    const startDate = new Date(startStr);
+    const startFormatted = startDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    if (!endStr) return startFormatted;
+    const endDate = new Date(endStr);
+    const endFormatted = endDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    return `${startFormatted} - ${endFormatted}`;
+  };
+
+  function formatTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return "Just now";
+
+    const diffSecs = Math.floor(diffMs / 1000);
+    if (diffSecs < 60) return "Just now";
+
+    const diffMins = Math.floor(diffSecs / 60);
+    if (diffMins < 60) return `${diffMins}m ago`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+
+    return date.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+    });
   }
 
   // Combine real donations and expenses to show under Recent Activities
   const recentActivities: any[] = [];
   
   if (donations && donations.length > 0) {
-    donations.slice(0, 2).forEach((don: any) => {
+    donations.forEach((don: any) => {
       recentActivities.push({
         id: `don-${don.id}`,
         type: "donation",
@@ -95,13 +172,14 @@ export default function MobileHomeScreen() {
         icon: "plus-circle",
         iconColor: colors.tulsiGreen,
         iconBg: "rgba(34, 197, 94, 0.1)",
-        time: "Just now",
+        time: formatTimeAgo(new Date(don.created_at)),
+        rawDate: new Date(don.created_at),
       });
     });
   }
 
   if (expenses && expenses.length > 0) {
-    expenses.slice(0, 2).forEach((exp: any) => {
+    expenses.forEach((exp: any) => {
       recentActivities.push({
         id: `exp-${exp.id}`,
         type: "expense",
@@ -111,49 +189,17 @@ export default function MobileHomeScreen() {
         icon: "receipt",
         iconColor: colors.kumkumRed,
         iconBg: "rgba(217, 43, 43, 0.1)",
-        time: "Today",
+        time: formatTimeAgo(new Date(exp.expense_date || exp.created_at)),
+        rawDate: new Date(exp.expense_date || exp.created_at),
       });
     });
   }
 
-  // Add default placeholders if empty
-  if (recentActivities.length === 0) {
-    recentActivities.push(
-      {
-        id: "act-1",
-        type: "donation",
-        title: "Donation from Rajesh Mehta",
-        subtitle: "Aarti Sponsorship",
-        value: "₹5,001",
-        icon: "plus-circle",
-        iconColor: colors.tulsiGreen,
-        iconBg: "rgba(34, 197, 94, 0.1)",
-        time: "2 hours ago",
-      },
-      {
-        id: "act-2",
-        type: "expense",
-        title: "Expense: Mandap Flowers",
-        subtitle: "Paid to floral decorator",
-        value: "₹12,400",
-        icon: "receipt",
-        iconColor: colors.kumkumRed,
-        iconBg: "rgba(217, 43, 43, 0.1)",
-        time: "5 hours ago",
-      },
-      {
-        id: "act-3",
-        type: "update",
-        title: "Volunteer Meeting Updated",
-        subtitle: "Schedule changed by Admin",
-        value: "",
-        icon: "account-group",
-        iconColor: colors.primaryContainer,
-        iconBg: "rgba(255, 149, 0, 0.1)",
-        time: "Yesterday • 6:30 PM",
-      }
-    );
-  }
+  // Sort by date desc
+  recentActivities.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+
+  // Show only 3 latest activities
+  const displayedActivities = recentActivities.slice(0, 3);
 
   // Quick Action Menu Animation Translations
   const fabRotation = fabAnim.interpolate({
@@ -220,6 +266,24 @@ export default function MobileHomeScreen() {
               <Text style={styles.countdownSub}>
                 {countdownSubtitle}
               </Text>
+              {upcomingEvent && (
+                <View style={styles.countdownMetaContainer}>
+                  <View style={styles.countdownMetaItem}>
+                    <MaterialCommunityIcons name="calendar-range" size={14} color="#FFFFFF" />
+                    <Text style={styles.countdownMetaText}>
+                      {formatEventDateRange(upcomingEvent.start_at, upcomingEvent.end_at)}
+                    </Text>
+                  </View>
+                  {upcomingEvent.location_name && (
+                    <View style={styles.countdownMetaItem}>
+                      <MaterialCommunityIcons name="map-marker" size={14} color="#FFFFFF" />
+                      <Text style={styles.countdownMetaText} numberOfLines={1}>
+                        {upcomingEvent.location_name}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
             <View style={styles.countdownRight}>
               <Animated.View style={{ transform: [{ scale: diyaPulse }] }}>
@@ -253,11 +317,11 @@ export default function MobileHomeScreen() {
                     <Text style={styles.kpiLabel}>Total Donations</Text>
                   </View>
                   <Text style={[styles.kpiValue, { color: colors.tulsiGreen }]}>
-                    {formatRupee(summary?.total_donations || 1254000)}
+                    {formatRupee(summary?.total_donations || 0)}
                   </Text>
                   <View style={styles.kpiTrendContainer}>
                     <MaterialCommunityIcons name="trending-up" size={14} color={colors.tulsiGreen} />
-                    <Text style={styles.kpiTrendText}>12% from last week</Text>
+                    <Text style={styles.kpiTrendText}>Real-time updates</Text>
                   </View>
                 </View>
 
@@ -268,9 +332,9 @@ export default function MobileHomeScreen() {
                     <Text style={styles.kpiLabel}>Pending Expenses</Text>
                   </View>
                   <Text style={[styles.kpiValue, { color: colors.haldiYellow }]}>
-                    ₹45,000
+                    {formatRupee(pendingExpensesAmount)}
                   </Text>
-                  <Text style={styles.kpiSubText}>Due within 3 days</Text>
+                  <Text style={styles.kpiSubText}>{pendingExpensesCount} requests pending review</Text>
                 </View>
 
                 {/* KPI Card 3 */}
@@ -280,9 +344,21 @@ export default function MobileHomeScreen() {
                     <Text style={styles.kpiLabel}>Net Balance</Text>
                   </View>
                   <Text style={[styles.kpiValue, { color: colors.primaryBrand }]}>
-                    {formatRupee(summary?.net_balance || 842500)}
+                    {formatRupee(summary?.net_balance || 0)}
                   </Text>
                   <Text style={styles.kpiSubText}>Current Liquidity</Text>
+                </View>
+
+                {/* KPI Card 4 */}
+                <View style={styles.kpiCard}>
+                  <View style={styles.kpiHeader}>
+                    <MaterialCommunityIcons name="receipt" size={20} color={colors.kumkumRed} />
+                    <Text style={styles.kpiLabel}>Total Expenses</Text>
+                  </View>
+                  <Text style={[styles.kpiValue, { color: colors.kumkumRed }]}>
+                    {formatRupee(summary?.total_expenses || totalExpensesAmount)}
+                  </Text>
+                  <Text style={styles.kpiSubText}>Approved payments</Text>
                 </View>
               </ScrollView>
             )}
@@ -301,25 +377,33 @@ export default function MobileHomeScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Recent Activities</Text>
             <View style={styles.activitiesCard}>
-              {recentActivities.map((act) => (
-                <TouchableOpacity key={act.id} style={styles.activityItem} activeOpacity={0.8}>
-                  <View style={[styles.activityIconBg, { backgroundColor: act.iconBg }]}>
-                    <MaterialCommunityIcons name={act.icon} size={20} color={act.iconColor} />
-                  </View>
-                  <View style={styles.activityTextContent}>
-                    <Text style={styles.activityTitle}>{act.title}</Text>
-                    <Text style={styles.activityTime}>{act.time}</Text>
-                  </View>
-                  {act.value ? (
-                    <Text style={styles.activityValue}>{act.value}</Text>
-                  ) : (
-                    <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-                  )}
-                </TouchableOpacity>
-              ))}
+              {displayedActivities.length === 0 ? (
+                <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                  <Text style={{ fontSize: 13, fontFamily: fonts.inter.regular, color: colors.onSurfaceVariant }}>
+                    No recent activities recorded.
+                  </Text>
+                </View>
+              ) : (
+                displayedActivities.map((act) => (
+                  <TouchableOpacity key={act.id} style={styles.activityItem} activeOpacity={0.8} onPress={() => router.push("/(dashboard)/recent-activity" as any)}>
+                    <View style={[styles.activityIconBg, { backgroundColor: act.iconBg }]}>
+                      <MaterialCommunityIcons name={act.icon} size={20} color={act.iconColor} />
+                    </View>
+                    <View style={styles.activityTextContent}>
+                      <Text style={styles.activityTitle} numberOfLines={1}>{act.title}</Text>
+                      <Text style={styles.activityTime}>{act.time}</Text>
+                    </View>
+                    {act.value ? (
+                      <Text style={styles.activityValue}>{act.value}</Text>
+                    ) : (
+                      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
               <TouchableOpacity
                 style={styles.viewAllActivitiesButton}
-                onPress={() => router.push("/(dashboard)/donate")}
+                onPress={() => router.push("/(dashboard)/recent-activity" as any)}
               >
                 <Text style={styles.viewAllActivitiesText}>View All Activities</Text>
               </TouchableOpacity>
@@ -337,28 +421,28 @@ export default function MobileHomeScreen() {
 
             {isEventsLoading ? (
               <ActivityIndicator size="small" color={colors.primaryContainer} />
-            ) : events && events.length > 0 ? (
-              <View style={styles.eventsGrid}>
-                {events.slice(0, 2).map((event: any, index: number) => {
+            ) : upcomingEvents && upcomingEvents.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.eventsCarousel}
+              >
+                {upcomingEvents.map((event: any, index: number) => {
                   const eventDate = new Date(event.start_at).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                   });
+                  const bannerUri = event.banner_image_url || fallbackEventImages[index % fallbackEventImages.length];
                   return (
                     <TouchableOpacity
                       key={event.id}
-                      style={styles.eventCard}
-                      onPress={() => router.push("/(dashboard)/events")}
+                      style={styles.eventCardHorizontal}
+                      onPress={() => router.push({ pathname: "/event-detail", params: { id: event.id } } as any)}
                       activeOpacity={0.9}
                     >
                       <Image
                         style={styles.eventImage}
-                        source={{
-                          uri:
-                            index === 0
-                              ? "https://lh3.googleusercontent.com/aida-public/AB6AXuBkA6EgiZ3X3xQP-c3TZEhiPM34Yin0b-I-PgNzhYBew44TCm4vKuXGCS-Qspzm_10Wa_wJ9kaTx6PziDypmRvy0uLSnqpxqU8k653pQXoYqn_VJcLpaSwMkdF1DDGiQIDlcCtuEA5-Pwl51BTmfRk8sXJiLixTHNpLPblGc9FoRjOG_W7WEMygHnUjFvJfogRdr1gC6Sft5X18UyykEMcoUu2UOlNWF8ur6iA7NgQ78XKtsyhnZQf5"
-                              : "https://lh3.googleusercontent.com/aida-public/AB6AXuA4GiiqBDc0H0NFYbxy_Qcom3kL91fTvxrR34B78NLR9HV5841DKM54iSf1YtYu7wnhCPpaMkrrJUF5GuzwqcU1vHwFFb8ZMZwonUxRT7nxMMg1D7zvcD66-Jv6whsFsFFnJbYmXaPXPG8JiIb9iJPJfDaOSKd5UE0C1jCqENIyuRBiRDemCdLVs-sTYGaLNTuYM7ZpAPMmbbIV4tNEgTgt3eF8-Rim-v2cIns_5xPM0OnnXiqFZRpI",
-                        }}
+                        source={{ uri: bannerUri }}
                       />
                       <LinearGradient
                         colors={["transparent", "rgba(58, 53, 48, 0.95)"]}
@@ -367,18 +451,18 @@ export default function MobileHomeScreen() {
                         <View style={styles.eventBadge}>
                           <Text style={styles.eventBadgeText}>{eventDate}</Text>
                         </View>
-                        <Text style={styles.eventTitle}>{event.title}</Text>
+                        <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
                         <View style={styles.eventLocationRow}>
                           <MaterialCommunityIcons name="map-marker-outline" size={14} color="#FFFFFF" />
-                          <Text style={styles.eventLocationText}>{event.location || "Community Hall"}</Text>
+                          <Text style={styles.eventLocationText} numberOfLines={1}>{event.location_name || "Community Hall"}</Text>
                         </View>
                       </LinearGradient>
                     </TouchableOpacity>
                   );
                 })}
-              </View>
+              </ScrollView>
             ) : (
-              <View style={styles.eventCard}>
+              <View style={styles.eventCardHorizontal}>
                 <Image
                   style={styles.eventImage}
                   source={{
@@ -390,12 +474,12 @@ export default function MobileHomeScreen() {
                   style={styles.eventOverlay}
                 >
                   <View style={[styles.eventBadge, { backgroundColor: colors.primaryContainer }]}>
-                    <Text style={styles.eventBadgeText}>Aug 28</Text>
+                    <Text style={styles.eventBadgeText}>No Events</Text>
                   </View>
-                  <Text style={styles.eventTitle}>Mandal decoration & Setup</Text>
+                  <Text style={styles.eventTitle}>No upcoming events</Text>
                   <View style={styles.eventLocationRow}>
                     <MaterialCommunityIcons name="map-marker-outline" size={14} color="#FFFFFF" />
-                    <Text style={styles.eventLocationText}>Main Chowk</Text>
+                    <Text style={styles.eventLocationText}>Mandal Chowk</Text>
                   </View>
                 </LinearGradient>
               </View>
@@ -440,6 +524,42 @@ export default function MobileHomeScreen() {
                 <MaterialCommunityIcons name="store-outline" size={24} color={colors.tertiary} />
               </View>
               <Text style={styles.quickLinkLabel}>Vendors</Text>
+            </TouchableOpacity>
+
+            {/* Added Missing Quick Links */}
+            <TouchableOpacity style={styles.quickLinkCard} onPress={() => router.push("/(dashboard)/donation-history")}>
+              <View style={[styles.quickLinkIconBg, { backgroundColor: "rgba(34, 197, 94, 0.08)" }]}>
+                <MaterialCommunityIcons name="history" size={24} color={colors.tulsiGreen} />
+              </View>
+              <Text style={styles.quickLinkLabel}>Donations</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickLinkCard} onPress={() => router.push("/(dashboard)/volunteer-duty-roster")}>
+              <View style={[styles.quickLinkIconBg, { backgroundColor: "rgba(14, 165, 233, 0.08)" }]}>
+                <MaterialCommunityIcons name="calendar-check" size={24} color="#0EA5E9" />
+              </View>
+              <Text style={styles.quickLinkLabel}>Duties</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickLinkCard} onPress={() => router.push("/(dashboard)/financial-reports")}>
+              <View style={[styles.quickLinkIconBg, { backgroundColor: "rgba(201, 146, 26, 0.08)" }]}>
+                <MaterialCommunityIcons name="file-chart-outline" size={24} color={colors.aartiGold} />
+              </View>
+              <Text style={styles.quickLinkLabel}>Reports</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickLinkCard} onPress={() => router.push("/(dashboard)/record-cash-entry")}>
+              <View style={[styles.quickLinkIconBg, { backgroundColor: "rgba(217, 43, 43, 0.08)" }]}>
+                <MaterialCommunityIcons name="cash-multiple" size={24} color={colors.kumkumRed} />
+              </View>
+              <Text style={styles.quickLinkLabel}>Cash Entry</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickLinkCard} onPress={() => router.push("/(dashboard)/about-mandal")}>
+              <View style={[styles.quickLinkIconBg, { backgroundColor: "rgba(125, 88, 0, 0.08)" }]}>
+                <MaterialCommunityIcons name="information-outline" size={24} color={colors.tertiary} />
+              </View>
+              <Text style={styles.quickLinkLabel}>About Mandal</Text>
             </TouchableOpacity>
 
             {["owner", "admin", "treasurer", "committee_member", "super_admin"].includes(role || "") && (
@@ -627,6 +747,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  countdownMetaContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: spacing.sm,
+  },
+  countdownMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+  },
+  countdownMetaText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontFamily: fonts.inter.medium,
+  },
   diyaIconGlow: {
     textShadowColor: colors.haldiYellow,
     textShadowOffset: { width: 0, height: 0 },
@@ -776,6 +916,18 @@ const styles = StyleSheet.create({
   eventsGrid: {
     flexDirection: "row",
     gap: spacing.md,
+  },
+  eventsCarousel: {
+    paddingRight: spacing.md,
+    gap: spacing.md,
+  },
+  eventCardHorizontal: {
+    width: width * 0.72,
+    height: 140,
+    borderRadius: borderRadius.xl,
+    overflow: "hidden",
+    backgroundColor: colors.charcoal,
+    position: "relative",
   },
   eventCard: {
     flex: 1,

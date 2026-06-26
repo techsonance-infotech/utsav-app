@@ -19,17 +19,29 @@ RETURNS TABLE (
   donation_count    int,
   expense_count     int
 ) LANGUAGE sql STABLE AS $$
+  WITH donation_stats AS (
+    SELECT
+      COALESCE(SUM(amount), 0) AS total_donations,
+      COUNT(id)::int AS donation_count
+    FROM donations
+    WHERE tenant_id = p_tenant_id AND status = 'confirmed'
+  ),
+  expense_stats AS (
+    SELECT
+      COALESCE(SUM(amount) FILTER (WHERE status IN ('approved', 'paid')), 0) AS total_expenses,
+      COUNT(id) FILTER (WHERE status = 'pending_approval')::int AS pending_approvals,
+      COUNT(id) FILTER (WHERE status IN ('approved', 'paid'))::int AS expense_count
+    FROM expenses
+    WHERE tenant_id = p_tenant_id
+  )
   SELECT
-    COALESCE(SUM(d.amount) FILTER (WHERE d.status = 'confirmed'), 0) AS total_donations,
-    COALESCE(SUM(e.amount) FILTER (WHERE e.status IN ('approved', 'paid')), 0) AS total_expenses,
-    COALESCE(SUM(d.amount) FILTER (WHERE d.status = 'confirmed'), 0)
-      - COALESCE(SUM(e.amount) FILTER (WHERE e.status IN ('approved', 'paid')), 0) AS net_balance,
-    COUNT(e.id) FILTER (WHERE e.status = 'pending_approval')::int AS pending_approvals,
-    COUNT(d.id) FILTER (WHERE d.status = 'confirmed')::int AS donation_count,
-    COUNT(e.id) FILTER (WHERE e.status IN ('approved', 'paid'))::int AS expense_count
-  FROM donations d
-  FULL OUTER JOIN expenses e ON e.tenant_id = d.tenant_id
-  WHERE COALESCE(d.tenant_id, e.tenant_id) = p_tenant_id;
+    d.total_donations,
+    e.total_expenses,
+    (d.total_donations - e.total_expenses) AS net_balance,
+    e.pending_approvals,
+    d.donation_count,
+    e.expense_count
+  FROM donation_stats d, expense_stats e;
 $$;
 
 -- 3. Receipt number generation per tenant

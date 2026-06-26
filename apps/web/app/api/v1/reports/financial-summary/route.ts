@@ -89,57 +89,45 @@ export async function GET(req: Request) {
   try {
     let resultData: any = null;
 
-    // 2. Try to invoke the postgres RPC function
-    const { data: summaryList, error: rpcError } = await supabase.rpc(
-      "tenant_financial_summary",
-      { p_tenant_id: tenantId }
-    );
+    // Direct JS aggregates to prevent join duplication bugs in Postgres RPC
+    // Sum of confirmed donations
+    const { data: donations, error: donErr } = await supabase
+      .from("donations")
+      .select("amount")
+      .eq("tenant_id", tenantId)
+      .eq("status", "confirmed");
 
-    if (!rpcError && summaryList && summaryList.length > 0) {
-      const summary = summaryList[0];
-      resultData = {
-        total_donations: Number(summary.total_donations || 0),
-        total_expenses: Number(summary.total_expenses || 0),
-        net_balance: Number(summary.net_balance || 0),
-        pending_approvals: Number(summary.pending_approvals || 0),
-        donation_count: Number(summary.donation_count || 0),
-        expense_count: Number(summary.expense_count || 0),
-      };
-    } else {
-      // 3. Direct JS aggregates fallback if RPC fails or is missing
-      console.warn("RPC tenant_financial_summary failed/missing, running query fallback", rpcError);
-
-      // Sum of confirmed donations
-      const { data: donations } = await supabase
-        .from("donations")
-        .select("amount")
-        .eq("tenant_id", tenantId)
-        .eq("status", "confirmed");
-
-      const total_donations = (donations || []).reduce((sum, d) => sum + Number(d.amount), 0);
-      const donation_count = (donations || []).length;
-
-      // Sum of approved/paid expenses
-      const { data: expenses } = await supabase
-        .from("expenses")
-        .select("amount, status")
-        .eq("tenant_id", tenantId);
-
-      const approvedExpenses = (expenses || []).filter((e) => ["approved", "paid"].includes(e.status));
-      const total_expenses = approvedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
-      const expense_count = approvedExpenses.length;
-
-      const pending_approvals = (expenses || []).filter((e) => e.status === "pending_approval" || e.status === "submitted").length;
-
-      resultData = {
-        total_donations,
-        total_expenses,
-        net_balance: total_donations - total_expenses,
-        pending_approvals,
-        donation_count,
-        expense_count,
-      };
+    if (donErr) {
+      throw new Error(donErr.message);
     }
+
+    const total_donations = (donations || []).reduce((sum, d) => sum + Number(d.amount), 0);
+    const donation_count = (donations || []).length;
+
+    // Sum of approved/paid expenses
+    const { data: expenses, error: expErr } = await supabase
+      .from("expenses")
+      .select("amount, status")
+      .eq("tenant_id", tenantId);
+
+    if (expErr) {
+      throw new Error(expErr.message);
+    }
+
+    const approvedExpenses = (expenses || []).filter((e) => ["approved", "paid"].includes(e.status));
+    const total_expenses = approvedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    const expense_count = approvedExpenses.length;
+
+    const pending_approvals = (expenses || []).filter((e) => e.status === "pending_approval" || e.status === "submitted").length;
+
+    resultData = {
+      total_donations,
+      total_expenses,
+      net_balance: total_donations - total_expenses,
+      pending_approvals,
+      donation_count,
+      expense_count,
+    };
 
     // Write back to Upstash Redis cache
     await setCachedSummary(tenantId, resultData);

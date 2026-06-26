@@ -12,6 +12,7 @@ import {
   Alert,
   FlatList,
   Animated,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "@utsav/stores";
@@ -983,16 +984,18 @@ export default function MobileDonateScreen() {
                     <View style={[styles.paymentModeIcon, mode === "online" && { backgroundColor: "rgba(201, 146, 26, 0.12)" }]}>
                       <MaterialCommunityIcons
                         name={mode === "cash" ? "cash-multiple" : "qrcode-scan"}
-                        size={24}
+                        size={20}
                         color={mode === "cash" ? colors.primaryContainer : colors.aartiGold}
                       />
                     </View>
-                    <View>
+                    <View style={{ flex: 1, flexShrink: 1 }}>
                       <Text style={styles.bannerLabel}>Payment Mode</Text>
-                      <Text style={styles.bannerValue}>{mode === "cash" ? "CASH PAYMENT" : "ONLINE CHECKOUT"}</Text>
+                      <Text style={styles.bannerValue} numberOfLines={1} ellipsizeMode="tail">
+                        {mode === "cash" ? "CASH" : "ONLINE"}
+                      </Text>
                     </View>
                   </View>
-                  <View style={{ flexDirection: "row", gap: 6 }}>
+                  <View style={styles.statusSelectGroup}>
                     <TouchableOpacity
                       onPress={() => setStatus("confirmed")}
                       style={[
@@ -1301,6 +1304,37 @@ export default function MobileDonateScreen() {
                           <Text style={[styles.modeText, editStatus === "pending" && styles.modeTextActive]}>Due (Pending)</Text>
                         </TouchableOpacity>
                       </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Campaign Designation</Text>
+                      <View style={styles.dropdownWrap}>
+                        <Text style={styles.dropdownSelected}>
+                          {editCampaign === ""
+                            ? "General Fund"
+                            : activeCampaigns?.find((c) => c.id === editCampaign)?.name ?? "General Fund"}
+                        </Text>
+                        <MaterialCommunityIcons name="chevron-down" size={20} color={colors.outline} />
+                      </View>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.campaignList}
+                        style={{ marginTop: 8 }}
+                      >
+                        {[{ id: "", name: "General Fund" }, ...activeCampaigns].map((item, index) => (
+                          <TouchableOpacity
+                            key={item.id || index.toString()}
+                            style={[styles.campaignChip, editCampaign === item.id && styles.campaignChipActive]}
+                            onPress={() => setEditCampaign(item.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.campaignChipText, editCampaign === item.id && styles.campaignChipTextActive]}>
+                              {item.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
                     </View>
 
                     <View style={styles.inputGroup}>
@@ -2233,9 +2267,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   bannerLeft: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.sm,
+  },
+  statusSelectGroup: {
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
+    flexShrink: 0,
   },
   paymentModeIcon: {
     backgroundColor: "rgba(255, 149, 0, 0.1)",
@@ -2248,7 +2289,7 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
   },
   bannerValue: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: fonts.inter.bold,
     color: colors.primaryBrand,
   },

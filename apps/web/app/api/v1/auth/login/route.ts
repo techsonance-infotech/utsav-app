@@ -105,6 +105,32 @@ export async function POST(req: Request) {
     // Fetch user's active tenant membership
     const serviceClient = createServiceRoleClient();
 
+    // Check if user has any pending memberships
+    const { data: pendingMemberships } = await serviceClient
+      .from("tenant_members")
+      .select("status")
+      .eq("user_id", data.user.id)
+      .eq("status", "pending");
+
+    if (pendingMemberships && pendingMemberships.length > 0) {
+      const { data: activeMemberships } = await serviceClient
+        .from("tenant_members")
+        .select("status")
+        .eq("user_id", data.user.id)
+        .eq("status", "active");
+
+      if (!activeMemberships || activeMemberships.length === 0) {
+        await logSecurityEvent(req, {
+          action: "auth_login_pending",
+          status: "failure",
+          details: { email: loginEmail, userId: data.user.id, reason: "Account is pending approval" },
+        });
+        return NextResponse.json({
+          message: "Your account is not approved yet. Please contact your organization owner or admin."
+        }, { status: 403 });
+      }
+    }
+
     // Auto-associate user with tenant if not already a member
     if (tenantId) {
       const { data: existingMember } = await serviceClient
