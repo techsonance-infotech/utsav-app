@@ -8,7 +8,7 @@ const UpdateExpenseSchema = z.object({
   category_id: z.string().uuid("Invalid category ID").optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
   vendor_id: z.string().uuid("Invalid vendor ID").optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
   description: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
-  receipt_url: z.string().url("Invalid receipt URL").optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  receipt_url: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
   expense_date: z.string().optional(),
   payment_mode: z.enum(["cash", "bank_transfer", "upi", "cheque"]).optional(),
   gst_amount: z.number().nonnegative("GST amount must be a positive number").optional(),
@@ -124,9 +124,55 @@ export async function PATCH(
 
     const validatedData = parsed.data;
 
+    // Process receipt upload if it's base64 data
+    let uploadedReceiptUrl = validatedData.receipt_url;
+
+    if (uploadedReceiptUrl && uploadedReceiptUrl.startsWith("data:image/")) {
+      const matches = uploadedReceiptUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const type = matches[1];
+        const buffer = Buffer.from(matches[2], "base64");
+        let ext = "jpg";
+        if (type === "image/png") ext = "png";
+        else if (type === "image/webp") ext = "webp";
+
+        const filePath = `${tenantId}/${userId}/receipt_${Date.now()}.${ext}`;
+
+        try {
+          const { data: buckets } = await supabase.storage.listBuckets();
+          const bucketExists = buckets?.some((b) => b.name === "receipts");
+          if (!bucketExists) {
+            await supabase.storage.createBucket("receipts", { public: true });
+          }
+
+          const { error: uploadError } = await supabase.storage
+            .from("receipts")
+            .upload(filePath, buffer, {
+              contentType: type,
+              upsert: true,
+            });
+
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage
+              .from("receipts")
+              .getPublicUrl(filePath);
+            uploadedReceiptUrl = urlData.publicUrl;
+          } else {
+            console.error("Receipt upload failed:", uploadError);
+            return NextResponse.json({ message: `Receipt upload failed: ${uploadError.message || uploadError}` }, { status: 400 });
+          }
+        } catch (storageErr: any) {
+          console.error("Receipt storage operation failed:", storageErr);
+          return NextResponse.json({ message: `Receipt storage operation failed: ${storageErr.message || storageErr}` }, { status: 500 });
+        }
+      } else {
+        return NextResponse.json({ message: "Invalid base64 receipt data format" }, { status: 400 });
+      }
+    }
+
     // Enforce receipt rule post-merge
     const finalAmount = validatedData.amount !== undefined ? validatedData.amount : Number(existing.amount);
-    const finalReceipt = validatedData.receipt_url !== undefined ? validatedData.receipt_url : existing.receipt_url;
+    const finalReceipt = uploadedReceiptUrl !== undefined ? uploadedReceiptUrl : existing.receipt_url;
 
     if (finalAmount > 500 && (!finalReceipt || finalReceipt.trim() === "")) {
       return NextResponse.json({ message: "A digital receipt upload is mandatory for expenses exceeding ₹500." }, { status: 400 });
@@ -138,13 +184,17 @@ export async function PATCH(
 
     const allowedFields = [
       "title", "amount", "category_id", "vendor_id", "description",
-      "receipt_url", "expense_date", "payment_mode", "gst_amount",
+      "expense_date", "payment_mode", "gst_amount",
     ];
 
     for (const field of allowedFields) {
       if (validatedData[field as keyof typeof validatedData] !== undefined) {
         updatePayload[field] = validatedData[field as keyof typeof validatedData];
       }
+    }
+
+    if (uploadedReceiptUrl !== undefined) {
+      updatePayload.receipt_url = uploadedReceiptUrl;
     }
 
     const { data: updated, error: updateError } = await supabase

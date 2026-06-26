@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "@utsav/stores";
-import { useFetchMembers } from "@utsav/api-client";
+import { useFetchMembers, useUpdateMemberRole, useRemoveMember } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -12,17 +12,20 @@ export default function MobileMembersScreen() {
 
   // Search and Filter states
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedRole, setSelectedRole] = useState<string>("all"); // 'all', 'admin', 'volunteer', 'member', 'owner', 'treasurer'
+  const [selectedRole, setSelectedRole] = useState<string>("all"); // 'all', 'admin', 'volunteer', 'member', 'owner', 'treasurer', 'pending'
 
   // Debounced/immediate filter values for API
   const apiFilters = useMemo(() => {
     return {
       search: searchQuery.trim() || undefined,
-      role: selectedRole === "all" ? undefined : selectedRole,
+      role: selectedRole === "pending" || selectedRole === "all" ? undefined : selectedRole,
+      status: selectedRole === "pending" ? "pending" : "active",
     };
   }, [searchQuery, selectedRole]);
 
   const { data: members = [], isLoading } = useFetchMembers(apiFilters);
+  const updateRoleMutation = useUpdateMemberRole();
+  const removeMemberMutation = useRemoveMember();
 
   const handleCall = async (phoneNumber: string) => {
     if (!phoneNumber) return;
@@ -39,8 +42,51 @@ export default function MobileMembersScreen() {
     }
   };
 
+  const handleApprove = async (memberId: string, name: string) => {
+    Alert.alert(
+      "Approve Member",
+      `Are you sure you want to approve ${name} to join your Mandal?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Approve",
+          onPress: async () => {
+            try {
+              await updateRoleMutation.mutateAsync({ id: memberId, status: "active" });
+              Alert.alert("Success", `${name} approved successfully!`);
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to approve member");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReject = async (memberId: string, name: string) => {
+    Alert.alert(
+      "Reject Request",
+      `Are you sure you want to reject the join request from ${name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reject",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeMemberMutation.mutateAsync(memberId);
+              Alert.alert("Success", `${name}'s request was rejected.`);
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to reject request");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getRoleColor = (roleStr: string) => {
-    switch (roleStr.toLowerCase()) {
+    switch ((roleStr || "").toLowerCase()) {
       case "owner":
       case "admin":
         return { bg: "rgba(217, 43, 43, 0.08)", text: colors.kumkumRed, border: "rgba(217, 43, 43, 0.15)" };
@@ -61,6 +107,11 @@ export default function MobileMembersScreen() {
     { label: "Members", value: "member" },
   ];
 
+  const isAdminOrOwner = ["owner", "admin"].includes(userRole || "");
+  const allFilterChips = isAdminOrOwner
+    ? [...filterRoles, { label: "Pending Approval", value: "pending" }]
+    : filterRoles;
+
   const hasInviteAccess = ["owner", "admin", "treasurer"].includes(userRole || "");
 
   return (
@@ -68,10 +119,10 @@ export default function MobileMembersScreen() {
       {/* Top Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.logoBadge}>
-            <MaterialIcons name="temple-hindu" size={20} color="#FFFFFF" />
-          </View>
-          <Text style={styles.headerLogo}>UTSAV</Text>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Mandal Directory</Text>
         </View>
         <TouchableOpacity style={styles.headerNotifyBtn}>
           <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
@@ -84,7 +135,7 @@ export default function MobileMembersScreen() {
         {/* Intro */}
         <View style={styles.introContainer}>
           <Text style={styles.introTitle}>Mandal Directory</Text>
-          <Text style={styles.introSub}>Search and coordinate with festival organizers and volunteers.</Text>
+          <Text style={styles.introSub}>Search and coordinate with festival organizers, volunteers, and devotees.</Text>
         </View>
 
         {/* Search input bar */}
@@ -105,26 +156,28 @@ export default function MobileMembersScreen() {
         </View>
 
         {/* Filter Chip row */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsScroll}
-        >
-          {filterRoles.map((roleChip) => {
-            const isActive = selectedRole === roleChip.value;
-            return (
-              <TouchableOpacity
-                key={roleChip.value}
-                style={[styles.chip, isActive && styles.chipActive]}
-                onPress={() => setSelectedRole(roleChip.value)}
-              >
-                <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-                  {roleChip.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <View style={{ marginBottom: spacing.md }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsScroll}
+          >
+            {allFilterChips.map((roleChip) => {
+              const isActive = selectedRole === roleChip.value;
+              return (
+                <TouchableOpacity
+                  key={roleChip.value}
+                  style={[styles.chip, isActive && styles.chipActive]}
+                  onPress={() => setSelectedRole(roleChip.value)}
+                >
+                  <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                    {roleChip.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
 
         {/* Loading and Results Grid */}
         {isLoading ? (
@@ -138,18 +191,28 @@ export default function MobileMembersScreen() {
           <View style={styles.membersList}>
             {members.map((member: any) => {
               const roleStyle = getRoleColor(member.role);
+              const isPendingItem = selectedRole === "pending" || member.status === "pending";
               return (
-                <View key={member.id} style={styles.memberCard}>
+                <View
+                  key={member.id}
+                  style={[
+                    styles.memberCard,
+                    isPendingItem && { flexDirection: "column", alignItems: "stretch", gap: 12 }
+                  ]}
+                >
                   <View style={styles.cardLeft}>
                     {/* Rounded Avatar */}
                     <View style={styles.avatar}>
                       <Text style={styles.avatarText}>
-                        {member.full_name.charAt(0).toUpperCase()}
+                        {(member.full_name || "U").charAt(0).toUpperCase()}
                       </Text>
                     </View>
 
                     <View style={styles.memberInfo}>
                       <Text style={styles.memberName}>{member.full_name}</Text>
+                      {member.email ? (
+                        <Text style={styles.emailText}>{member.email}</Text>
+                      ) : null}
                       <View style={styles.roleBadgeRow}>
                         <View
                           style={[
@@ -161,7 +224,7 @@ export default function MobileMembersScreen() {
                           ]}
                         >
                           <Text style={[styles.roleBadgeText, { color: roleStyle.text }]}>
-                            {member.role.toUpperCase()}
+                            {(member.role || "MEMBER").toUpperCase()}
                           </Text>
                         </View>
                         {member.phone ? (
@@ -171,16 +234,37 @@ export default function MobileMembersScreen() {
                     </View>
                   </View>
 
-                  {/* Actions Column */}
-                  {member.phone ? (
-                    <TouchableOpacity
-                      style={styles.callBtn}
-                      onPress={() => handleCall(member.phone)}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialCommunityIcons name="phone" size={18} color={colors.primaryBrand} />
-                    </TouchableOpacity>
-                  ) : null}
+                  {/* Actions row */}
+                  {isPendingItem ? (
+                    <View style={styles.approvalActionsRow}>
+                      <TouchableOpacity
+                        style={styles.approveBtn}
+                        onPress={() => handleApprove(member.id, member.full_name)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="check-circle-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.approveBtnText}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.rejectBtn}
+                        onPress={() => handleReject(member.id, member.full_name)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="close-circle-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.rejectBtnText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    member.phone ? (
+                      <TouchableOpacity
+                        style={styles.callBtn}
+                        onPress={() => handleCall(member.phone)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="phone" size={18} color={colors.primaryBrand} />
+                      </TouchableOpacity>
+                    ) : null
+                  )}
                 </View>
               );
             })}
@@ -222,15 +306,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  logoBadge: {
+  backBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primaryContainer,
     justifyContent: "center",
     alignItems: "center",
   },
-  headerLogo: {
+  headerTitle: {
     fontSize: 16,
     fontFamily: fonts.poppins.bold,
     color: colors.primaryBrand,
@@ -252,12 +335,10 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.secondaryBrand,
-    borderWidth: 1.5,
-    borderColor: "#FFFFFF",
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: 90,
+    paddingBottom: 80,
   },
   introContainer: {
     marginBottom: spacing.md,
@@ -277,17 +358,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.sandstone,
-    borderRadius: 12,
-    height: 48,
     paddingHorizontal: 12,
+    height: 48,
     marginBottom: spacing.md,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
-    elevation: 1,
   },
   searchIcon: {
     marginRight: 8,
@@ -304,56 +380,58 @@ const styles = StyleSheet.create({
   },
   chipsScroll: {
     gap: 8,
-    paddingBottom: spacing.md,
+    paddingVertical: 4,
   },
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: colors.sandstone,
-    backgroundColor: colors.pujaWhite,
-    marginRight: 8,
   },
   chipActive: {
     backgroundColor: colors.primaryContainer,
     borderColor: colors.primaryContainer,
   },
   chipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: fonts.inter.medium,
-    color: colors.onSurface,
+    color: colors.onSurfaceVariant,
   },
   chipTextActive: {
-    color: "#FFFFFF",
+    color: colors.onPrimaryContainer,
     fontFamily: fonts.inter.bold,
   },
   emptyContainer: {
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 60,
+    gap: 12,
   },
   emptyText: {
-    fontSize: 13,
-    fontFamily: fonts.inter.medium,
-    color: colors.outline,
-    marginTop: 10,
+    fontSize: 14,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurfaceVariant,
+    textAlign: "center",
+    paddingHorizontal: 32,
   },
   membersList: {
-    gap: spacing.md,
+    gap: 12,
   },
   memberCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.sandstone,
-    padding: 14,
+    padding: 12,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.02,
-    shadowRadius: 6,
+    shadowRadius: 4,
     elevation: 1,
   },
   cardLeft: {
@@ -367,41 +445,48 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: colors.cream,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: fonts.poppins.bold,
     color: colors.primaryBrand,
   },
   memberInfo: {
     flex: 1,
-    gap: 4,
   },
   memberName: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: fonts.poppins.bold,
     color: colors.charcoal,
+  },
+  emailText: {
+    fontSize: 11,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurfaceVariant,
+    marginTop: 1,
+    marginBottom: 3,
   },
   roleBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexWrap: "wrap",
   },
   roleBadge: {
-    borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
+    borderWidth: 1,
   },
   roleBadgeText: {
     fontSize: 9,
     fontFamily: fonts.inter.bold,
   },
   phoneNumberText: {
-    fontSize: 11,
-    fontFamily: fonts.inter.medium,
+    fontSize: 12,
+    fontFamily: fonts.inter.regular,
     color: colors.onSurfaceVariant,
   },
   callBtn: {
@@ -409,15 +494,51 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: colors.cream,
-    justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.sandstone,
+    justifyContent: "center",
+  },
+  approvalActionsRow: {
+    flexDirection: "row",
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(232, 226, 214, 0.4)",
+    paddingTop: 10,
+    marginTop: 4,
+  },
+  approveBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: colors.tulsiGreen,
+    height: 36,
+    borderRadius: 8,
+  },
+  approveBtnText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.bold,
+    color: "#FFFFFF",
+  },
+  rejectBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: colors.kumkumRed,
+    height: 36,
+    borderRadius: 8,
+  },
+  rejectBtnText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.bold,
+    color: "#FFFFFF",
   },
   fab: {
     position: "absolute",
-    bottom: 20,
-    right: 20,
+    bottom: 24,
+    right: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -425,9 +546,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     shadowColor: colors.primaryContainer,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 6,
+    elevation: 4,
   },
 });

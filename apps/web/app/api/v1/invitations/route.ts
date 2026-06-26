@@ -54,9 +54,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Resolve the request URL or host
-    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://utsav.app";
-    const link = `${origin}/join/${tenant.slug}/${role}/${invitation.token}`;
+    // Construct link with tenant slug subdomain and metadata query params
+    const host = req.headers.get("host") || "";
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || "techsonance.co.in";
+    const isLocal = host.includes("localhost") || host.includes("127.0.0.1") || baseDomain.includes("localhost");
+    const domainPart = isLocal ? `${tenant.slug}.localhost:3000` : `${tenant.slug}.${baseDomain}`;
+    const protocol = isLocal ? "http" : "https";
+    const link = `${protocol}://${domainPart}/join/${invitation.token}?name=${encodeURIComponent(invitee_name || "")}&phone=${encodeURIComponent(phone || "")}&role=${role}`;
 
     // Get active role
     const { data: actorMember } = await supabase

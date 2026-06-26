@@ -10,6 +10,8 @@ import {
   Dimensions,
   Platform,
   Alert,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "@utsav/stores";
@@ -18,6 +20,9 @@ import {
   useApproveExpense,
   useRejectExpense,
   usePayExpense,
+  useUpdateExpense,
+  useExpenseCategories,
+  useFetchVendors,
 } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
@@ -26,16 +31,20 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import DatePickerModal from "../components/DatePickerModal";
+import * as ImagePicker from "expo-image-picker";
 
 const { width } = Dimensions.get("window");
 
 export default function MobileExpensesScreen() {
-  const { role, userFullName } = useAuthStore();
+  const { role, userFullName, userId } = useAuthStore();
   const { data: expenses = [], isLoading: loadingExpenses, refetch } = useExpenses() as any;
 
   const approveMutation = useApproveExpense();
   const rejectMutation = useRejectExpense();
   const payMutation = usePayExpense();
+  const updateMutation = useUpdateExpense();
+  const { data: categories = [], isLoading: loadingCategories } = useExpenseCategories();
+  const { data: vendors = [], isLoading: loadingVendors } = useFetchVendors();
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,6 +57,31 @@ export default function MobileExpensesScreen() {
   // DatePicker Visibilities
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
+  // Local Pagination State
+  const [visibleCount, setVisibleCount] = useState(15);
+
+  // Edit Expense States
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [editCategoryName, setEditCategoryName] = useState("Select Category");
+  const [editVendorId, setEditVendorId] = useState("");
+  const [editVendorName, setEditVendorName] = useState("Select Vendor");
+  const [editExpenseDate, setEditExpenseDate] = useState("");
+  const [editPaymentMode, setEditPaymentMode] = useState<"cash" | "bank_transfer" | "upi" | "cheque">("cash");
+  const [editGstAmount, setEditGstAmount] = useState("");
+  const [editReceiptUrl, setEditReceiptUrl] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Edit Modal Selectors Visibilities
+  const [showEditCategorySelector, setShowEditCategorySelector] = useState(false);
+  const [showEditVendorSelector, setShowEditVendorSelector] = useState(false);
+  const [showEditPaymentModeSelector, setShowEditPaymentModeSelector] = useState(false);
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
 
   const hasAdminAccess = ["owner", "admin", "treasurer"].includes(role || "");
 
@@ -111,6 +145,154 @@ export default function MobileExpensesScreen() {
     ]);
   };
 
+  const isEditable = (item: any) => {
+    return (item.status === "draft" || item.status === "pending_approval") && item.submitted_by === userId;
+  };
+
+  const handleEditPress = (item: any) => {
+    setEditingExpenseId(item.id);
+    setEditTitle(item.title || "");
+    setEditAmount(item.amount ? item.amount.toString() : "");
+    setEditCategoryId(item.category_id || "");
+    setEditCategoryName(item.category?.name || "None / General");
+    setEditVendorId(item.vendor_id || "");
+    setEditVendorName(item.vendor?.business_name || "None");
+    setEditExpenseDate(item.expense_date || "");
+    setEditPaymentMode(item.payment_mode || "cash");
+    setEditGstAmount(item.gst_amount ? item.gst_amount.toString() : "");
+    setEditReceiptUrl(item.receipt_url || "");
+    setEditNotes(item.description || "");
+    setIsEditModalVisible(true);
+  };
+
+  const handleEditUploadReceipt = () => {
+    Alert.alert(
+      "Upload Receipt",
+      "Choose an option to upload your receipt:",
+      [
+        {
+          text: "Take Photo (Camera)",
+          onPress: () => pickEditImage(true),
+        },
+        {
+          text: "Choose from Gallery",
+          onPress: () => pickEditImage(false),
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ]
+    );
+  };
+
+  const pickEditImage = async (useCamera: boolean) => {
+    try {
+      let result;
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "We need camera permission to take a picture.");
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "We need gallery permissions to select a photo.");
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploading(true);
+        
+        // Validate type: only png, jpg, jpeg. Do not accept pdf.
+        const uriLower = asset.uri.toLowerCase();
+        const isImage = uriLower.endsWith(".png") || uriLower.endsWith(".jpg") || uriLower.endsWith(".jpeg");
+        const mimeType = asset.mimeType?.toLowerCase() || "";
+        const isMimeImage = mimeType === "image/png" || mimeType === "image/jpeg" || mimeType === "image/jpg";
+
+        if (!isImage && !isMimeImage) {
+          setIsUploading(false);
+          Alert.alert("Invalid File Type", "Only PNG, JPG, or JPEG images are allowed. PDFs are not accepted.");
+          return;
+        }
+
+        // Validate size (1MB = 1048576 bytes)
+        let sizeBytes = asset.fileSize;
+        if (!sizeBytes && asset.base64) {
+          sizeBytes = Math.round((asset.base64.length * 3) / 4);
+        }
+
+        if (sizeBytes && sizeBytes > 1024 * 1024) {
+          setIsUploading(false);
+          Alert.alert("File Too Large", "The receipt image must be 1MB or smaller.");
+          return;
+        }
+
+        if (asset.base64) {
+          const format = uriLower.endsWith(".png") || mimeType === "image/png" ? "png" : "jpeg";
+          setEditReceiptUrl(`data:image/${format};base64,${asset.base64}`);
+        } else {
+          Alert.alert("Error", "Could not read the image data.");
+        }
+        setIsUploading(false);
+      }
+    } catch (err: any) {
+      setIsUploading(false);
+      Alert.alert("Error picking image", err.message || "Failed to pick image");
+    }
+  };
+
+  const handleUpdateSubmit = async () => {
+    if (!editingExpenseId) return;
+
+    const parsedAmount = parseFloat(editAmount);
+    if (!editTitle.trim()) {
+      Alert.alert("Validation Error", "Please enter an expense title");
+      return;
+    }
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert("Validation Error", "Please enter a valid amount");
+      return;
+    }
+    if (parsedAmount > 500 && (!editReceiptUrl || editReceiptUrl.trim() === "")) {
+      Alert.alert("Validation Error", "A digital receipt upload is mandatory for expenses exceeding ₹500.");
+      return;
+    }
+
+    try {
+      await updateMutation.mutateAsync({
+        id: editingExpenseId,
+        title: editTitle.trim(),
+        amount: parsedAmount,
+        category_id: editCategoryId || undefined,
+        vendor_id: editVendorId || undefined,
+        expense_date: editExpenseDate,
+        description: editNotes.trim() || undefined,
+        payment_mode: editPaymentMode,
+        receipt_url: editReceiptUrl || undefined,
+        gst_amount: editGstAmount ? parseFloat(editGstAmount) : 0,
+      });
+      setIsEditModalVisible(false);
+      Alert.alert("Success", "Expense updated successfully");
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to update expense");
+    }
+  };
+
   // Helper formatting functions
   const formatRupee = (value: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -169,6 +351,16 @@ export default function MobileExpensesScreen() {
       return true;
     });
   }, [expenses, searchQuery, selectedModeFilter, selectedMonthFilter, startDateStr, endDateStr]);
+
+  const paginatedExpenses = useMemo(() => {
+    return filteredExpenses.slice(0, visibleCount);
+  }, [filteredExpenses, visibleCount]);
+
+  const handleLoadMore = () => {
+    if (visibleCount < filteredExpenses.length) {
+      setVisibleCount((prev) => prev + 15);
+    }
+  };
 
   // Recalculate dynamic KPIs based on active filtered dataset
   const kpis = useMemo(() => {
@@ -354,6 +546,17 @@ export default function MobileExpensesScreen() {
         ) : null}
 
         {/* Action Rows */}
+        {isEditable(item) && (
+          <TouchableOpacity
+            style={styles.editActionBtn}
+            onPress={() => handleEditPress(item)}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="pencil-outline" size={14} color={colors.primaryBrand} />
+            <Text style={styles.editActionBtnText}>Edit Expense Details</Text>
+          </TouchableOpacity>
+        )}
+
         {hasAdminAccess && item.status === "pending_approval" && (
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -407,7 +610,7 @@ export default function MobileExpensesScreen() {
       </View>
 
       <FlatList
-        data={filteredExpenses}
+        data={paginatedExpenses}
         keyExtractor={(item, index) => item.id || index.toString()}
         renderItem={renderExpenseItem}
         contentContainerStyle={styles.listScroll}
@@ -415,6 +618,15 @@ export default function MobileExpensesScreen() {
         initialNumToRender={10}
         windowSize={5}
         maxToRenderPerBatch={10}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={
+          visibleCount < filteredExpenses.length ? (
+            <View style={{ paddingVertical: 20, alignItems: "center" }}>
+              <ActivityIndicator size="small" color={colors.primaryBrand} />
+            </View>
+          ) : null
+        }
         ListHeaderComponent={
           <View style={styles.listHeader}>
             {/* KPI Cards section */}
@@ -621,6 +833,310 @@ export default function MobileExpensesScreen() {
         onSelect={(date) => setEndDateStr(date)}
         onClose={() => setShowEndDatePicker(false)}
         title="Select End Date"
+      />
+
+      {/* Edit Expense Modal */}
+      <Modal visible={isEditModalVisible} animationType="slide" transparent>
+        <SafeAreaView style={styles.modalSafeArea} edges={["top", "bottom"]}>
+          <View style={styles.editModalContainer}>
+            {/* Modal Header */}
+            <View style={styles.editModalHeader}>
+              <Text style={styles.editModalTitle}>Edit Expense Voucher</Text>
+              <TouchableOpacity onPress={() => setIsEditModalVisible(false)} style={styles.editModalCloseBtn}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.editModalScrollView} contentContainerStyle={styles.editModalScrollContent}>
+              {/* Form Input fields */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Title / Purpose *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. Flower decorations"
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Amount (₹) *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  value={editAmount}
+                  onChangeText={setEditAmount}
+                />
+              </View>
+
+              {/* Category selector */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Category</Text>
+                <TouchableOpacity
+                  style={styles.selectorBtn}
+                  onPress={() => setShowEditCategorySelector(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.selectorBtnText}>{editCategoryName}</Text>
+                  <MaterialCommunityIcons name="chevron-down" size={20} color={colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Vendor selector */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Vendor</Text>
+                <TouchableOpacity
+                  style={styles.selectorBtn}
+                  onPress={() => setShowEditVendorSelector(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.selectorBtnText}>{editVendorName}</Text>
+                  <MaterialCommunityIcons name="chevron-down" size={20} color={colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Expense Date selector */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Expense Date *</Text>
+                <TouchableOpacity
+                  style={styles.selectorBtn}
+                  onPress={() => setShowEditDatePicker(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.selectorBtnText}>{editExpenseDate || "Select Date"}</Text>
+                  <MaterialCommunityIcons name="calendar" size={20} color={colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Payment Mode */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Payment Mode *</Text>
+                <TouchableOpacity
+                  style={styles.selectorBtn}
+                  onPress={() => setShowEditPaymentModeSelector(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.selectorBtnText}>
+                    {editPaymentMode.replace("_", " ").toUpperCase()}
+                  </Text>
+                  <MaterialCommunityIcons name="chevron-down" size={20} color={colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
+
+              {/* GST Amount */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>GST Amount (₹)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="0.00 (optional)"
+                  keyboardType="numeric"
+                  value={editGstAmount}
+                  onChangeText={setEditGstAmount}
+                />
+              </View>
+
+              {/* Receipt File upload */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Receipt / Invoice Proof</Text>
+                <View style={styles.receiptUploadContainer}>
+                  {editReceiptUrl ? (
+                    <View style={styles.receiptPreviewWrapper}>
+                      <Text style={styles.receiptPreviewText} numberOfLines={1}>
+                        {editReceiptUrl.startsWith("data:image/") ? "New Receipt Selected" : "Current Receipt Uploaded"}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.clearReceiptBtn}
+                        onPress={() => setEditReceiptUrl("")}
+                      >
+                        <MaterialCommunityIcons name="delete-outline" size={20} color={colors.kumkumRed} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.uploadReceiptBtn}
+                      onPress={handleEditUploadReceipt}
+                      disabled={isUploading}
+                    >
+                      {isUploading ? (
+                        <ActivityIndicator size="small" color={colors.primaryBrand} />
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons name="camera-plus-outline" size={22} color={colors.primaryBrand} />
+                          <Text style={styles.uploadReceiptBtnText}>Attach Image (PNG/JPG/JPEG Max 1MB)</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Notes / Description */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Additional Notes</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textArea]}
+                  placeholder="Describe the reason/details of this expense..."
+                  multiline
+                  numberOfLines={4}
+                  value={editNotes}
+                  onChangeText={setEditNotes}
+                />
+              </View>
+            </ScrollView>
+
+            {/* Modal Bottom Actions */}
+            <View style={styles.editModalFooter}>
+              <TouchableOpacity
+                style={[styles.modalFooterBtn, styles.cancelFooterBtn]}
+                onPress={() => setIsEditModalVisible(false)}
+                disabled={updateMutation.isPending}
+              >
+                <Text style={styles.cancelFooterBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalFooterBtn, styles.saveFooterBtn]}
+                onPress={handleUpdateSubmit}
+                disabled={updateMutation.isPending || isUploading}
+              >
+                {updateMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveFooterBtnText}>Save Changes</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Edit Category picker modal */}
+      <Modal visible={showEditCategorySelector} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Category</Text>
+              <TouchableOpacity onPress={() => setShowEditCategorySelector(false)}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalList}>
+              {loadingCategories ? (
+                <ActivityIndicator size="small" color={colors.primaryBrand} style={{ marginVertical: 20 }} />
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setEditCategoryId("");
+                      setEditCategoryName("None / General");
+                      setShowEditCategorySelector(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>None / General</Text>
+                  </TouchableOpacity>
+                  {categories.map((cat: any) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={styles.modalItem}
+                      onPress={() => {
+                        setEditCategoryId(cat.id);
+                        setEditCategoryName(cat.name);
+                        setShowEditCategorySelector(false);
+                      }}
+                    >
+                      <Text style={styles.modalItemText}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Vendor picker modal */}
+      <Modal visible={showEditVendorSelector} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Vendor</Text>
+              <TouchableOpacity onPress={() => setShowEditVendorSelector(false)}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalList}>
+              {loadingVendors ? (
+                <ActivityIndicator size="small" color={colors.primaryBrand} style={{ marginVertical: 20 }} />
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setEditVendorId("");
+                      setEditVendorName("None");
+                      setShowEditVendorSelector(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>None</Text>
+                  </TouchableOpacity>
+                  {vendors.map((vendor: any) => (
+                    <TouchableOpacity
+                      key={vendor.id}
+                      style={styles.modalItem}
+                      onPress={() => {
+                        setEditVendorId(vendor.id);
+                        setEditVendorName(vendor.name);
+                        setShowEditVendorSelector(false);
+                      }}
+                    >
+                      <Text style={styles.modalItemText}>{vendor.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Payment Mode picker modal */}
+      <Modal visible={showEditPaymentModeSelector} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Payment Mode</Text>
+              <TouchableOpacity onPress={() => setShowEditPaymentModeSelector(false)}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalList}>
+              {["cash", "bank_transfer", "upi", "cheque"].map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setEditPaymentMode(mode as any);
+                    setShowEditPaymentModeSelector(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{mode.replace("_", " ").toUpperCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Date picker modal */}
+      <DatePickerModal
+        visible={showEditDatePicker}
+        value={editExpenseDate}
+        onSelect={(dateStr) => {
+          if (dateStr) setEditExpenseDate(dateStr);
+        }}
+        onClose={() => setShowEditDatePicker(false)}
+        title="Select Expense Date"
       />
     </SafeAreaView>
   );
@@ -1067,5 +1583,204 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
     fontFamily: fonts.inter.semibold,
     textAlign: "center",
+  },
+  editActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 149, 0, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 149, 0, 0.2)",
+    borderRadius: borderRadius.md,
+    paddingVertical: 10,
+    marginTop: 8,
+    gap: 6,
+  },
+  editActionBtnText: {
+    color: colors.primaryBrand,
+    fontSize: 12,
+    fontFamily: fonts.inter.bold,
+  },
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  editModalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden",
+  },
+  editModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.sandstone,
+    backgroundColor: "#FFFFFF",
+  },
+  editModalTitle: {
+    fontSize: 16,
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
+  },
+  editModalCloseBtn: {
+    padding: 4,
+  },
+  editModalScrollView: {
+    flex: 1,
+  },
+  editModalScrollContent: {
+    padding: 20,
+    gap: 16,
+  },
+  formGroup: {
+    gap: 6,
+  },
+  formLabel: {
+    fontSize: 13,
+    fontFamily: fonts.inter.semibold,
+    color: colors.onSurface,
+  },
+  textInput: {
+    height: 48,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 14,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurface,
+  },
+  textArea: {
+    height: 80,
+    paddingTop: 12,
+    textAlignVertical: "top",
+  },
+  selectorBtn: {
+    height: 48,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  selectorBtnText: {
+    fontSize: 14,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurface,
+  },
+  receiptUploadContainer: {
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: 12,
+    borderStyle: "dashed",
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  receiptPreviewWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    height: 48,
+  },
+  receiptPreviewText: {
+    fontSize: 13,
+    fontFamily: fonts.inter.medium,
+    color: colors.tulsiGreen,
+    flex: 1,
+  },
+  clearReceiptBtn: {
+    padding: 8,
+  },
+  uploadReceiptBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 48,
+    gap: 8,
+  },
+  uploadReceiptBtnText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.semibold,
+    color: colors.primaryBrand,
+  },
+  editModalFooter: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: colors.sandstone,
+    padding: 16,
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  modalFooterBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelFooterBtn: {
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+  },
+  cancelFooterBtnText: {
+    fontSize: 14,
+    fontFamily: fonts.inter.semibold,
+    color: colors.onSurfaceVariant,
+  },
+  saveFooterBtn: {
+    backgroundColor: colors.primaryBrand,
+  },
+  saveFooterBtnText: {
+    fontSize: 14,
+    fontFamily: fonts.inter.bold,
+    color: "#FFFFFF",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "60%",
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.sandstone,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
+  },
+  modalList: {
+    padding: 16,
+  },
+  modalItem: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(232, 226, 214, 0.3)",
+  },
+  modalItemText: {
+    fontSize: 14,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurface,
   },
 });

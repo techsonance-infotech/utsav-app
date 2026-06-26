@@ -131,25 +131,94 @@ export default function AddExpenseScreen() {
   const [showPaymentModeSelector, setShowPaymentModeSelector] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleUploadReceipt = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert("Permission Required", "Permission to access camera roll is required to upload a receipt!");
-      return;
-    }
+  const handleUploadReceipt = () => {
+    Alert.alert(
+      "Upload Receipt",
+      "Choose an option to upload your receipt:",
+      [
+        {
+          text: "Take Photo (Camera)",
+          onPress: () => pickImage(true),
+        },
+        {
+          text: "Choose from Gallery",
+          onPress: () => pickImage(false),
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ]
+    );
+  };
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
+  const pickImage = async (useCamera: boolean) => {
+    try {
+      let result;
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "We need camera permission to take a picture.");
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "We need gallery permissions to select a photo.");
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+      }
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setIsUploading(true);
-      setTimeout(() => {
-        setReceiptUrl("https://utsav-app.s3.amazonaws.com/receipts/mock_receipt_102.jpg");
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploading(true);
+        
+        // Validate type: only png, jpg, jpeg. Do not accept pdf.
+        const uriLower = asset.uri.toLowerCase();
+        const isImage = uriLower.endsWith(".png") || uriLower.endsWith(".jpg") || uriLower.endsWith(".jpeg");
+        const mimeType = asset.mimeType?.toLowerCase() || "";
+        const isMimeImage = mimeType === "image/png" || mimeType === "image/jpeg" || mimeType === "image/jpg";
+
+        if (!isImage && !isMimeImage) {
+          setIsUploading(false);
+          Alert.alert("Invalid File Type", "Only PNG, JPG, or JPEG images are allowed. PDFs are not accepted.");
+          return;
+        }
+
+        // Validate size (1MB = 1048576 bytes)
+        let sizeBytes = asset.fileSize;
+        if (!sizeBytes && asset.base64) {
+          sizeBytes = Math.round((asset.base64.length * 3) / 4);
+        }
+
+        if (sizeBytes && sizeBytes > 1024 * 1024) {
+          setIsUploading(false);
+          Alert.alert("File Too Large", "The receipt image must be 1MB or smaller.");
+          return;
+        }
+
+        if (asset.base64) {
+          const format = uriLower.endsWith(".png") || mimeType === "image/png" ? "png" : "jpeg";
+          setReceiptUrl(`data:image/${format};base64,${asset.base64}`);
+        } else {
+          Alert.alert("Error", "Could not read the image data.");
+        }
         setIsUploading(false);
-      }, 1200);
+      }
+    } catch (err: any) {
+      setIsUploading(false);
+      Alert.alert("Error picking image", err.message || "Failed to pick image");
     }
   };
 
@@ -384,29 +453,35 @@ export default function AddExpenseScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalList}>
-              <TouchableOpacity
-                style={styles.modalItem}
-                onPress={() => {
-                  setCategoryId("");
-                  setCategoryName("None / General");
-                  setShowCategorySelector(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>None / General</Text>
-              </TouchableOpacity>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={styles.modalItem}
-                  onPress={() => {
-                    setCategoryId(cat.id);
-                    setCategoryName(cat.name);
-                    setShowCategorySelector(false);
-                  }}
-                >
-                  <Text style={styles.modalItemText}>{cat.name}</Text>
-                </TouchableOpacity>
-              ))}
+              {loadingCategories ? (
+                <ActivityIndicator size="small" color={colors.primaryBrand} style={{ marginVertical: 20 }} />
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setCategoryId("");
+                      setCategoryName("None / General");
+                      setShowCategorySelector(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>None / General</Text>
+                  </TouchableOpacity>
+                  {categories.map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={styles.modalItem}
+                      onPress={() => {
+                        setCategoryId(cat.id);
+                        setCategoryName(cat.name);
+                        setShowCategorySelector(false);
+                      }}
+                    >
+                      <Text style={styles.modalItemText}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -423,29 +498,35 @@ export default function AddExpenseScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalList}>
-              <TouchableOpacity
-                style={styles.modalItem}
-                onPress={() => {
-                  setVendorId("");
-                  setVendorName("None");
-                  setShowVendorSelector(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>None</Text>
-              </TouchableOpacity>
-              {vendors.map((vendor) => (
-                <TouchableOpacity
-                  key={vendor.id}
-                  style={styles.modalItem}
-                  onPress={() => {
-                    setVendorId(vendor.id);
-                    setVendorName(vendor.name);
-                    setShowVendorSelector(false);
-                  }}
-                >
-                  <Text style={styles.modalItemText}>{vendor.name}</Text>
-                </TouchableOpacity>
-              ))}
+              {loadingVendors ? (
+                <ActivityIndicator size="small" color={colors.primaryBrand} style={{ marginVertical: 20 }} />
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setVendorId("");
+                      setVendorName("None");
+                      setShowVendorSelector(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>None</Text>
+                  </TouchableOpacity>
+                  {vendors.map((vendor) => (
+                    <TouchableOpacity
+                      key={vendor.id}
+                      style={styles.modalItem}
+                      onPress={() => {
+                        setVendorId(vendor.id);
+                        setVendorName(vendor.name);
+                        setShowVendorSelector(false);
+                      }}
+                    >
+                      <Text style={styles.modalItemText}>{vendor.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
             </ScrollView>
           </View>
         </View>

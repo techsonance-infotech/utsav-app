@@ -479,6 +479,12 @@ export default function DashboardLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="recent-activity"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
