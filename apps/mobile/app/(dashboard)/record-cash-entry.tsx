@@ -14,6 +14,7 @@ export default function RecordCashEntryScreen() {
   const [selectedCampaign, setSelectedCampaign] = useState("general");
   const [receiptRef, setReceiptRef] = useState("");
   const [notes, setNotes] = useState("");
+  const [status, setStatus] = useState<"confirmed" | "pending">("confirmed");
 
   const { tenantId, userFullName } = useAuthStore();
   const { data: tenant } = useFetchTenant(tenantId);
@@ -36,15 +37,25 @@ export default function RecordCashEntryScreen() {
       Alert.alert("Error", "Please enter the donor name.");
       return;
     }
+    let formattedPhone: string | undefined = undefined;
+    if (mobile) {
+      const cleaned = mobile.replace(/\D/g, "");
+      if (cleaned.length !== 10) {
+        Alert.alert("Error", "Please enter a valid 10-digit mobile number.");
+        return;
+      }
+      formattedPhone = cleaned;
+    }
 
     try {
       await createDonationMutation.mutateAsync({
         donor_name: donorName,
-        donor_phone: mobile ? `+91${mobile}` : undefined,
+        donor_phone: formattedPhone,
         amount: donationAmount,
         mode: "cash",
         campaign_id: selectedCampaign === "general" ? undefined : selectedCampaign,
         note: notes ? `${notes} (Ref: ${receiptRef})` : receiptRef ? `Ref: ${receiptRef}` : undefined,
+        status,
       });
 
       Alert.alert("Success", "Cash donation recorded successfully!", [
@@ -109,8 +120,41 @@ export default function RecordCashEntryScreen() {
               <Text style={styles.bannerValue}>CASH PAYMENT</Text>
             </View>
           </View>
-          <View style={styles.fixedBadge}>
-            <Text style={styles.fixedBadgeText}>CONFIRMED</Text>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            <TouchableOpacity
+              onPress={() => setStatus("confirmed")}
+              style={[
+                styles.statusSelectBadge,
+                status === "confirmed" ? styles.statusSelectBadgeActiveConfirmed : styles.statusSelectBadgeInactive,
+              ]}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.statusSelectBadgeText,
+                  status === "confirmed" && styles.statusSelectBadgeTextActive,
+                ]}
+              >
+                PAID
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setStatus("pending")}
+              style={[
+                styles.statusSelectBadge,
+                status === "pending" ? styles.statusSelectBadgeActivePending : styles.statusSelectBadgeInactive,
+              ]}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.statusSelectBadgeText,
+                  status === "pending" && styles.statusSelectBadgeTextActive,
+                ]}
+              >
+                DUE
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -570,5 +614,34 @@ const styles = StyleSheet.create({
     fontFamily: fonts.inter.medium,
     color: colors.outline,
     textAlign: "center",
+  },
+  statusSelectBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusSelectBadgeActiveConfirmed: {
+    backgroundColor: "rgba(34, 197, 94, 0.15)",
+    borderColor: colors.tulsiGreen,
+  },
+  statusSelectBadgeActivePending: {
+    backgroundColor: "rgba(234, 179, 8, 0.15)",
+    borderColor: colors.haldiYellow,
+  },
+  statusSelectBadgeInactive: {
+    backgroundColor: "transparent",
+    borderColor: colors.sandstone,
+  },
+  statusSelectBadgeText: {
+    fontSize: 10,
+    fontFamily: fonts.inter.bold,
+    color: colors.outline,
+    letterSpacing: 0.5,
+  },
+  statusSelectBadgeTextActive: {
+    color: colors.onSurface,
   },
 });

@@ -40,7 +40,43 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: channelsError.message }, { status: 500 });
     }
 
-    return NextResponse.json(channels || []);
+    // Fetch members for these channels
+    const { data: allMemberships } = await supabase
+      .from("chat_channel_members")
+      .select("channel_id, user_id")
+      .in("channel_id", channelIds);
+
+    const uniqueUserIds = Array.from(new Set((allMemberships || []).map((m) => m.user_id)));
+    const memberProfiles: Record<string, { full_name: string; avatar_url: string | null }> = {};
+    if (uniqueUserIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("tenant_members")
+        .select("user_id, full_name, avatar_url")
+        .eq("tenant_id", tenantId)
+        .in("user_id", uniqueUserIds);
+      profiles?.forEach((p) => {
+        memberProfiles[p.user_id] = {
+          full_name: p.full_name,
+          avatar_url: p.avatar_url,
+        };
+      });
+    }
+
+    const enrichedChannels = (channels || []).map((ch) => {
+      const chMembers = (allMemberships || [])
+        .filter((m) => m.channel_id === ch.id)
+        .map((m) => ({
+          user_id: m.user_id,
+          full_name: memberProfiles[m.user_id]?.full_name || "Member",
+          avatar_url: memberProfiles[m.user_id]?.avatar_url || null,
+        }));
+      return {
+        ...ch,
+        members: chMembers,
+      };
+    });
+
+    return NextResponse.json(enrichedChannels);
   } catch (err: any) {
     return NextResponse.json({ message: err.message }, { status: 500 });
   }

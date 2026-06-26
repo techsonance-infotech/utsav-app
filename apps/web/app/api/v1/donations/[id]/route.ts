@@ -3,7 +3,14 @@ import { verifySession, createServiceRoleClient, logAuditEvent } from "../../uti
 import { z } from "zod";
 
 const UpdateDonationSchema = z.object({
-  status: z.enum(["pending", "confirmed", "failed", "refunded"]),
+  status: z.enum(["pending", "confirmed", "failed", "refunded"]).optional(),
+  donor_name: z.string().min(1).optional(),
+  donor_phone: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  donor_email: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  donor_address: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  amount: z.number().positive().optional(),
+  campaign_id: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  note: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
 });
 
 export async function GET(
@@ -102,7 +109,7 @@ export async function PATCH(
 
     const allowedRoles = ["owner", "admin", "treasurer"];
     if (!member || !allowedRoles.includes(member.role)) {
-      return NextResponse.json({ message: "Forbidden: Only owners, admins, or treasurers can update transaction statuses." }, { status: 403 });
+      return NextResponse.json({ message: "Forbidden: Only owners, admins, or treasurers can update transaction details." }, { status: 403 });
     }
 
     const { data: donation, error: dbError } = await supabase
@@ -117,9 +124,33 @@ export async function PATCH(
     }
 
     const updatePayload: Record<string, any> = {
-      status: parsed.data.status,
       updated_at: new Date().toISOString(),
     };
+
+    if (parsed.data.status !== undefined) updatePayload.status = parsed.data.status;
+    if (parsed.data.donor_name !== undefined) updatePayload.donor_name = parsed.data.donor_name;
+    if (parsed.data.donor_phone !== undefined) {
+      if (parsed.data.donor_phone) {
+        const cleaned = parsed.data.donor_phone.replace(/\D/g, "");
+        const tenDigits = cleaned.length > 10 ? cleaned.slice(-10) : cleaned;
+        if (!/^\d{10}$/.test(tenDigits)) {
+          return NextResponse.json({ message: "Phone number must be exactly 10 digits" }, { status: 400 });
+        }
+        updatePayload.donor_phone = tenDigits;
+      } else {
+        updatePayload.donor_phone = null;
+      }
+    }
+    if (parsed.data.donor_email !== undefined) {
+      if (parsed.data.donor_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parsed.data.donor_email)) {
+        return NextResponse.json({ message: "Invalid email address" }, { status: 400 });
+      }
+      updatePayload.donor_email = parsed.data.donor_email;
+    }
+    if (parsed.data.donor_address !== undefined) updatePayload.donor_address = parsed.data.donor_address;
+    if (parsed.data.amount !== undefined) updatePayload.amount = parsed.data.amount;
+    if (parsed.data.campaign_id !== undefined) updatePayload.campaign_id = parsed.data.campaign_id;
+    if (parsed.data.note !== undefined) updatePayload.note = parsed.data.note;
 
     // If status is transitioning to confirmed, also set paid_at if not set
     if (parsed.data.status === "confirmed" && !donation.paid_at) {
@@ -128,6 +159,8 @@ export async function PATCH(
       if (!donation.receipt_number) {
         updatePayload.receipt_number = `RCPT-${Math.floor(Math.random() * 90000) + 10000}`;
       }
+    } else if (parsed.data.status === "pending") {
+      updatePayload.paid_at = null;
     }
 
     const { data: updatedDonation, error: updateError } = await supabase
