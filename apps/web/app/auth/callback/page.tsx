@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
-
 import { AlertCircle } from "lucide-react";
 
 export default function AuthCallbackPage() {
@@ -15,8 +14,6 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleOAuthCallback = async () => {
       try {
-        // Supabase client with `detectSessionInUrl: true` will automatically
-        // pick up the access_token from the URL hash fragment and set the session.
         const {
           data: { session },
           error: sessionError,
@@ -29,7 +26,6 @@ export default function AuthCallbackPage() {
         }
 
         if (!session) {
-          // If getSession doesn't find it yet, try listening for auth state change
           const {
             data: { subscription },
           } = supabase.auth.onAuthStateChange(async (event, newSession) => {
@@ -39,7 +35,6 @@ export default function AuthCallbackPage() {
             }
           });
 
-          // Timeout fallback — if no auth event fires within 8 seconds, redirect to login
           setTimeout(() => {
             subscription.unsubscribe();
             setError("Authentication timed out. Please try again.");
@@ -64,38 +59,81 @@ export default function AuthCallbackPage() {
         user.email ||
         "";
 
-      // Persist session in localStorage (Google SSO = persistent session)
+      // 1. Check for pending Google OAuth signup invitations
+      let pendingToken = null;
+      let pendingName = "";
+      let pendingPhone = "";
       if (typeof window !== "undefined") {
-        localStorage.setItem("utsav_user_id", user.id);
-        localStorage.setItem("utsav_access_token", accessToken);
+        pendingToken = sessionStorage.getItem("utsav_pending_invite_token");
+        pendingName = sessionStorage.getItem("utsav_pending_invite_name") || "";
+        pendingPhone = sessionStorage.getItem("utsav_pending_invite_phone") || "";
       }
 
-      // Update Zustand auth store
-      setAuth({
-        userId: user.id,
-        accessToken,
-        tenantId: null,
-        tenantName: null,
-        tenantSlug: null,
-        role: null,
-      });
+      if (pendingToken) {
+        try {
+          const linkRes = await fetch(
+            `${window.location.origin}/api/v1/auth/accept-google-invite`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: user.id,
+                token: pendingToken,
+                fullName: pendingName,
+                phone: pendingPhone,
+              }),
+            }
+          );
 
-      // Check if the user already has a tenant membership via API
-      try {
-        const res = await fetch(
-          `${window.location.origin}/api/v1/auth/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
+          if (linkRes.ok) {
+            sessionStorage.removeItem("utsav_pending_invite_token");
+            sessionStorage.removeItem("utsav_pending_invite_name");
+            sessionStorage.removeItem("utsav_pending_invite_phone");
           }
-        );
+        } catch (linkErr) {
+          console.error("Failed to link invitation token:", linkErr);
+        }
+      }
+
+      // Check if user has active/pending tenant membership
+      try {
+        const res = await fetch(`${window.location.origin}/api/v1/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        });
 
         if (res.ok) {
           const data = await res.json();
+
+          // If membership is pending, block routing and show info message
+          if (data.tenant?.status === "pending") {
+            setAuth({
+              userId: null,
+              accessToken: null,
+              tenantId: null,
+              tenantName: null,
+              tenantSlug: null,
+              role: null,
+            });
+
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("utsav_user_id");
+              localStorage.removeItem("utsav_access_token");
+              localStorage.removeItem("utsav_tenant_id");
+              localStorage.removeItem("utsav_tenant_slug");
+              localStorage.removeItem("utsav_tenant_name");
+              localStorage.removeItem("utsav_role");
+            }
+
+            setError(
+              "Your registration was submitted successfully and is pending approval by the Mandal administrators. Once approved, you can log in."
+            );
+            return;
+          }
+
           if (data.tenant?.id) {
-            // User has an existing tenant — go to dashboard
             setAuth({
               userId: user.id,
               accessToken,
@@ -110,6 +148,8 @@ export default function AuthCallbackPage() {
               localStorage.setItem("utsav_tenant_slug", data.tenant.slug);
               localStorage.setItem("utsav_tenant_name", data.tenant.name);
               localStorage.setItem("utsav_role", data.tenant.role);
+              localStorage.setItem("utsav_user_id", user.id);
+              localStorage.setItem("utsav_access_token", accessToken);
             }
 
             if (data.tenant.slug) {
@@ -120,11 +160,25 @@ export default function AuthCallbackPage() {
             return;
           }
         }
-      } catch {
-        // API might not have /auth/me yet — that's okay, just proceed to onboarding
+      } catch (err) {
+        console.error("Failed to check profile details:", err);
       }
 
-      // No tenant found — redirect to onboarding
+      // Default fallback
+      setAuth({
+        userId: user.id,
+        accessToken,
+        tenantId: null,
+        tenantName: null,
+        tenantSlug: null,
+        role: null,
+      });
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("utsav_user_id", user.id);
+        localStorage.setItem("utsav_access_token", accessToken);
+      }
+
       router.replace("/onboarding");
     };
 
@@ -134,17 +188,17 @@ export default function AuthCallbackPage() {
   if (error) {
     return (
       <div className="bg-puja-white min-h-screen flex items-center justify-center">
-        <div className="max-w-md w-full mx-4 p-xl bg-white border border-sandstone rounded-2xl shadow-lg text-center">
-          <div className="w-16 h-16 mx-auto mb-lg bg-error-container rounded-full flex items-center justify-center">
-            <AlertCircle className="h-8 w-8 text-on-error-container" />
+        <div className="max-w-md w-full mx-4 p-8 bg-white border border-sandstone rounded-2xl shadow-lg text-center">
+          <div className="w-16 h-16 mx-auto mb-6 bg-amber-50 rounded-full flex items-center justify-center">
+            <AlertCircle className="h-8 w-8 text-amber-600" />
           </div>
-          <h2 className="font-headline-md text-headline-md text-on-surface mb-md">
-            Authentication Failed
+          <h2 className="text-xl font-bold text-gray-900 mb-3">
+            Registration Status
           </h2>
-          <p className="font-body-md text-on-surface-variant mb-xl">{error}</p>
+          <p className="text-sm text-gray-600 mb-6 leading-relaxed">{error}</p>
           <button
             onClick={() => router.replace("/login")}
-            className="w-full py-3 bg-primary text-on-primary font-label-md rounded-xl hover:bg-surface-tint transition-colors"
+            className="w-full py-3 bg-amber-600 text-white font-semibold rounded-xl hover:bg-amber-700 transition-colors"
           >
             Back to Login
           </button>
@@ -154,19 +208,18 @@ export default function AuthCallbackPage() {
   }
 
   return (
-    <div className="bg-puja-white min-h-screen flex flex-col items-center justify-center gap-lg">
-      {/* Loading Spinner */}
+    <div className="bg-puja-white min-h-screen flex flex-col items-center justify-center gap-6">
       <div className="relative">
-        <div className="w-16 h-16 border-4 border-sandstone border-t-primary rounded-full animate-spin"></div>
+        <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"></div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-8 h-8 bg-primary-container/30 rounded-full animate-pulse"></div>
+          <div className="w-8 h-8 bg-amber-600/30 rounded-full animate-pulse"></div>
         </div>
       </div>
       <div className="text-center">
-        <h2 className="font-headline-sm text-headline-sm text-on-surface mb-xs">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">
           Signing you in...
         </h2>
-        <p className="font-body-md text-on-surface-variant">
+        <p className="text-sm text-gray-500">
           Please wait while we complete your Google sign-in.
         </p>
       </div>

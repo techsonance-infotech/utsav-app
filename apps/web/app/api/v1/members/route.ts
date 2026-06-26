@@ -31,19 +31,22 @@ export async function GET(req: Request) {
     return NextResponse.json({ message: "Access denied" }, { status: 403 });
   }
 
+  const statusFilter = status || "active";
+  if (statusFilter === "pending" && !["owner", "admin"].includes(requester.role)) {
+    return NextResponse.json({ message: "Access denied: pending approval list is only accessible to admins or owners" }, { status: 403 });
+  }
+
   let query = supabase
     .from("tenant_members")
     .select("*")
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .eq("status", statusFilter);
 
   if (role) {
     query = query.eq("role", role);
   }
-  if (status) {
-    query = query.eq("status", status);
-  }
   if (search) {
-    query = query.ilike("full_name", `%${search}%`);
+    query = query.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
   }
 
   // Sort by name

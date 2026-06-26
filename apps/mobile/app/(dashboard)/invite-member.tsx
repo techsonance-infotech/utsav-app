@@ -1,17 +1,25 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform } from "react-native";
+import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { colors, fonts, spacing } from "../lib/theme";
+import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useGenerateInvite } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
+import * as Clipboard from "expo-clipboard";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+
+type RoleType = "treasurer" | "admin" | "volunteer" | "member";
 
 export default function InviteMemberScreen() {
+  const { tenantSlug, tenantName } = useAuthStore();
   const generateInviteMutation = useGenerateInvite();
 
   // Form Fields
   const [inviteeName, setInviteeName] = useState("");
-  const [roleSelection, setRoleSelection] = useState<"treasurer" | "admin" | "volunteer">("volunteer");
+  const [inviteePhone, setInviteePhone] = useState("");
+  const [roleSelection, setRoleSelection] = useState<RoleType>("volunteer");
 
   // Output token & link
   const [generatedLink, setGeneratedLink] = useState("");
@@ -22,6 +30,13 @@ export default function InviteMemberScreen() {
     if (!inviteeName.trim()) {
       Alert.alert("Name Required", "Please enter the invitee's name.");
       return;
+    }
+    if (!inviteePhone.trim()) {
+      Alert.alert("Phone Required", "Please enter the invitee's mobile number.");
+      return;
+    }
+    if (!/^\d{10}$/.test(inviteePhone.trim())) {
+      Alert.alert("Invalid Phone", "Please enter a valid 10-digit mobile number.");
       return;
     }
 
@@ -30,6 +45,7 @@ export default function InviteMemberScreen() {
       const response = await generateInviteMutation.mutateAsync({
         role: roleSelection,
         invitee_name: inviteeName.trim(),
+        phone: inviteePhone.trim(),
         expires_in_days: 7,
       });
 
@@ -42,19 +58,72 @@ export default function InviteMemberScreen() {
     }
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!generatedLink) return;
-    // Clipboard copy mock
-    Alert.alert("Link Copied", "Invitation link copied to clipboard!");
+    try {
+      await Clipboard.setStringAsync(generatedLink);
+      Alert.alert("Link Copied", "Invitation link copied to clipboard!");
+    } catch (err: any) {
+      Alert.alert("Error", "Failed to copy link to clipboard.");
+    }
   };
 
   const handleWhatsAppShare = () => {
     if (!generatedLink) return;
-    Alert.alert(
-      "Opening WhatsApp",
-      `Sharing invite link for ${inviteeName} on WhatsApp...`
-    );
+    const cleanedPhone = inviteePhone.trim().replace(/\D/g, "");
+    const formattedPhone = cleanedPhone.length === 10 ? `91${cleanedPhone}` : cleanedPhone;
+
+    const roleMap: Record<RoleType, string> = {
+      treasurer: "Treasurer",
+      admin: "Committee Member",
+      volunteer: "Volunteer",
+      member: "Devotee",
+    };
+    const roleLabel = roleMap[roleSelection];
+
+    const message = `Hello ${inviteeName},\n\nYou have been invited to join ${tenantName || "our Mandal"} on Utsav App as a ${roleLabel}.\n\nPlease click the link below to verify your details and join:\n${generatedLink}\n\nRegards,\n${tenantName || "Utsav Mandal"}`;
+
+    const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+    Linking.openURL(whatsappUrl).catch(() => {
+      Alert.alert("Error", "WhatsApp is not installed on this device or could not be opened.");
+    });
   };
+
+  const handlePrintQR = async (qrDataUrl: string, title: string, subtitle: string) => {
+    const html = `
+      <html>
+        <body style="text-align: center; font-family: sans-serif; padding: 40px; color: #333333; background-color: #FFFFFF;">
+          <div style="border: 4px solid #FF9500; border-radius: 20px; padding: 30px; max-width: 500px; margin: 0 auto; background-color: #FFFDF9; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+            <h1 style="color: #D92B2B; margin-bottom: 5px; font-size: 28px; letter-spacing: 1px;">${(tenantName || "UTSAV MANDAL").toUpperCase()}</h1>
+            <h2 style="color: #FF9500; margin-top: 0; font-size: 20px; font-weight: 600;">${title}</h2>
+            <hr style="border: 0; border-top: 1px solid #E8E2D6; margin: 20px 0;" />
+            <p style="font-size: 15px; line-height: 1.6; color: #555555; margin-bottom: 25px; padding: 0 10px;">
+              ${subtitle}
+            </p>
+            <div style="display: inline-block; background: white; padding: 15px; border: 1px solid #E8E2D6; border-radius: 12px; margin-bottom: 20px;">
+              <img src="${qrDataUrl}" style="width: 250px; height: 250px; display: block;" />
+            </div>
+            <p style="font-size: 12px; color: #999999; margin-top: 25px;">
+              Scan using your smartphone camera or QR reader to join.
+            </p>
+            <p style="font-size: 11px; color: #CCCCCC; margin-top: 5px;">
+              Powered by Utsav App • techsonance.co.in
+            </p>
+          </div>
+        </body>
+      </html>
+    `;
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: `Print/Save ${title}` });
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to download QR code PDF");
+    }
+  };
+
+  const volunteerLink = tenantSlug
+    ? `https://${tenantSlug}.techsonance.co.in/join?role=volunteer`
+    : "";
 
   return (
     <SafeAreaView style={styles.container}>
@@ -71,7 +140,7 @@ export default function InviteMemberScreen() {
         {/* Intro */}
         <View style={styles.introContainer}>
           <Text style={styles.introTitle}>Invite Member</Text>
-          <Text style={styles.introSub}>Add a new coordinator, treasurer, or volunteer to your Mandal.</Text>
+          <Text style={styles.introSub}>Add a new coordinator, treasurer, volunteer, or devotee to your Mandal.</Text>
         </View>
 
         {/* Input Card */}
@@ -84,6 +153,19 @@ export default function InviteMemberScreen() {
               placeholderTextColor={colors.outline}
               value={inviteeName}
               onChangeText={setInviteeName}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.fieldLabel}>Mobile Number</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="10-digit mobile number"
+              placeholderTextColor={colors.outline}
+              keyboardType="phone-pad"
+              maxLength={10}
+              value={inviteePhone}
+              onChangeText={setInviteePhone}
             />
           </View>
 
@@ -153,6 +235,27 @@ export default function InviteMemberScreen() {
                 color={roleSelection === "volunteer" ? colors.primaryContainer : colors.outline}
               />
             </TouchableOpacity>
+
+            {/* Devotee/Member Option */}
+            <TouchableOpacity
+              style={[styles.roleRow, roleSelection === "member" && styles.roleRowActive]}
+              onPress={() => setRoleSelection("member")}
+            >
+              <View style={styles.roleLeft}>
+                <View style={styles.roleIconBox}>
+                  <MaterialCommunityIcons name="account-heart-outline" size={20} color={colors.primaryBrand} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.roleTitle}>Devotee / Member</Text>
+                  <Text style={styles.roleDesc}>Access announcements, donation campaigns & chats</Text>
+                </View>
+              </View>
+              <MaterialCommunityIcons
+                name={roleSelection === "member" ? "radiobox-marked" : "radiobox-blank"}
+                size={22}
+                color={roleSelection === "member" ? colors.primaryContainer : colors.outline}
+              />
+            </TouchableOpacity>
           </View>
 
           {/* Generate Button / Display Link */}
@@ -187,7 +290,7 @@ export default function InviteMemberScreen() {
               <View style={styles.shareButtonsRow}>
                 <TouchableOpacity style={styles.whatsappBtn} onPress={handleWhatsAppShare}>
                   <MaterialCommunityIcons name="whatsapp" size={18} color="#FFFFFF" />
-                  <Text style={styles.whatsappText}>Share via WhatsApp</Text>
+                  <Text style={styles.whatsappText}>Send to WhatsApp</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -207,26 +310,76 @@ export default function InviteMemberScreen() {
         {/* In-Person Onboarding Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>In-Person Onboarding</Text>
-          <View style={styles.qrCard}>
-            <View style={styles.qrPlaceholderBox}>
-              {/* Render a styled mockup QR code using nested border layouts */}
-              <View style={styles.qrCorner}>
+
+          {/* Card 1: Specific Invitation Link QR Code */}
+          {generatedLink ? (
+            <View style={styles.qrCard}>
+              <View style={styles.qrPlaceholderBox}>
                 <View style={styles.qrInnerBlock}>
-                  <MaterialCommunityIcons name="qrcode" size={120} color={colors.charcoal} />
+                  <Print.Image
+                    source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(generatedLink)}` }}
+                    style={{ width: 140, height: 140 }}
+                  />
                 </View>
               </View>
-            </View>
-            <View style={styles.qrInfo}>
-              <Text style={styles.qrTitle}>Scan to Join in Person</Text>
-              <Text style={styles.qrDesc}>
-                Let {inviteeName ? inviteeName : "them"} scan this QR code to join instantly as a{" "}
-                <Text style={{ fontFamily: fonts.inter.bold, color: colors.primaryBrand }}>
-                  {roleSelection.toUpperCase()}
+              <View style={styles.qrInfo}>
+                <Text style={styles.qrTitle}>Personalized Onboarding QR</Text>
+                <Text style={styles.qrDesc}>
+                  Let <Text style={{ fontFamily: fonts.inter.bold }}>{inviteeName}</Text> scan this to register as a{" "}
+                  <Text style={{ fontFamily: fonts.inter.bold, color: colors.primaryBrand }}>
+                    {roleSelection === "admin" ? "COMMITTEE MEMBER" : roleSelection.toUpperCase()}
+                  </Text>
+                  .
                 </Text>
-                .
-              </Text>
+                <TouchableOpacity
+                  style={styles.downloadBtn}
+                  onPress={() =>
+                    handlePrintQR(
+                      `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(generatedLink)}`,
+                      `Personalized Invite: ${inviteeName}`,
+                      `Scan this QR to register as a ${roleSelection === "admin" ? "Committee Member" : roleSelection} in ${tenantName || "our Mandal"}.`
+                    )
+                  }
+                >
+                  <MaterialCommunityIcons name="download" size={16} color={colors.primaryBrand} />
+                  <Text style={styles.downloadBtnText}>Download/Print QR</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          ) : null}
+
+          {/* Card 2: Constant Volunteer Join QR Code */}
+          {volunteerLink ? (
+            <View style={styles.qrCard}>
+              <View style={styles.qrPlaceholderBox}>
+                <View style={styles.qrInnerBlock}>
+                  <Print.Image
+                    source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(volunteerLink)}` }}
+                    style={{ width: 140, height: 140 }}
+                  />
+                </View>
+              </View>
+              <View style={styles.qrInfo}>
+                <Text style={styles.qrTitle}>Join instantly as a Volunteer</Text>
+                <Text style={styles.qrDesc}>
+                  Print and display this QR code around your Mandal premises to invite volunteer signups.
+                </Text>
+                <TouchableOpacity
+                  style={styles.downloadBtn}
+                  onPress={() =>
+                    handlePrintQR(
+                      `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(volunteerLink)}`,
+                      "Join as Volunteer",
+                      `Scan this QR code to join ${tenantName || "our Mandal"} as a Volunteer.`
+                    )
+                  }
+                >
+                  <MaterialCommunityIcons name="download" size={16} color={colors.primaryBrand} />
+                  <Text style={styles.downloadBtnText}>Download/Print QR</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -324,6 +477,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     backgroundColor: colors.pujaWhite,
+    marginBottom: 8,
   },
   roleRowActive: {
     borderColor: colors.primaryContainer,
@@ -438,7 +592,7 @@ const styles = StyleSheet.create({
   },
   section: {
     marginTop: 24,
-    gap: 12,
+    gap: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -454,6 +608,7 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "center",
     gap: 16,
+    marginBottom: 8,
   },
   qrPlaceholderBox: {
     padding: 12,
@@ -462,16 +617,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.sandstone,
   },
-  qrCorner: {
-    padding: 4,
-  },
   qrInnerBlock: {
     justifyContent: "center",
     alignItems: "center",
+    width: 140,
+    height: 140,
+    overflow: "hidden",
   },
   qrInfo: {
     alignItems: "center",
     gap: 6,
+    width: "100%",
   },
   qrTitle: {
     fontSize: 15,
@@ -485,5 +641,23 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
     paddingHorizontal: 16,
+  },
+  downloadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.primaryBrand,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  downloadBtnText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.bold,
+    color: colors.primaryBrand,
   },
 });
