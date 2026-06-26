@@ -89,11 +89,13 @@ const CreateDonationSchema = z.object({
   donor_name: z.string().min(1, "Donor name is required"),
   donor_phone: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
   donor_email: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  donor_address: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
   amount: z.number().positive("Amount must be a positive number"),
   mode: z.string().default("online"),
   campaign_id: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
   is_anonymous: z.boolean().default(false),
   note: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
+  status: z.string().optional().nullable().transform((val: string | null | undefined) => val && val.trim() !== "" ? val.trim() : null),
 });
 
 export async function POST(req: Request) {
@@ -113,8 +115,13 @@ export async function POST(req: Request) {
     const validatedData = parsed.data;
 
     // Validate phone number format if provided
-    if (validatedData.donor_phone && !/^\d{10}$/.test(validatedData.donor_phone)) {
-      return NextResponse.json({ message: "Phone number must be exactly 10 digits" }, { status: 400 });
+    if (validatedData.donor_phone) {
+      const cleaned = validatedData.donor_phone.replace(/\D/g, "");
+      const tenDigits = cleaned.length > 10 ? cleaned.slice(-10) : cleaned;
+      if (!/^\d{10}$/.test(tenDigits)) {
+        return NextResponse.json({ message: "Phone number must be exactly 10 digits" }, { status: 400 });
+      }
+      validatedData.donor_phone = tenDigits;
     }
 
     // Validate email format if provided
@@ -163,6 +170,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: "Forbidden: Only committee members can record offline donations" }, { status: 403 });
       }
 
+      const finalStatus = validatedData.status || "confirmed";
       const { data: donation, error: dbError } = await supabase
         .from("donations")
         .insert({
@@ -173,14 +181,15 @@ export async function POST(req: Request) {
           donor_name: validatedData.donor_name,
           donor_phone: validatedData.donor_phone,
           donor_email: validatedData.donor_email,
+          donor_address: validatedData.donor_address,
           amount: validatedData.amount,
           currency: "INR",
           mode: validatedData.mode,
-          status: "confirmed",
+          status: finalStatus,
           is_anonymous: validatedData.is_anonymous,
           is_in_kind: validatedData.mode === "in_kind",
           note: validatedData.note,
-          paid_at: new Date().toISOString(),
+          paid_at: finalStatus === "confirmed" ? new Date().toISOString() : null,
         })
         .select()
         .single();
@@ -210,10 +219,11 @@ export async function POST(req: Request) {
           donor_name: validatedData.donor_name,
           donor_phone: validatedData.donor_phone,
           donor_email: validatedData.donor_email,
+          donor_address: validatedData.donor_address,
           amount: validatedData.amount,
           currency: "INR",
           mode: "online",
-          status: "pending",
+          status: validatedData.status || "pending",
           is_anonymous: validatedData.is_anonymous,
           note: validatedData.note,
         })

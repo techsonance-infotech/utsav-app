@@ -11,6 +11,7 @@ export interface Donation {
   donor_name: string;
   donor_phone?: string | null;
   donor_email?: string | null;
+  donor_address?: string | null;
   amount: number;
   currency: string;
   mode: "online" | "cash" | "cheque" | "bank_transfer" | "in_kind";
@@ -83,11 +84,13 @@ export function useCreateDonation() {
       donor_name: string;
       donor_phone?: string;
       donor_email?: string;
+      donor_address?: string;
       amount: number;
       mode: string;
       campaign_id?: string;
       is_anonymous?: boolean;
       note?: string;
+      status?: string;
     }) => {
       return apiClient<Donation>("/donations", {
         method: "POST",
@@ -185,10 +188,23 @@ export function useUpdateDonation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({
+      id,
+      ...data
+    }: {
+      id: string;
+      status?: string;
+      donor_name?: string;
+      donor_phone?: string | null;
+      donor_email?: string | null;
+      donor_address?: string | null;
+      amount?: number;
+      campaign_id?: string | null;
+      note?: string | null;
+    }) => {
       return apiClient<Donation>(`/donations/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(data),
       });
     },
     onSuccess: () => {

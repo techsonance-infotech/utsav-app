@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, Switch, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, Switch, ActivityIndicator, KeyboardAvoidingView, Platform, Image, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
@@ -7,6 +7,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFetchTenant, useUpdateTenant } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 import LoaderOverlay from "../components/LoaderOverlay";
+import * as ImagePicker from "expo-image-picker";
 
 function CustomInput({
   label,
@@ -171,6 +172,7 @@ export default function EditMandalScreen() {
   const [timezone, setTimezone] = useState("Asia/Kolkata");
   const [isPublicDonations, setIsPublicDonations] = useState(true);
   const [isPublicExpenses, setIsPublicExpenses] = useState(false);
+  const [logoUrl, setLogoUrl] = useState("");
 
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -192,8 +194,33 @@ export default function EditMandalScreen() {
       setTimezone(tenant.timezone || "Asia/Kolkata");
       setIsPublicDonations(tenant.is_public_donations);
       setIsPublicExpenses(tenant.is_public_expenses);
+      setLogoUrl(tenant.logo_url || "");
     }
   }, [tenant]);
+
+  const handlePickQR = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "We need gallery permissions to select a QR code photo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0].base64) {
+        const base64Uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        setLogoUrl(base64Uri);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to select image.");
+    }
+  };
 
   const handleSave = async () => {
     setErrorMsg("");
@@ -230,6 +257,7 @@ export default function EditMandalScreen() {
         timezone: timezone.trim(),
         is_public_donations: isPublicDonations,
         is_public_expenses: isPublicExpenses,
+        logo_url: logoUrl || null,
       });
 
       router.back();
@@ -452,6 +480,42 @@ export default function EditMandalScreen() {
             />
           </View>
 
+          {/* Section 5: UPI QR Code Setup */}
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="qrcode-scan" size={20} color={colors.primaryBrand} />
+            <Text style={styles.sectionTitle}>UPI Payment & QR Code Setup</Text>
+          </View>
+
+          <View style={styles.formCard}>
+            <Text style={styles.fieldLabel}>Mandal UPI QR Code</Text>
+            <Text style={styles.fieldSubLabel}>
+              Upload the static UPI QR Code image of your Mandal's bank account. This QR Code will be displayed on the donation screen for devotees to scan and pay directly.
+            </Text>
+
+            {logoUrl ? (
+              <View style={styles.qrImageContainer}>
+                <Image source={{ uri: logoUrl }} style={styles.qrPreview} resizeMode="contain" />
+                <View style={styles.qrActionsRow}>
+                  <TouchableOpacity style={styles.qrChangeBtn} onPress={handlePickQR} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="image-edit-outline" size={16} color={colors.primaryBrand} />
+                    <Text style={styles.qrChangeBtnText}>Change QR Code</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.qrDeleteBtn} onPress={() => setLogoUrl("")} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="delete-outline" size={16} color={colors.kumkumRed} />
+                    <Text style={styles.qrDeleteBtnText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.qrUploadBox} onPress={handlePickQR} activeOpacity={0.8}>
+                <View style={styles.qrUploadIconCircle}>
+                  <MaterialCommunityIcons name="qrcode" size={32} color={colors.primaryBrand} />
+                </View>
+                <Text style={styles.qrUploadTitle}>Upload UPI QR Code Image</Text>
+                <Text style={styles.qrUploadSubtitle}>JPG or PNG format, square aspect recommended</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -696,5 +760,97 @@ const styles = StyleSheet.create({
     fontFamily: fonts.poppins.bold,
     fontSize: 14,
     color: "#FFFFFF",
+  },
+  fieldSubLabel: {
+    fontFamily: fonts.inter.regular,
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  qrUploadBox: {
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: colors.outlineVariant,
+    borderRadius: 16,
+    padding: spacing.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 149, 0, 0.02)",
+    gap: 8,
+  },
+  qrUploadIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255, 149, 0, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  qrUploadTitle: {
+    fontFamily: fonts.poppins.semibold,
+    fontSize: 14,
+    color: colors.charcoal,
+  },
+  qrUploadSubtitle: {
+    fontFamily: fonts.inter.regular,
+    fontSize: 11,
+    color: colors.onSurfaceVariant,
+    textAlign: "center",
+  },
+  qrImageContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.md,
+    backgroundColor: "rgba(255, 149, 0, 0.02)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+  },
+  qrPreview: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+  },
+  qrActionsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  qrChangeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    backgroundColor: "#FFFFFF",
+  },
+  qrChangeBtnText: {
+    fontFamily: fonts.inter.semibold,
+    fontSize: 12,
+    color: colors.primaryBrand,
+  },
+  qrDeleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    backgroundColor: "#FFFFFF",
+  },
+  qrDeleteBtnText: {
+    fontFamily: fonts.inter.semibold,
+    fontSize: 12,
+    color: colors.kumkumRed,
   },
 });

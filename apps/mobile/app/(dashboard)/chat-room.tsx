@@ -91,12 +91,23 @@ export default function ChatRoomScreen() {
                   ]}
                 >
                   {!isSelf && (
-                    <Image
-                      source={{
-                        uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuDVm8mGX1o_66QQ0TzJkL-JcjJ8BURxWYH1fS2eaADOF1War6HJ06FH9k7e5bMcYrbzPoedgYM_Jmz9I6v5uvayyklGETyQHTmJJ_voLAGFBhrUMH-Ko0mM1UtU0GXbjjn82W4II3QR9x9eiDkt5GU66Q-jxgp6DdJy5l8zJ68wEwdDav2_ySOnqWN3SA1-B9el2FV3Q1fP2sLnCPjfWV6Rrr3ZUeHG_GlbS2WZA9k7gQx-VdU0Sz3F",
-                      }}
-                      style={styles.senderAvatar}
-                    />
+                    item.sender_avatar_url ? (
+                      <Image
+                        source={{ uri: item.sender_avatar_url }}
+                        style={styles.senderAvatar}
+                      />
+                    ) : (
+                      <View style={styles.senderInitialsFrame}>
+                        <Text style={styles.senderInitialsText}>
+                          {item.sender_name
+                            ?.split(" ")
+                            .map((n: string) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2) || "M"}
+                        </Text>
+                      </View>
+                    )
                   )}
 
                   <View style={[styles.bubble, isSelf ? styles.bubbleSelf : styles.bubbleOther]}>
@@ -281,5 +292,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryContainer,
     justifyContent: "center",
     alignItems: "center",
+  },
+  senderInitialsFrame: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.cream,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+  },
+  senderInitialsText: {
+    fontSize: 10,
+    fontFamily: fonts.inter.bold,
+    color: colors.primaryBrand,
   },
 });

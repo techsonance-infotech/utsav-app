@@ -79,12 +79,55 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       website_url,
     } = body;
 
+    let uploadedLogoUrl = logo_url;
+
+    if (logo_url !== undefined) {
+      if (logo_url && logo_url.startsWith("data:image/")) {
+        const matches = logo_url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const type = matches[1];
+          const buffer = Buffer.from(matches[2], "base64");
+          let ext = "jpg";
+          if (type === "image/png") ext = "png";
+          else if (type === "image/webp") ext = "webp";
+
+          const filePath = `${id}/logo_${Date.now()}.${ext}`;
+
+          try {
+            const { data: buckets } = await supabase.storage.listBuckets();
+            const bucketExists = buckets?.some((b) => b.name === "avatars");
+            if (!bucketExists) {
+              await supabase.storage.createBucket("avatars", { public: true });
+            }
+
+            const { error: uploadError } = await supabase.storage
+              .from("avatars")
+              .upload(filePath, buffer, {
+                contentType: type,
+                upsert: true,
+              });
+
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage
+                .from("avatars")
+                .getPublicUrl(filePath);
+              uploadedLogoUrl = urlData.publicUrl;
+            } else {
+              console.error("Logo upload failed:", uploadError);
+            }
+          } catch (storageErr) {
+            console.error("Logo storage operation failed:", storageErr);
+          }
+        }
+      }
+    }
+
     const { data: updatedTenant, error: updateError } = await supabase
       .from("tenants")
       .update({
         name,
         vertical,
-        logo_url,
+        logo_url: uploadedLogoUrl,
         banner_url,
         primary_color,
         city,

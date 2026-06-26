@@ -106,9 +106,12 @@ export async function apiClient<T>(
         };
 
         response = await fetch(url, retryConfig);
+      } else {
+        useAuthStore.getState().clearAuth();
       }
     } catch (refreshErr) {
       console.error("Failed to automatically refresh token:", refreshErr);
+      useAuthStore.getState().clearAuth();
     }
   }
 
