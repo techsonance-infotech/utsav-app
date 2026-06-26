@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import { useCreateRazorpayOrder } from "@utsav/api-client";
+import React, { useState, useEffect } from "react";
+import { useCreateRazorpayOrder, useCreateDonation } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import { Heart, CheckCircle2, AlertCircle, Loader2, Sparkles, Lock, X } from "lucide-react";
 
 interface Campaign {
@@ -13,10 +14,19 @@ interface DonationFormProps {
   tenantId: string;
   campaigns: Campaign[];
   primaryColor: string;
+  razorpayKeyId?: string | null;
+  logoUrl?: string | null;
 }
 
-export default function DonationForm({ tenantId, campaigns, primaryColor }: DonationFormProps) {
+export default function DonationForm({
+  tenantId,
+  campaigns,
+  primaryColor,
+  razorpayKeyId,
+  logoUrl,
+}: DonationFormProps) {
   const createOrderMutation = useCreateRazorpayOrder();
+  const recordDonationMutation = useCreateDonation();
 
   const [donorName, setDonorName] = useState("");
   const [donorPhone, setDonorPhone] = useState("");
@@ -33,6 +43,27 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
   const [isProcessing, setIsProcessing] = useState(false);
   const [mockOrderData, setMockOrderData] = useState<any>(null);
   const [confirmedDonation, setConfirmedDonation] = useState<any>(null);
+
+  const { role } = useAuthStore();
+  const allowedOffline = ["owner", "admin", "treasurer", "committee_member"].includes(role || "");
+
+  const hasRazorpay = !!razorpayKeyId;
+  const hasQRCode = !!logoUrl;
+
+  const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "upi_qr" | "cash">(
+    hasRazorpay ? "razorpay" : hasQRCode ? "upi_qr" : "cash"
+  );
+  const [paymentStatus, setPaymentStatus] = useState<"confirmed" | "pending">("confirmed");
+
+  useEffect(() => {
+    if (!allowedOffline) {
+      if (paymentMethod === "upi_qr") {
+        setPaymentStatus("pending");
+      } else {
+        setPaymentStatus("confirmed");
+      }
+    }
+  }, [paymentMethod, allowedOffline]);
 
   const amounts = [501, 1001, 2100, 5100];
 
@@ -63,6 +94,34 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
     if (!validate()) return;
     setErrorMsg("");
     setIsProcessing(true);
+
+    if (paymentMethod === "upi_qr" || paymentMethod === "cash") {
+      try {
+        const res = await recordDonationMutation.mutateAsync({
+          donor_name: donorName,
+          donor_phone: donorPhone || undefined,
+          donor_email: donorEmail || undefined,
+          amount: Number(amount),
+          mode: paymentMethod === "cash" ? "cash" : "online",
+          campaign_id: campaignId || undefined,
+          is_anonymous: isAnonymous,
+          note: note || undefined,
+          status: paymentStatus,
+        });
+
+        setConfirmedDonation({
+          receipt_number: res.receipt_number || `RCPT-${Math.floor(Math.random() * 90000) + 10000}`,
+          donor_name: res.donor_name,
+          amount: res.amount,
+          payment_id: paymentMethod === "cash" ? "CASH_COLLECTED" : "UPI_QR_MANUAL",
+        });
+      } catch (err: any) {
+        setErrorMsg(err.message || "Failed to record donation.");
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
 
     try {
       const order = await createOrderMutation.mutateAsync({
@@ -245,6 +304,49 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
           </div>
         )}
 
+        {/* Paid / Due Status Banner for Admins/Owners */}
+        {allowedOffline && (
+          <div className="bg-[#FAFAF8]/50 border border-[#E8E2D6] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-[#FF9500]/10 rounded-xl">
+                <span className="material-symbols-outlined text-[#8c5000]">
+                  {paymentMethod === "cash" ? "payments" : "qr_code_scanner"}
+                </span>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Payment Mode</p>
+                <p className="text-xs font-black text-gray-900 uppercase">
+                  {paymentMethod === "cash" ? "Cash Payment" : paymentMethod === "upi_qr" ? "Online Checkout (UPI QR)" : "Online (Razorpay)"}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentStatus("confirmed")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+                  paymentStatus === "confirmed"
+                    ? "bg-[#22C55E]/10 border-2 border-[#22C55E] text-[#22C55E]"
+                    : "bg-white border border-[#E8E2D6] text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                PAID
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentStatus("pending")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+                  paymentStatus === "pending"
+                    ? "bg-[#EAB308]/10 border-2 border-[#EAB308] text-[#EAB308]"
+                    : "bg-white border border-[#E8E2D6] text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                DUE
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Predefined Amounts Selection */}
         <div className="space-y-3">
           <label className="block text-[10px] font-extrabold text-[#554334] uppercase tracking-widest">
@@ -288,6 +390,125 @@ export default function DonationForm({ tenantId, campaigns, primaryColor }: Dona
           </div>
           {errors.amount && <p className="text-[10px] text-red-500 font-bold mt-1">{errors.amount}</p>}
         </div>
+
+        {/* Payment Method Selector */}
+        <div className="space-y-3">
+          <label className="block text-[10px] font-extrabold text-[#554334] uppercase tracking-widest">
+            Select Payment Method
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {hasRazorpay && (
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("razorpay")}
+                className={`p-4 border rounded-2xl font-bold text-xs transition-all flex items-center justify-between ${
+                  paymentMethod === "razorpay"
+                    ? "bg-[#FAFAF8] text-[#8c5000]"
+                    : "bg-[#FAFAF8] border-[#E8E2D6] text-gray-700 hover:border-[#8c5000]"
+                }`}
+                style={{
+                  borderColor: paymentMethod === "razorpay" ? primaryColor : undefined,
+                  borderWidth: paymentMethod === "razorpay" ? "2px" : "1px",
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined" style={{ color: primaryColor }}>credit_card</span>
+                  <div className="text-left">
+                    <p className="font-extrabold">Online Checkout (Razorpay)</p>
+                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Cards, Netbanking, Wallet</p>
+                  </div>
+                </div>
+                {paymentMethod === "razorpay" && (
+                  <CheckCircle2 className="w-5 h-5" style={{ color: primaryColor }} />
+                )}
+              </button>
+            )}
+
+            {hasQRCode && (
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("upi_qr")}
+                className={`p-4 border rounded-2xl font-bold text-xs transition-all flex items-center justify-between ${
+                  paymentMethod === "upi_qr"
+                    ? "bg-[#FAFAF8] text-[#8c5000]"
+                    : "bg-[#FAFAF8] border-[#E8E2D6] text-gray-700 hover:border-[#8c5000]"
+                }`}
+                style={{
+                  borderColor: paymentMethod === "upi_qr" ? primaryColor : undefined,
+                  borderWidth: paymentMethod === "upi_qr" ? "2px" : "1px",
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined" style={{ color: primaryColor }}>qr_code_scanner</span>
+                  <div className="text-left">
+                    <p className="font-extrabold">Online Checkout (UPI QR)</p>
+                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Scan & Pay using any UPI app</p>
+                  </div>
+                </div>
+                {paymentMethod === "upi_qr" && (
+                  <CheckCircle2 className="w-5 h-5" style={{ color: primaryColor }} />
+                )}
+              </button>
+            )}
+
+            {allowedOffline && (
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("cash")}
+                className={`p-4 border rounded-2xl font-bold text-xs transition-all flex items-center justify-between ${
+                  paymentMethod === "cash"
+                    ? "bg-[#FAFAF8] text-[#8c5000]"
+                    : "bg-[#FAFAF8] border-[#E8E2D6] text-gray-700 hover:border-[#8c5000]"
+                }`}
+                style={{
+                  borderColor: paymentMethod === "cash" ? primaryColor : undefined,
+                  borderWidth: paymentMethod === "cash" ? "2px" : "1px",
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined" style={{ color: primaryColor }}>payments</span>
+                  <div className="text-left">
+                    <p className="font-extrabold">Offline Cash</p>
+                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Record offline desk payment</p>
+                  </div>
+                </div>
+                {paymentMethod === "cash" && (
+                  <CheckCircle2 className="w-5 h-5" style={{ color: primaryColor }} />
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* UPI QR Code Scanner display card */}
+        {paymentMethod === "upi_qr" && logoUrl && (
+          <div className="space-y-3">
+            <label className="block text-[10px] font-extrabold text-[#554334] uppercase tracking-widest">
+              Scan & Pay using UPI
+            </label>
+            <div className="bg-white border border-[#E8E2D6] rounded-2xl p-6 flex flex-col items-center gap-4 shadow-sm text-center">
+              <div className="p-3 border-2 border-dashed rounded-2xl bg-white" style={{ borderColor: primaryColor }}>
+                <img
+                  src={logoUrl}
+                  alt="UPI QR Code"
+                  className="w-48 h-48 object-contain rounded-lg"
+                />
+              </div>
+              <p className="text-xs font-semibold text-gray-700 max-w-xs leading-relaxed">
+                Scan this QR code using GPay, PhonePe, Paytm, or any UPI app to complete payment.
+              </p>
+              <div className="flex gap-2 items-center justify-center py-2 px-4 bg-[#FAFAF8] rounded-full border border-[#E8E2D6]/60">
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Accepted Apps</span>
+                <span className="text-gray-300">•</span>
+                <span className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">BHIM</span>
+                <span className="text-gray-300">•</span>
+                <span className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">GPAY</span>
+                <span className="text-gray-300">•</span>
+                <span className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">PHONEPE</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Campaign Selector */}
         <div className="space-y-1.5">
