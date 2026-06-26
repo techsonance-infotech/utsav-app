@@ -114,10 +114,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
               uploadedLogoUrl = urlData.publicUrl;
             } else {
               console.error("Logo upload failed:", uploadError);
+              return NextResponse.json({ message: `Logo upload failed: ${uploadError.message || uploadError}` }, { status: 400 });
             }
-          } catch (storageErr) {
+          } catch (storageErr: any) {
             console.error("Logo storage operation failed:", storageErr);
+            return NextResponse.json({ message: `Logo storage operation failed: ${storageErr.message || storageErr}` }, { status: 500 });
           }
+        } else {
+          return NextResponse.json({ message: "Invalid base64 image data format for logo" }, { status: 400 });
         }
       }
     }

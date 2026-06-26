@@ -256,7 +256,7 @@ function addSecurityHeaders(res: NextResponse) {
   res.headers.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
   res.headers.set(
     "Content-Security-Policy",
-    "default-src 'self' https:; script-src 'self' 'unsafe-eval' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https:;"
+    "default-src 'self' https:; script-src 'self' 'unsafe-eval' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:;"
   );
 }
 

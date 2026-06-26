@@ -38,7 +38,7 @@ export default async function PublicDonatePage({ params }: PublicDonatePageProps
 
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("id, name, slug, primary_color, description, city, state, address, whatsapp_group_url")
+    .select("id, name, slug, primary_color, description, city, state, address, whatsapp_group_url, razorpay_key_id, logo_url")
     .eq("slug", params.slug)
     .single();
 
@@ -114,7 +114,13 @@ export default async function PublicDonatePage({ params }: PublicDonatePageProps
 
             {/* Donation Form Card */}
             <div className="bg-white border border-[#E8E2D6] rounded-3xl p-6 md:p-8 shadow-sm saffron-glow">
-              <DonationForm tenantId={tenant.id} campaigns={campaigns || []} primaryColor={primaryColor} />
+              <DonationForm
+                tenantId={tenant.id}
+                campaigns={campaigns || []}
+                primaryColor={primaryColor}
+                razorpayKeyId={tenant.razorpay_key_id}
+                logoUrl={tenant.logo_url}
+              />
             </div>
 
             {/* Trust Markers */}
