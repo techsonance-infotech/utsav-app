@@ -7,7 +7,7 @@ const eventUpdateSchema = z.object({
   title_hi: z.string().trim().max(100).transform(val => sanitizeInputText(val)).optional().nullable(),
   title_gu: z.string().trim().max(100).transform(val => sanitizeInputText(val)).optional().nullable(),
   description: z.string().trim().max(1000).transform(val => sanitizeInputText(val)).optional().nullable(),
-  category: z.enum(["general", "festival", "meeting", "cultural", "pooja", "other"]).optional(),
+  category: z.enum(["general", "festival", "meeting", "cultural", "pooja", "puja", "aarti", "sports", "prasad_vitran", "volunteer_duty", "visarjan", "other"]).optional(),
   start_at: z.string().trim().optional(),
   end_at: z.string().trim().optional().nullable(),
   location_name: z.string().trim().max(200).transform(val => sanitizeInputText(val)).optional().nullable(),

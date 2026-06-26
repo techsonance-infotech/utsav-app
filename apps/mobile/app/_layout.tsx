@@ -1,8 +1,8 @@
-import { Stack, SplashScreen } from "expo-router";
+import { Stack, SplashScreen, useSegments, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, View, Alert } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   useFonts,
@@ -52,17 +52,56 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  const [isInitialized, setIsInitialized] = useState(false);
+  const userId = useAuthStore((state) => state.userId);
+  const segments = useSegments();
+
   useEffect(() => {
-    useAuthStore.getState().initialize();
+    async function init() {
+      try {
+        await useAuthStore.getState().initialize();
+      } catch (err) {
+        console.error("Failed to initialize auth store", err);
+      } finally {
+        setIsInitialized(true);
+      }
+    }
+    init();
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if ((fontsLoaded || fontError) && isInitialized) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, isInitialized]);
 
-  if (!fontsLoaded && !fontError) {
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const inAuthGroup = segments[0] === "(auth)";
+
+    if (!userId) {
+      // Session expired or logged out: redirect to welcome
+      if (!inAuthGroup) {
+        Alert.alert("Session Expired", "Your session has expired. Please sign in again.");
+        router.replace("/(auth)/welcome");
+      }
+    } else {
+      // User is logged in: don't allow accessing welcome/login/signup screens
+      if (inAuthGroup && segments[1] !== "splash") {
+        const { role, tenantId } = useAuthStore.getState();
+        if (role === "super_admin") {
+          router.replace("/(dashboard)/super-admin-dashboard");
+        } else if (tenantId) {
+          router.replace("/(dashboard)/home");
+        } else {
+          router.replace("/(auth)/tenant-setup");
+        }
+      }
+    }
+  }, [userId, segments, isInitialized]);
+
+  if ((!fontsLoaded && !fontError) || !isInitialized) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FAFAF8" }}>
         <ActivityIndicator size="large" color="#FF9500" />

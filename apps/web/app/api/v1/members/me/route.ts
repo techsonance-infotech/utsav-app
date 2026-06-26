@@ -195,7 +195,7 @@ export async function PATCH(req: Request) {
     };
     if (fullName !== undefined) updatedMetadata.full_name = fullName;
     if (phone !== undefined) updatedMetadata.phone = phone;
-    if (avatarUrl !== undefined) updatedMetadata.avatar_url = avatarUrl;
+    if (updates.avatar_url !== undefined) updatedMetadata.avatar_url = updates.avatar_url;
 
     await supabase.auth.admin.updateUserById(userId, {
       user_metadata: updatedMetadata,

@@ -1,10 +1,109 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Platform } from "react-native";
+import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Platform, Animated, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { colors, fonts, spacing } from "../lib/theme";
+import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCreateExpense, useExpenseCategories, useFetchVendors } from "@utsav/api-client";
+import DatePickerModal from "../components/DatePickerModal";
+import * as ImagePicker from "expo-image-picker";
+
+interface FloatingLabelInputProps {
+  label: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
+  editable?: boolean;
+  maxLength?: number;
+}
+
+function FloatingLabelInput({
+  label,
+  value,
+  onChangeText,
+  keyboardType = "default",
+  editable = true,
+  maxLength,
+}: FloatingLabelInputProps) {
+  const [isFocused, setIsFocused] = useState(false);
+  const animatedIsFocused = React.useRef(new Animated.Value(value === "" ? 0 : 1)).current;
+
+  React.useEffect(() => {
+    Animated.timing(animatedIsFocused, {
+      toValue: isFocused || value !== "" ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused, value]);
+
+  const labelStyle = {
+    position: "absolute" as const,
+    left: 16,
+    top: animatedIsFocused.interpolate({
+      inputRange: [0, 1],
+      outputRange: [18, 6],
+    }),
+    fontSize: animatedIsFocused.interpolate({
+      inputRange: [0, 1],
+      outputRange: [14, 10],
+    }),
+    color: animatedIsFocused.interpolate({
+      inputRange: [0, 1],
+      outputRange: [colors.onSurfaceVariant, colors.primaryBrand],
+    }),
+    fontFamily: fonts.inter.regular,
+  };
+
+  return (
+    <View style={styles.floatingInputContainer}>
+      <Animated.Text style={labelStyle}>{label}</Animated.Text>
+      <TextInput
+        style={[
+          styles.floatingInput,
+          isFocused && styles.floatingInputFocused,
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        keyboardType={keyboardType}
+        maxLength={maxLength}
+        editable={editable}
+        placeholder=""
+      />
+    </View>
+  );
+}
+
+interface FloatingLabelSelectorProps {
+  label: string;
+  value: string;
+  onPress: () => void;
+  icon?: string;
+}
+
+function FloatingLabelSelector({
+  label,
+  value,
+  onPress,
+  icon = "chevron-down",
+}: FloatingLabelSelectorProps) {
+  return (
+    <TouchableOpacity
+      style={styles.floatingSelectorContainer}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.floatingSelectorLabel}>{label}</Text>
+      <View style={styles.floatingSelectorContent}>
+        <Text style={styles.floatingSelectorText} numberOfLines={1}>
+          {value}
+        </Text>
+        <MaterialCommunityIcons name={icon as any} size={20} color={colors.onSurfaceVariant} style={styles.floatingSelectorIcon} />
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function AddExpenseScreen() {
   const { data: categories = [], isLoading: loadingCategories } = useExpenseCategories();
@@ -22,40 +121,62 @@ export default function AddExpenseScreen() {
   const [notes, setNotes] = useState("");
   const [receiptUrl, setReceiptUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<"cash" | "bank_transfer" | "upi" | "cheque">("cash");
+  const [gstAmount, setGstAmount] = useState("");
 
   // Selector Modals
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [showVendorSelector, setShowVendorSelector] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showPaymentModeSelector, setShowPaymentModeSelector] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleUploadReceipt = () => {
-    setIsUploading(true);
-    setTimeout(() => {
-      setReceiptUrl("https://utsav-app.s3.amazonaws.com/receipts/mock_receipt_102.jpg");
-      setIsUploading(false);
-    }, 1200);
+  const handleUploadReceipt = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert("Permission Required", "Permission to access camera roll is required to upload a receipt!");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setIsUploading(true);
+      setTimeout(() => {
+        setReceiptUrl("https://utsav-app.s3.amazonaws.com/receipts/mock_receipt_102.jpg");
+        setIsUploading(false);
+      }, 1200);
+    }
   };
 
   const handleSubmit = async () => {
     setErrorMsg("");
-    if (!amount || parseFloat(amount) <= 0) {
+    const parsedAmount = parseFloat(amount);
+    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
       return setErrorMsg("Please enter a valid amount");
     }
     if (!title.trim()) {
       return setErrorMsg("Please enter an expense title");
     }
+    if (parsedAmount > 500 && (!receiptUrl || receiptUrl.trim() === "")) {
+      return setErrorMsg("A digital receipt upload is mandatory for expenses exceeding ₹500.");
+    }
 
     try {
       await createMutation.mutateAsync({
         title: title.trim(),
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         category_id: categoryId || undefined,
         vendor_id: vendorId || undefined,
         expense_date: expenseDate,
         description: notes.trim() || undefined,
-        payment_mode: "cash",
+        payment_mode: paymentMode,
         receipt_url: receiptUrl || undefined,
-        gst_amount: 0,
+        gst_amount: gstAmount ? parseFloat(gstAmount) : 0,
       });
       router.back();
     } catch (err: any) {
@@ -109,66 +230,76 @@ export default function AddExpenseScreen() {
           </View>
 
           {/* Title Input */}
-          <View style={styles.inputGroup}>
-            <LabelWithIcon icon="pencil-outline" label="Title" />
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g. Mandap Flowers"
-              placeholderTextColor={colors.outline}
-              value={title}
-              onChangeText={setTitle}
-            />
-          </View>
+          <FloatingLabelInput
+            label="Expense Title *"
+            value={title}
+            onChangeText={setTitle}
+          />
 
           {/* Category Selector */}
-          <View style={styles.inputGroup}>
-            <LabelWithIcon icon="shape-outline" label="Category" />
-            <TouchableOpacity
-              style={styles.selectorBtn}
-              onPress={() => setShowCategorySelector(true)}
-            >
-              <Text style={[styles.selectorBtnText, categoryId ? styles.textActive : styles.textPlaceholder]}>
-                {categoryName}
-              </Text>
-              <MaterialCommunityIcons name="chevron-down" size={20} color={colors.onSurfaceVariant} />
-            </TouchableOpacity>
-          </View>
+          <FloatingLabelSelector
+            label="Category"
+            value={categoryName}
+            onPress={() => setShowCategorySelector(true)}
+          />
 
           {/* Date & Vendor Grid */}
           <View style={styles.gridRow}>
             {/* Date Input */}
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <LabelWithIcon icon="calendar" label="Date" />
-              <TextInput
-                style={styles.textInput}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.outline}
+            <View style={{ flex: 1 }}>
+              <FloatingLabelSelector
+                label="Date *"
                 value={expenseDate}
-                onChangeText={setExpenseDate}
+                onPress={() => setShowDatePicker(true)}
+                icon="calendar"
               />
             </View>
 
             {/* Vendor Selector */}
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <LabelWithIcon icon="store-outline" label="Vendor" />
-              <TouchableOpacity
-                style={styles.selectorBtn}
+            <View style={{ flex: 1 }}>
+              <FloatingLabelSelector
+                label="Vendor"
+                value={vendorName}
                 onPress={() => setShowVendorSelector(true)}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={[styles.selectorBtnText, vendorId ? styles.textActive : styles.textPlaceholder]}
-                >
-                  {vendorName}
-                </Text>
-                <MaterialCommunityIcons name="chevron-down" size={20} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
+                icon="store-outline"
+              />
+            </View>
+          </View>
+
+          {/* Payment Mode & GST Grid */}
+          <View style={styles.gridRow}>
+            {/* Payment Mode Selector */}
+            <View style={{ flex: 1 }}>
+              <FloatingLabelSelector
+                label="Payment Mode"
+                value={
+                  paymentMode === "cash"
+                    ? "Cash"
+                    : paymentMode === "bank_transfer"
+                    ? "Bank Transfer"
+                    : paymentMode === "upi"
+                    ? "UPI"
+                    : "Cheque"
+                }
+                onPress={() => setShowPaymentModeSelector(true)}
+                icon="credit-card-outline"
+              />
+            </View>
+
+            {/* GST Amount Input */}
+            <View style={{ flex: 1 }}>
+              <FloatingLabelInput
+                label="GST Amount"
+                value={gstAmount}
+                onChangeText={setGstAmount}
+                keyboardType="numeric"
+              />
             </View>
           </View>
 
           {/* Receipt Upload */}
           <View style={styles.inputGroup}>
-            <LabelWithIcon icon="receipt" label="Proof of Expense" />
+            <Text style={styles.uploadLabelHeader}>Proof of Expense (Required if over ₹500)</Text>
             {receiptUrl ? (
               <View style={[styles.uploadBox, styles.uploadBoxSuccess]}>
                 <View style={styles.uploadIconCircleSuccess}>
@@ -201,18 +332,11 @@ export default function AddExpenseScreen() {
           </View>
 
           {/* Optional Notes */}
-          <View style={styles.inputGroup}>
-            <LabelWithIcon icon="note-text-outline" label="Additional Notes" />
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Describe specific items or context..."
-              placeholderTextColor={colors.outline}
-              multiline
-              numberOfLines={3}
-              value={notes}
-              onChangeText={setNotes}
-            />
-          </View>
+          <FloatingLabelInput
+            label="Additional Notes"
+            value={notes}
+            onChangeText={setNotes}
+          />
         </View>
 
         {/* Quick Tips Bento */}
@@ -320,6 +444,50 @@ export default function AddExpenseScreen() {
                   }}
                 >
                   <Text style={styles.modalItemText}>{vendor.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Picker Modal */}
+      <DatePickerModal
+        visible={showDatePicker}
+        value={expenseDate}
+        onSelect={(dateStr) => {
+          if (dateStr) setExpenseDate(dateStr);
+        }}
+        onClose={() => setShowDatePicker(false)}
+        title="Select Expense Date"
+      />
+
+      {/* Payment Mode Picker Modal */}
+      <Modal visible={showPaymentModeSelector} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Payment Mode</Text>
+              <TouchableOpacity onPress={() => setShowPaymentModeSelector(false)}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalList}>
+              {([
+                { id: "cash", name: "Cash" },
+                { id: "bank_transfer", name: "Bank Transfer" },
+                { id: "upi", name: "UPI" },
+                { id: "cheque", name: "Cheque" },
+              ] as const).map((mode) => (
+                <TouchableOpacity
+                  key={mode.id}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setPaymentMode(mode.id);
+                    setShowPaymentModeSelector(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{mode.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -659,5 +827,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fonts.inter.medium,
     color: colors.onSurface,
+  },
+  floatingInputContainer: {
+    position: "relative",
+    height: 56,
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: borderRadius.lg,
+    justifyContent: "center",
+  },
+  floatingInput: {
+    height: "100%",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    fontSize: 14,
+    color: colors.onSurface,
+    fontFamily: fonts.inter.medium,
+  },
+  floatingInputFocused: {
+    borderColor: colors.primaryContainer,
+  },
+  floatingSelectorContainer: {
+    position: "relative",
+    height: 56,
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: borderRadius.lg,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  floatingSelectorLabel: {
+    position: "absolute",
+    left: 16,
+    top: 6,
+    fontSize: 10,
+    color: colors.primaryBrand,
+    fontFamily: fonts.inter.regular,
+  },
+  floatingSelectorContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 14,
+  },
+  floatingSelectorText: {
+    fontSize: 14,
+    color: colors.onSurface,
+    fontFamily: fonts.inter.medium,
+    flex: 1,
+  },
+  floatingSelectorIcon: {
+    marginLeft: 8,
+  },
+  uploadLabelHeader: {
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    fontFamily: fonts.inter.semibold,
+    marginBottom: 6,
   },
 });

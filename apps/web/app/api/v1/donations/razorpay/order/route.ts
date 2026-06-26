@@ -36,8 +36,13 @@ export async function POST(req: Request) {
     const validatedData = parsed.data;
 
     // Validate phone number format if provided
-    if (validatedData.donor_phone && !/^\d{10}$/.test(validatedData.donor_phone)) {
-      return NextResponse.json({ message: "Phone number must be exactly 10 digits" }, { status: 400 });
+    if (validatedData.donor_phone) {
+      const cleaned = validatedData.donor_phone.replace(/\D/g, "");
+      const tenDigits = cleaned.length > 10 ? cleaned.slice(-10) : cleaned;
+      if (!/^\d{10}$/.test(tenDigits)) {
+        return NextResponse.json({ message: "Phone number must be exactly 10 digits" }, { status: 400 });
+      }
+      validatedData.donor_phone = tenDigits;
     }
 
     // Validate email format if provided

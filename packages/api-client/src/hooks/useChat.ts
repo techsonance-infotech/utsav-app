@@ -11,6 +11,11 @@ export interface ChatChannel {
   created_at: string;
   last_message_at: string;
   last_message_text?: string | null;
+  members?: {
+    user_id: string;
+    full_name: string;
+    avatar_url: string | null;
+  }[];
 }
 
 export interface ChatMessage {
