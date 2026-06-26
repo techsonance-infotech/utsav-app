@@ -78,9 +78,13 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: async () => {
-      return apiClient("/auth/logout", { method: "POST" });
+      try {
+        return await apiClient("/auth/logout", { method: "POST" });
+      } catch (err) {
+        console.error("API logout call failed, clearing local auth", err);
+      }
     },
-    onSuccess: () => {
+    onSettled: () => {
       clearAuth();
     },
   });

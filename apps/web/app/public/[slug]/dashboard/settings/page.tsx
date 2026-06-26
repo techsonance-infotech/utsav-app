@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
   const [isPublicDonations, setIsPublicDonations] = useState(true);
   const [isPublicExpenses, setIsPublicExpenses] = useState(true);
+  const [logoUrl, setLogoUrl] = useState("");
 
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -70,8 +71,25 @@ export default function SettingsPage() {
       setRazorpayKeyId(tenant.razorpay_key_id || "");
       setIsPublicDonations(tenant.is_public_donations ?? true);
       setIsPublicExpenses(tenant.is_public_expenses ?? true);
+      setLogoUrl(tenant.logo_url || "");
     }
   }, [tenant]);
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMsg("Image size should be less than 2MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,6 +122,7 @@ export default function SettingsPage() {
         razorpay_key_id: razorpayKeyId,
         is_public_donations: isPublicDonations,
         is_public_expenses: isPublicExpenses,
+        logo_url: logoUrl || null,
       } as any);
 
       setSuccessMsg("Organization settings updated successfully!");
@@ -132,6 +151,7 @@ export default function SettingsPage() {
       setRazorpayKeyId(tenant.razorpay_key_id || "");
       setIsPublicDonations(tenant.is_public_donations ?? true);
       setIsPublicExpenses(tenant.is_public_expenses ?? true);
+      setLogoUrl(tenant.logo_url || "");
       setSuccessMsg("");
       setErrorMsg("");
     }
@@ -202,18 +222,37 @@ export default function SettingsPage() {
           <div className="p-6 space-y-6">
             <div className="flex flex-col md:flex-row md:items-start gap-6">
               <div className="relative group self-center md:self-start">
-                <div className="w-24 h-24 rounded-2xl bg-cream border-2 border-dashed border-outline-variant flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:border-primary transition-colors">
-                  <img
-                    className="w-full h-full object-cover group-hover:opacity-50 transition-opacity"
-                    alt="Mandal Logo"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBmVmEk9cwkZD9vSAZloi8sZQZGICXJJLU-bmG4LuhJc8F1g9OVCHnK__KDs8AEfYQDoggqxnEO76Lwe7ij-5bo-gxremwJjPdMmxAG7pjCeXMpJyQweGi_UWBj7QlWzfqQpWpJNh3mB-vW2ZX4EEPyXhUbbsa0EZxdwjn0BcwnsEfauNKPFmo04jGE3li3PmLqSMKZiyGdpqnjJAIRH0tquOopBC77edsfEvFEaOoTy1tCopmBq6f2E5YdPrc-MW7MIGiHneKBBE"
-                  />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="material-symbols-outlined text-primary">upload</span>
-                    <span className="text-[10px] font-bold text-primary uppercase">Change</span>
-                  </div>
-                </div>
-                <label className="block text-center mt-1 text-xs font-semibold text-on-surface-variant">Mandal Logo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoChange}
+                  className="hidden"
+                  id="logo-upload"
+                />
+                <label
+                  htmlFor="logo-upload"
+                  className="relative block w-24 h-24 rounded-2xl bg-cream border-2 border-dashed border-[#E8E2D6] flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:border-primary hover:bg-[#F4F1EB] transition-all"
+                >
+                  {logoUrl ? (
+                    <img
+                      className="w-full h-full object-cover"
+                      alt="Mandal Logo / QR Code"
+                      src={logoUrl}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-on-surface-variant group-hover:text-primary">
+                      <span className="material-symbols-outlined text-[24px]">upload</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider mt-1">Upload</span>
+                    </div>
+                  )}
+                  {logoUrl && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity text-white">
+                      <span className="material-symbols-outlined">upload</span>
+                      <span className="text-[10px] font-bold uppercase mt-1">Change</span>
+                    </div>
+                  )}
+                </label>
+                <label className="block text-center mt-1 text-[10px] font-bold text-[#554334] uppercase tracking-wider">Logo/QR Code</label>
               </div>
 
               <div className="flex-1 space-y-4 w-full">

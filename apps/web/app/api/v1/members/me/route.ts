@@ -139,16 +139,17 @@ export async function PATCH(req: Request) {
               updates.avatar_url = urlData.publicUrl;
             } else {
               console.error("Avatar upload failed:", uploadError);
-              updates.avatar_url = avatarUrl;
+              return NextResponse.json({ message: `Avatar upload failed: ${uploadError.message || uploadError}` }, { status: 400 });
             }
-          } catch (storageErr) {
+          } catch (storageErr: any) {
             console.error("Avatar storage operation failed:", storageErr);
-            updates.avatar_url = avatarUrl;
+            return NextResponse.json({ message: `Avatar storage operation failed: ${storageErr.message || storageErr}` }, { status: 500 });
           }
         } else {
-          updates.avatar_url = avatarUrl;
+          return NextResponse.json({ message: "Invalid base64 image data format" }, { status: 400 });
         }
       } else {
+        // Normal URL or null
         updates.avatar_url = avatarUrl;
       }
     }
