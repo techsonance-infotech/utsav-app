@@ -662,6 +662,22 @@ export default function MobileSettingsScreen() {
 
               <TouchableOpacity
                 style={styles.groupItem}
+                onPress={() => router.push("/(dashboard)/offline-mode")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.groupItemLeft}>
+                  <View style={[styles.iconContainer, { backgroundColor: colors.surfaceContainer }]}>
+                    <MaterialCommunityIcons name="cloud-off-outline" size={20} color={colors.onSurfaceVariant} />
+                  </View>
+                  <Text style={styles.groupItemText}>Offline Mode Dashboard</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              <View style={styles.itemSeparator} />
+
+              <TouchableOpacity
+                style={styles.groupItem}
                 onPress={() => router.push("/(dashboard)/about-utsav")}
                 activeOpacity={0.7}
               >

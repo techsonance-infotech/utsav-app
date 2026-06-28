@@ -65,7 +65,67 @@ export async function apiClient<T>(
     url += `?${searchParams.toString()}`;
   }
 
-  let response = await fetch(url, config);
+  let isOnline = true;
+  try {
+    const { useOfflineStore } = require("@utsav/stores");
+    isOnline = useOfflineStore.getState().isOnline;
+  } catch (e) {
+    // Fallback if store is not loaded
+  }
+
+  const isMutation = customConfig.method === "POST" || customConfig.method === "PATCH" || customConfig.method === "DELETE";
+
+  const isQueuable =
+    isMutation && (
+      endpoint.endsWith("/rsvp") ||
+      (endpoint.includes("/chat/channels/") && customConfig.method === "POST") ||
+      (endpoint === "/notifications" && customConfig.method === "PATCH")
+    );
+
+  if (!isOnline) {
+    if (isQueuable) {
+      const { enqueueMutation } = require("./offline/mutationQueue");
+      const body = customConfig.body ? JSON.parse(customConfig.body as string) : {};
+      await enqueueMutation(endpoint, customConfig.method || "POST", body);
+
+      // Return simulated success response
+      if (endpoint.endsWith("/rsvp")) {
+        return { success: true, queued: true } as any;
+      }
+      if (endpoint.includes("/chat/channels/")) {
+        return { id: `queued_${Date.now()}`, queued: true } as any;
+      }
+      return { success: true, count: 0, queued: true } as any;
+    } else if (isMutation) {
+      throw new Error("You're offline — please reconnect to complete this transaction.");
+    } else {
+      throw new Error("You're offline. Some features are unavailable.");
+    }
+  }
+
+  let response;
+  try {
+    response = await fetch(url, config);
+  } catch (fetchErr) {
+    if (isQueuable) {
+      const { enqueueMutation } = require("./offline/mutationQueue");
+      const body = customConfig.body ? JSON.parse(customConfig.body as string) : {};
+      await enqueueMutation(endpoint, customConfig.method || "POST", body);
+
+      if (endpoint.endsWith("/rsvp")) {
+        return { success: true, queued: true } as any;
+      }
+      if (endpoint.includes("/chat/channels/")) {
+        return { id: `queued_${Date.now()}`, queued: true } as any;
+      }
+      return { success: true, count: 0, queued: true } as any;
+    } else if (isMutation) {
+      throw new Error("You're offline — please reconnect to complete this transaction.");
+    } else {
+      throw fetchErr;
+    }
+  }
+
 
   // If response is 401 Unauthorized, try to refresh token and retry
   if (

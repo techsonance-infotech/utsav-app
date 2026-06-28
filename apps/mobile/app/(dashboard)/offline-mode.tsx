@@ -1,11 +1,55 @@
 import React from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { useOfflineStore } from "@utsav/stores";
+import { useEvents } from "@utsav/api-client";
 
 export default function OfflineModeScreen() {
+  const isOnline = useOfflineStore((state) => state.isOnline);
+  const queue = useOfflineStore((state) => state.queue);
+  const { data: events = [] } = useEvents();
+
+  const getQueueItemDetails = (item: any) => {
+    switch (item.type) {
+      case "rsvp":
+        return {
+          title: "Event RSVP",
+          subtitle: `Status: ${
+            item.payload.status === "attending"
+              ? "Attending"
+              : item.payload.status === "maybe"
+              ? "Maybe"
+              : "Not Attending"
+          }`,
+          icon: "checkbox-marked-circle-outline",
+        };
+      case "chat_message":
+        return {
+          title: `Chat: "${item.payload.text || "Message"}"`,
+          subtitle: "Drafted message to channel",
+          icon: "chat-outline",
+        };
+      case "notification_read":
+        return {
+          title: "Read Notification",
+          subtitle: item.payload.id ? `Notification ID: ${item.payload.id}` : "All notifications",
+          icon: "bell-check-outline",
+        };
+      default:
+        return {
+          title: "Offline Action",
+          subtitle: "Pending sync",
+          icon: "sync",
+        };
+    }
+  };
+
+  const upcomingEvent = events.length > 0 ? events[0] : null;
+  const festivalName = upcomingEvent ? upcomingEvent.title : "Maha Shivratri";
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -26,7 +70,7 @@ export default function OfflineModeScreen() {
         </View>
         <View style={styles.headerRight}>
           <MaterialIcons
-            name="cloud-off"
+            name={isOnline ? "cloud-queue" : "cloud-off"}
             size={22}
             color={colors.primaryBrand}
             style={styles.offlineIcon}
@@ -43,8 +87,16 @@ export default function OfflineModeScreen() {
 
       {/* Offline Warning Banner */}
       <View style={styles.warningBanner}>
-        <MaterialCommunityIcons name="alert-circle" size={18} color={colors.onPrimaryContainer} />
-        <Text style={styles.warningText}>You're offline. Some features are unavailable.</Text>
+        <MaterialCommunityIcons
+          name={isOnline ? "check-circle" : "alert-circle"}
+          size={18}
+          color={colors.onPrimaryContainer}
+        />
+        <Text style={styles.warningText}>
+          {isOnline
+            ? "You're online. Actions are syncing in the background."
+            : "You're offline. Some features are unavailable."}
+        </Text>
       </View>
 
       <ScrollView
@@ -64,7 +116,7 @@ export default function OfflineModeScreen() {
               </View>
             </View>
 
-            <Text style={styles.festivalName}>Maha Shivratri</Text>
+            <Text style={styles.festivalName}>{festivalName}</Text>
 
             <View style={styles.countdownDigits}>
               <View style={styles.digitCol}>
@@ -87,41 +139,34 @@ export default function OfflineModeScreen() {
           </View>
 
           <View style={styles.eventsList}>
-            {/* Event 1 */}
-            <View style={styles.eventCard}>
-              <View style={styles.eventImagePlaceholder}>
-                <MaterialCommunityIcons name="image-outline" size={40} color={colors.outline} />
+            {events.length === 0 ? (
+              <View style={styles.emptyEvents}>
+                <MaterialCommunityIcons name="calendar-blank-outline" size={32} color={colors.outline} />
+                <Text style={styles.emptyEventsText}>No cached events found.</Text>
               </View>
-              <View style={styles.eventDetails}>
-                <View style={styles.eventHeaderRow}>
-                  <Text style={styles.eventTitle}>Daily Sandhya Aarti</Text>
-                  <View style={styles.goingBadge}>
-                    <Text style={styles.goingText}>Going</Text>
+            ) : (
+              events.slice(0, 3).map((event: any, idx: number) => (
+                <View key={event.id || idx} style={styles.eventCardSimple}>
+                  <View style={styles.eventIconBg}>
+                    <MaterialCommunityIcons name="calendar-month-outline" size={24} color={colors.primaryBrand} />
+                  </View>
+                  <View style={styles.eventDetails}>
+                    <Text style={styles.eventTitle}>{event.title}</Text>
+                    {event.description ? (
+                      <Text style={styles.eventDesc} numberOfLines={1}>
+                        {event.description}
+                      </Text>
+                    ) : null}
+                    <View style={styles.eventMetaRow}>
+                      <MaterialCommunityIcons name="clock-outline" size={14} color={colors.outline} />
+                      <Text style={styles.eventMetaText}>
+                        {event.event_date ? new Date(event.event_date).toLocaleDateString() : ""} • {event.location || "Mandir Mandap"}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-                <View style={styles.eventMetaRow}>
-                  <MaterialCommunityIcons name="clock-outline" size={14} color={colors.onSurfaceVariant} />
-                  <Text style={styles.eventMetaText}>6:30 PM • Main Mandap</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Event 2 */}
-            <View style={styles.eventCardSimple}>
-              <View style={styles.eventIconBg}>
-                <MaterialCommunityIcons name="hand-heart-outline" size={28} color={colors.primaryBrand} />
-              </View>
-              <View style={styles.eventDetails}>
-                <Text style={styles.eventTitle}>Annadaan Seva</Text>
-                <Text style={styles.eventDesc} numberOfLines={1}>
-                  Community kitchen volunteer drive...
-                </Text>
-                <View style={styles.eventMetaRow}>
-                  <MaterialCommunityIcons name="calendar-month-outline" size={14} color={colors.outline} />
-                  <Text style={styles.eventMetaText}>Saturday, 10:00 AM</Text>
-                </View>
-              </View>
-            </View>
+              ))
+            )}
           </View>
         </View>
 
@@ -133,34 +178,47 @@ export default function OfflineModeScreen() {
               <Text style={styles.sectionTitle}>Syncing Queue</Text>
             </View>
             <View style={styles.queueCountBadge}>
-              <Text style={styles.queueCountText}>2 Actions</Text>
+              <Text style={styles.queueCountText}>
+                {queue.length} {queue.length === 1 ? "Action" : "Actions"}
+              </Text>
             </View>
           </View>
 
           <View style={styles.queueList}>
-            {/* Action 1 */}
-            <View style={styles.queueCard}>
-              <View style={styles.queueIconBg}>
-                <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={20} color={colors.onSurfaceVariant} />
+            {queue.length === 0 ? (
+              <View style={styles.emptyQueue}>
+                <MaterialCommunityIcons name="check-all" size={24} color={colors.tulsiGreen} />
+                <Text style={styles.emptyQueueText}>All synced! No pending actions.</Text>
               </View>
-              <View style={styles.queueContent}>
-                <Text style={styles.queueTitle}>RSVP to Maha Aarti</Text>
-                <Text style={styles.queueSubtitle}>Waiting for connection...</Text>
-              </View>
-              <View style={styles.pulseDot} />
-            </View>
-
-            {/* Action 2 */}
-            <View style={styles.queueCard}>
-              <View style={styles.queueIconBg}>
-                <MaterialCommunityIcons name="chat-outline" size={20} color={colors.onSurfaceVariant} />
-              </View>
-              <View style={styles.queueContent}>
-                <Text style={styles.queueTitle}>Chat Message: "Har Har Mahadev"</Text>
-                <Text style={styles.queueSubtitle}>Drafted 2m ago</Text>
-              </View>
-              <View style={styles.pulseDot} />
-            </View>
+            ) : (
+              queue.map((item) => {
+                const details = getQueueItemDetails(item);
+                const timeStr = new Date(item.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+                return (
+                  <View key={item.id} style={styles.queueCard}>
+                    <View style={styles.queueIconBg}>
+                      <MaterialCommunityIcons
+                        name={details.icon as any}
+                        size={20}
+                        color={colors.onSurfaceVariant}
+                      />
+                    </View>
+                    <View style={styles.queueContent}>
+                      <Text style={styles.queueTitle} numberOfLines={1}>
+                        {details.title}
+                      </Text>
+                      <Text style={styles.queueSubtitle}>
+                        {details.subtitle} • Drafted {timeStr}
+                      </Text>
+                    </View>
+                    <View style={styles.pulseDot} />
+                  </View>
+                );
+              })
+            )}
           </View>
 
           <Text style={styles.syncFooterNote}>
@@ -169,9 +227,16 @@ export default function OfflineModeScreen() {
         </View>
       </ScrollView>
 
-      {/* Floating Diya button */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.8}>
-        <MaterialCommunityIcons name="fire" size={28} color="#FFFFFF" />
+      {/* Floating Utsav Logo Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.8}
+        onPress={() => router.back()}
+      >
+        <Image
+          source={require("../../assets/image-only.png")}
+          style={{ width: 28, height: 28, resizeMode: "contain", tintColor: "#FFFFFF" }}
+        />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -413,6 +478,37 @@ const styles = StyleSheet.create({
     color: colors.outline,
     textAlign: "center",
     fontStyle: "italic",
+  },
+
+  emptyQueue: {
+    padding: spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F2F9F2",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.2)",
+    gap: 8,
+  },
+  emptyQueueText: {
+    fontFamily: fonts.inter.medium,
+    fontSize: 13,
+    color: colors.tulsiGreen,
+  },
+  emptyEvents: {
+    padding: spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    gap: 8,
+  },
+  emptyEventsText: {
+    fontFamily: fonts.inter.medium,
+    fontSize: 13,
+    color: colors.outline,
   },
 
   fab: {
