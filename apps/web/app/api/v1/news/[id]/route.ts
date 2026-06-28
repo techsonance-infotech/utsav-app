@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, logAuditEvent, checkRole } from "../../utils";
+import { verifySession, createServiceRoleClient, logAuditEvent, checkRole, uploadBase64ToStorage } from "../../utils";
 
 export async function GET(
   req: Request,
@@ -96,6 +96,19 @@ export async function PATCH(
       if (body[field] !== undefined) {
         updatePayload[field] = body[field];
       }
+    }
+
+    if (updatePayload.banner_image_url && updatePayload.banner_image_url.startsWith("data:")) {
+      const { publicUrl, error: uploadError } = await uploadBase64ToStorage(
+        tenantId,
+        userId,
+        updatePayload.banner_image_url,
+        "news-banners"
+      );
+      if (uploadError || !publicUrl) {
+        return NextResponse.json({ message: uploadError || "Failed to upload image" }, { status: 500 });
+      }
+      updatePayload.banner_image_url = publicUrl;
     }
 
     // Set published_at if transitioning to published

@@ -1,7 +1,7 @@
 import { Stack, SplashScreen, useSegments, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState, useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { ActivityIndicator, View, Alert } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
@@ -18,8 +18,12 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 
-import { setApiBaseUrl } from "@utsav/api-client";
+import { setApiBaseUrl, syncOfflineQueueFromStorage } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { useNetworkListener } from "./lib/netInfo";
 
 // Set base API URL for the client using Metro-injected env variable
 const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://utsav.techsonance.co.in";
@@ -28,7 +32,15 @@ setApiBaseUrl(apiUrl);
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+const persister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: "utsav:query-cache",
+  throttleTime: 1000,
+});
+
 export default function RootLayout() {
+  useNetworkListener();
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -60,6 +72,7 @@ export default function RootLayout() {
     async function init() {
       try {
         await useAuthStore.getState().initialize();
+        await syncOfflineQueueFromStorage();
       } catch (err) {
         console.error("Failed to initialize auth store", err);
       } finally {
@@ -110,7 +123,10 @@ export default function RootLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister }}
+    >
       <SafeAreaProvider>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false }}>
@@ -128,7 +144,7 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)/account-locked" />
         </Stack>
       </SafeAreaProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
 

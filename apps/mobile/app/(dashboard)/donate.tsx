@@ -32,6 +32,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import DatePickerModal from "../components/DatePickerModal";
+import { ScreenHeader } from "../components/ScreenHeader";
+
 
 const { width } = Dimensions.get("window");
 
@@ -512,7 +514,7 @@ export default function MobileDonateScreen() {
         </head>
         <body>
           <div class="header">
-            <div class="logo-title">UTSAV DONATIONS</div>
+            <div class="logo-title">${(tenant?.name || "UTSAV").toUpperCase()} DONATIONS</div>
             <div class="report-title">
               <strong>Mandal Ledger Summary</strong><br/>
               Report Date: ${new Date().toLocaleDateString("en-IN")}
@@ -568,7 +570,7 @@ export default function MobileDonateScreen() {
           </table>
 
           <div class="footer">
-            UTSAV Mandal Management App • Production Generated Document
+            ${tenant?.name || "UTSAV"} Mandal Management App • Production Generated Document
           </div>
         </body>
         </html>
@@ -671,27 +673,11 @@ export default function MobileDonateScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Top App Bar */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarLeft}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
-          </TouchableOpacity>
-          <View style={styles.logoAvatarWrapper}>
-            <Image
-              style={styles.logoAvatar}
-              source={require("../../assets/image-only.png")}
-            />
-          </View>
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <View style={styles.profileAvatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
-          ) : (
-            <Text style={styles.headerAvatarText}>{initials}</Text>
-          )}
-        </View>
-      </View>
+      <ScreenHeader
+        title="Donate"
+        showBack={false}
+        showLogo={false}
+      />
 
       {/* Segmented Top Control Tab */}
       <View style={styles.tabContainer}>
@@ -1159,11 +1145,11 @@ export default function MobileDonateScreen() {
                 {mode === "online" && (
                   <View style={styles.qrContainer}>
                     <Text style={styles.qrSectionHeader}>Scan & Pay using UPI</Text>
-                    {tenant?.logo_url ? (
+                    {tenant?.banner_url ? (
                       <View style={styles.qrCard}>
                         {/* Golden corner borders styling */}
                         <View style={styles.qrBorderDecoration}>
-                          <Image source={{ uri: tenant.logo_url }} style={styles.qrCodeImage} resizeMode="contain" />
+                          <Image source={{ uri: tenant.banner_url }} style={styles.qrCodeImage} resizeMode="contain" />
                         </View>
                         <Text style={styles.qrScanInstructions}>Scan this QR code using GPay, PhonePe, Paytm, or any UPI app to complete payment.</Text>
                         <View style={styles.upiIconRow}>

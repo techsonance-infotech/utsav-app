@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, logAuditEvent, checkRole } from "../utils";
+import { verifySession, createServiceRoleClient, logAuditEvent, checkRole, uploadBase64ToStorage } from "../utils";
 
 export async function GET(req: Request) {
   const { error } = await verifySession(req);
@@ -80,6 +80,20 @@ export async function POST(req: Request) {
 
     const publishDate = status === "published" ? new Date().toISOString() : null;
 
+    let uploadedBannerUrl = banner_image_url;
+    if (banner_image_url && banner_image_url.startsWith("data:image/")) {
+      const { publicUrl, error: uploadError } = await uploadBase64ToStorage(
+        tenantId,
+        userId,
+        banner_image_url,
+        "gallery"
+      );
+      if (uploadError) {
+        return NextResponse.json({ message: `Banner image upload failed: ${uploadError}` }, { status: 400 });
+      }
+      uploadedBannerUrl = publicUrl;
+    }
+
     const { data: article, error: insertError } = await supabase
       .from("news_articles")
       .insert({
@@ -94,7 +108,7 @@ export async function POST(req: Request) {
         excerpt: excerpt || null,
         category,
         language,
-        banner_image_url: banner_image_url || null,
+        banner_image_url: uploadedBannerUrl || null,
         tags,
         status,
         published_at: publishDate,

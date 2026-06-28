@@ -6,6 +6,8 @@ import { useEvents, useRSVP } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { ScreenHeader } from "../components/ScreenHeader";
+
 
 export default function MobileEventsScreen() {
   const { role } = useAuthStore();
@@ -130,18 +132,13 @@ export default function MobileEventsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Top Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoBadge}>
-            <MaterialIcons name="temple-hindu" size={20} color="#FFFFFF" />
-          </View>
-          <Text style={styles.headerLogo}>UTSAV</Text>
-        </View>
-        <TouchableOpacity style={styles.headerNotifyBtn}>
-          <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
-          <View style={styles.notifyBadge} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Events"
+        showBack={false}
+        showLogo={false}
+        rightIcon="bell-outline"
+        onRightPress={() => router.push("/(dashboard)/notifications")}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Calendar Card Section */}

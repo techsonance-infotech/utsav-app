@@ -1,15 +1,54 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, FlatList } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
+  FlatList,
+  TextInput,
+  Alert,
+  ScrollView,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useFetchDonations, useFinancialSummary } from "@utsav/api-client";
+import { useFetchDonations, useFinancialSummary, useFetchCampaigns, Donation } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function DonationHistoryScreen() {
-  const { data: donations, isLoading } = useFetchDonations();
-  const { data: summary } = useFinancialSummary();
-  const [filterYear, setFilterYear] = useState<"all" | "2024">("all");
+  const { tenantId } = useAuthStore();
+  const { data: summary, isLoading: loadingSummary, refetch: refetchSummary } = useFinancialSummary(tenantId);
+  const { data: campaigns, isLoading: loadingCampaigns, refetch: refetchCampaigns } = useFetchCampaigns();
+
+  const [search, setSearch] = useState("");
+  const [selectedMode, setSelectedMode] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const limit = 5;
+
+  // Reset page when search or mode filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedMode]);
+
+  const params: Record<string, string> = {
+    page: page.toString(),
+    limit: limit.toString(),
+  };
+  if (selectedMode !== "all") {
+    params.mode = selectedMode;
+  }
+  if (search.trim() !== "") {
+    params.search = search.trim();
+  }
+
+  const {
+    data: paginatedData,
+    isLoading: loadingDonations,
+    isRefetching,
+    refetch: refetchDonations,
+  } = useFetchDonations(params);
 
   const [downloadingTxnId, setDownloadingTxnId] = useState<string | null>(null);
 
@@ -17,12 +56,20 @@ export default function DonationHistoryScreen() {
     setDownloadingTxnId(txnId);
     setTimeout(() => {
       setDownloadingTxnId(null);
-      alert("Receipt downloaded successfully!");
+      Alert.alert("Success", "Donation receipt downloaded successfully!");
     }, 1500);
   };
 
-  const getDonationIcon = (purpose: string) => {
-    const p = purpose.toLowerCase();
+  const handleRefresh = async () => {
+    await Promise.all([
+      refetchSummary(),
+      refetchCampaigns(),
+      refetchDonations(),
+    ]);
+  };
+
+  const getDonationIcon = (purpose?: string | null) => {
+    const p = (purpose || "").toLowerCase();
     if (p.includes("pandal") || p.includes("construction")) return "home-group";
     if (p.includes("anna") || p.includes("feast") || p.includes("food")) return "silverware-clean";
     if (p.includes("light") || p.includes("decor") || p.includes("event")) return "lamp";
@@ -30,209 +77,153 @@ export default function DonationHistoryScreen() {
     return "gift-outline";
   };
 
-  const sampleDonations = [
-    {
-      id: "d1",
-      purpose: "Pandal Construction Fund",
-      amount: 5001,
-      txn_id: "TXN-49210",
-      created_at: "2024-10-24T12:00:00Z",
-      status: "Confirmed",
-    },
-    {
-      id: "d2",
-      purpose: "Annadhanam (Community Feast)",
-      amount: 11000,
-      txn_id: "TXN-48522",
-      created_at: "2024-10-12T14:30:00Z",
-      status: "Confirmed",
-    },
-    {
-      id: "d3",
-      purpose: "Cultural Event & Lighting",
-      amount: 2500,
-      txn_id: "TXN-48101",
-      created_at: "2024-09-05T18:15:00Z",
-      status: "Confirmed",
-    },
-    {
-      id: "d4",
-      purpose: "Swachh Mandap Drive",
-      amount: 501,
-      txn_id: "TXN-47209",
-      created_at: "2024-08-15T09:00:00Z",
-      status: "Confirmed",
-    },
-    {
-      id: "d5",
-      purpose: "Member Welfare Fund",
-      amount: 25000,
-      txn_id: "TXN-39821",
-      created_at: "2024-01-10T10:00:00Z",
-      status: "Confirmed",
-    },
-  ];
+  const donationsList = Array.isArray(paginatedData) ? paginatedData : (paginatedData as any)?.data || [];
+  const totalCount = Array.isArray(paginatedData) ? paginatedData.length : (paginatedData as any)?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / limit) || 1;
 
-  const displayedDonations = donations || sampleDonations;
+  // Dynamic values
+  const totalDonations = summary?.total_donations || 0;
+  const donationCount = summary?.donation_count || 0;
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            style={styles.backBtn}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color={colors.primaryBrand}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Donation History</Text>
+  // VIP Patron Tier calculation
+  let vipTier = "Devotee";
+  let vipColor = colors.outline;
+  if (totalDonations >= 50000) {
+    vipTier = "Dharma Patron";
+    vipColor = colors.primaryBrand;
+  } else if (totalDonations >= 10000) {
+    vipTier = "Suvarna Patron";
+    vipColor = colors.aartiGold;
+  } else if (totalDonations >= 5000) {
+    vipTier = "Mandal Patron";
+    vipColor = colors.primaryContainer;
+  }
+
+  // Active campaign
+  const activeCampaign = campaigns?.find((c) => c.is_active);
+  const campaignName = activeCampaign?.name || "Annual Festival Contribution";
+  const campaignTarget = activeCampaign?.target_amount || 50000;
+  const campaignAchieved = Math.min(totalDonations, campaignTarget);
+  const campaignPercent = campaignTarget > 0 ? Math.round((campaignAchieved / campaignTarget) * 100) : 0;
+  const campaignRemaining = Math.max(0, campaignTarget - campaignAchieved);
+
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      {/* Lifetime contribution summary */}
+      <View style={styles.heroCard}>
+        <Text style={styles.heroSubtitle}>Lifetime Contribution</Text>
+        <View style={styles.heroMainRow}>
+          <Text style={styles.heroAmount}>₹{totalDonations.toLocaleString("en-IN")}</Text>
+          <View style={styles.trendBadge}>
+            <MaterialCommunityIcons name="trending-up" size={14} color={colors.tulsiGreen} />
+            <Text style={styles.trendText}>{donationCount} Donations</Text>
+          </View>
         </View>
-        <TouchableOpacity activeOpacity={0.7}>
-          <MaterialCommunityIcons
-            name="filter-variant"
-            size={24}
-            color={colors.primaryBrand}
-          />
-        </TouchableOpacity>
+        <View style={styles.badgeRow}>
+          <View style={[styles.vipBadge, { backgroundColor: vipColor + "15" }]}>
+            <Text style={[styles.vipText, { color: vipColor }]}>{vipTier.toUpperCase()}</Text>
+          </View>
+        </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero contribution summary */}
-        <View style={styles.heroCard}>
-          <Text style={styles.heroSubtitle}>Lifetime Contribution</Text>
-          <View style={styles.heroMainRow}>
-            <Text style={styles.heroAmount}>₹4,25,850</Text>
-            <View style={styles.trendBadge}>
-              <MaterialCommunityIcons name="trending-up" size={14} color={colors.tulsiGreen} />
-              <Text style={styles.trendText}>+12%</Text>
-            </View>
+      {/* Campaign Progress Card */}
+      <View style={styles.progressCard}>
+        <View style={styles.progressHeader}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={styles.progressTitle}>{campaignName}</Text>
+            <Text style={styles.progressSubtitle}>Annual Target: ₹{campaignTarget.toLocaleString("en-IN")}</Text>
           </View>
-          <View style={styles.badgeRow}>
-            <View style={styles.vipBadge}>
-              <Text style={styles.vipText}>VIP</Text>
-            </View>
-            <View style={styles.goldBadge}>
-              <MaterialCommunityIcons name="star" size={12} color="#FFFFFF" />
-              <Text style={styles.goldText}>Patron</Text>
-            </View>
+          <View style={styles.progressPercentBadge}>
+            <Text style={styles.progressPercentText}>{campaignPercent}% Achieved</Text>
           </View>
         </View>
-
-        {/* Festival Progress Card */}
-        <View style={styles.progressCard}>
-          <View style={styles.progressHeader}>
-            <View>
-              <Text style={styles.progressTitle}>Festival 2024 Progress</Text>
-              <Text style={styles.progressSubtitle}>Annual Target: ₹51,000</Text>
-            </View>
-            <View style={styles.progressPercentBadge}>
-              <Text style={styles.progressPercentText}>82% Achieved</Text>
-            </View>
-          </View>
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: "82%" }]} />
-          </View>
-          <View style={styles.progressFooter}>
-            <Text style={styles.progressFooterText}>Current: ₹41,820</Text>
-            <Text style={styles.progressFooterText}>Remaining: ₹9,180</Text>
-          </View>
+        <View style={styles.progressBarBg}>
+          <View style={[styles.progressBarFill, { width: `${campaignPercent}%` }]} />
         </View>
+        <View style={styles.progressFooter}>
+          <Text style={styles.progressFooterText}>Current: ₹{campaignAchieved.toLocaleString("en-IN")}</Text>
+          <Text style={styles.progressFooterText}>Remaining: ₹{campaignRemaining.toLocaleString("en-IN")}</Text>
+        </View>
+      </View>
 
-        {/* History Header & Filters */}
-        <View style={styles.historySectionHeader}>
-          <Text style={styles.historySectionTitle}>Donations List</Text>
-          <View style={styles.filterTabs}>
+      {/* List Title and Search */}
+      <View style={styles.searchSection}>
+        <Text style={styles.sectionTitle}>Donations List</Text>
+        <View style={styles.searchBar}>
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.outline} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search donor name..."
+            placeholderTextColor={colors.outline}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <MaterialCommunityIcons name="close-circle" size={18} color={colors.outline} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Mode Filter Chips */}
+      <View style={styles.filterRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsScroll}>
+          {[
+            { label: "All Modes", value: "all" },
+            { label: "Cash", value: "cash" },
+            { label: "Cheque", value: "cheque" },
+            { label: "Online", value: "online" },
+            { label: "Bank Transfer", value: "bank_transfer" },
+            { label: "In Kind", value: "in_kind" },
+          ].map((mode) => (
             <TouchableOpacity
-              style={[styles.filterTab, filterYear === "all" && styles.filterTabActive]}
-              onPress={() => setFilterYear("all")}
+              key={mode.value}
+              style={[
+                styles.filterChip,
+                selectedMode === mode.value && styles.filterChipActive,
+              ]}
+              onPress={() => setSelectedMode(mode.value)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.filterTabText, filterYear === "all" && styles.filterTabTextActive]}>
-                All Time
+              <Text style={[styles.filterChipText, selectedMode === mode.value && styles.filterChipTextActive]}>
+                {mode.label}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterTab, filterYear === "2024" && styles.filterTabActive]}
-              onPress={() => setFilterYear("2024")}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.filterTabText, filterYear === "2024" && styles.filterTabTextActive]}>
-                2024
-              </Text>
-            </TouchableOpacity>
-          </View>
+          ))}
+        </ScrollView>
+      </View>
+    </View>
+  );
+
+  const renderFooter = () => {
+    if (donationsList.length === 0) return null;
+    return (
+      <View style={styles.footerContainer}>
+        {/* Pagination Controls */}
+        <View style={styles.paginationRow}>
+          <TouchableOpacity
+            style={[styles.pageBtn, page === 1 && styles.pageBtnDisabled]}
+            disabled={page === 1}
+            onPress={() => setPage((p) => Math.max(1, p - 1))}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="chevron-left" size={20} color={page === 1 ? colors.outline : colors.primaryBrand} />
+          </TouchableOpacity>
+
+          <Text style={styles.pageInfo}>
+            Page {page} of {totalPages} ({totalCount} items)
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.pageBtn, page >= totalPages && styles.pageBtnDisabled]}
+            disabled={page >= totalPages}
+            onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="chevron-right" size={20} color={page >= totalPages ? colors.outline : colors.primaryBrand} />
+          </TouchableOpacity>
         </View>
-
-        {/* Donations Cards */}
-        {isLoading ? (
-          <ActivityIndicator size="large" color={colors.primaryBrand} style={{ marginVertical: 20 }} />
-        ) : (
-          <View style={styles.cardsGrid}>
-            {displayedDonations.map((item: any) => (
-              <View key={item.id} style={styles.donationCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.iconContainer}>
-                    <MaterialCommunityIcons
-                      name={getDonationIcon(item.purpose)}
-                      size={20}
-                      color={colors.primaryBrand}
-                    />
-                  </View>
-                  <View style={styles.amountCol}>
-                    <Text style={styles.cardAmount}>₹{item.amount.toLocaleString("en-IN")}</Text>
-                    <Text style={styles.cardTxn}>{item.txn_id}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardContent}>
-                  <Text style={styles.cardPurpose}>{item.purpose}</Text>
-                  <View style={styles.dateRow}>
-                    <MaterialCommunityIcons name="calendar-range" size={14} color={colors.outline} />
-                    <Text style={styles.cardDate}>
-                      {new Date(item.created_at).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardFooter}>
-                  <View style={styles.statusRow}>
-                    <View style={[styles.statusDot, { backgroundColor: colors.tulsiGreen }]} />
-                    <Text style={styles.statusText}>{item.status || "Confirmed"}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.receiptBtn}
-                    onPress={() => handleDownloadReceipt(item.txn_id)}
-                    activeOpacity={0.7}
-                    disabled={downloadingTxnId === item.txn_id}
-                  >
-                    {downloadingTxnId === item.txn_id ? (
-                      <ActivityIndicator size="small" color={colors.primaryBrand} />
-                    ) : (
-                      <>
-                        <MaterialCommunityIcons name="download" size={16} color={colors.primaryBrand} />
-                        <Text style={styles.receiptText}>Receipt</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
 
         {/* Featured Impact Card */}
         <View style={styles.impactCard}>
@@ -245,7 +236,126 @@ export default function DonationHistoryScreen() {
             <Text style={styles.upgradeBtnText}>Upgrade Tier</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+            style={styles.backBtn}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Donation History</Text>
+        </View>
+        {isRefetching || loadingSummary || loadingCampaigns || loadingDonations ? (
+          <ActivityIndicator size="small" color={colors.primaryBrand} />
+        ) : (
+          <TouchableOpacity onPress={handleRefresh} activeOpacity={0.7}>
+            <MaterialCommunityIcons name="refresh" size={24} color={colors.primaryBrand} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <FlatList
+        data={donationsList}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
+        showsVerticalScrollIndicator={false}
+        refreshing={isRefetching}
+        onRefresh={handleRefresh}
+        ListEmptyComponent={
+          !loadingDonations ? (
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="currency-usd-off" size={48} color={colors.outline} />
+              <Text style={styles.emptyText}>No donations found</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <ActivityIndicator size="small" color={colors.primaryBrand} />
+            </View>
+          )
+        }
+        renderItem={({ item }) => (
+          <View style={styles.donationCard}>
+            <View style={styles.cardHeader}>
+              <View style={styles.iconContainer}>
+                <MaterialCommunityIcons
+                  name={getDonationIcon(item.note)}
+                  size={20}
+                  color={colors.primaryBrand}
+                />
+              </View>
+              <View style={styles.amountCol}>
+                <Text style={styles.cardAmount}>₹{(item.amount || 0).toLocaleString("en-IN")}</Text>
+                <Text style={styles.cardTxn}>{item.receipt_number || item.id.substring(0, 8).toUpperCase()}</Text>
+              </View>
+            </View>
+
+            <View style={styles.cardContent}>
+              <Text style={styles.cardPurpose}>
+                {item.note || `Donation from ${item.donor_name || "Anonymous Devotee"}`}
+              </Text>
+              <View style={styles.donorMeta}>
+                <Text style={styles.donorName}>By: {item.donor_name || "Anonymous"}</Text>
+                <View style={styles.modeBadge}>
+                  <Text style={styles.modeText}>{item.mode.toUpperCase()}</Text>
+                </View>
+              </View>
+              <View style={styles.dateRow}>
+                <MaterialCommunityIcons name="calendar-range" size={14} color={colors.outline} />
+                <Text style={styles.cardDate}>
+                  {new Date(item.created_at).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.cardFooter}>
+              <View style={styles.statusRow}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    {
+                      backgroundColor:
+                        item.status === "confirmed" ? colors.tulsiGreen : colors.aartiGold,
+                    },
+                  ]}
+                />
+                <Text style={styles.statusText}>
+                  {(item.status || "Pending").toUpperCase()}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.receiptBtn}
+                onPress={() => handleDownloadReceipt(item.receipt_number || item.id)}
+                activeOpacity={0.7}
+                disabled={downloadingTxnId === (item.receipt_number || item.id)}
+              >
+                {downloadingTxnId === (item.receipt_number || item.id) ? (
+                  <ActivityIndicator size="small" color={colors.primaryBrand} />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="download" size={16} color={colors.primaryBrand} />
+                    <Text style={styles.receiptText}>Receipt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      />
     </SafeAreaView>
   );
 }
@@ -270,8 +380,8 @@ const styles = StyleSheet.create({
     color: colors.primaryBrand,
   },
 
-  scroll: { flex: 1 },
-  scrollContent: { padding: spacing.md, paddingBottom: 40, gap: 20 },
+  listContent: { padding: spacing.md, paddingBottom: 40 },
+  headerContainer: { gap: 16, marginBottom: 16 },
 
   // Hero Card
   heroCard: {
@@ -311,7 +421,6 @@ const styles = StyleSheet.create({
   },
   badgeRow: { flexDirection: "row", gap: 6, marginTop: 4 },
   vipBadge: {
-    backgroundColor: colors.sandstone,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -319,21 +428,7 @@ const styles = StyleSheet.create({
   vipText: {
     fontFamily: fonts.inter.bold,
     fontSize: 10,
-    color: colors.charcoal,
-  },
-  goldBadge: {
-    backgroundColor: colors.aartiGold,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  goldText: {
-    fontFamily: fonts.inter.bold,
-    fontSize: 10,
-    color: "#FFFFFF",
+    letterSpacing: 0.5,
   },
 
   // Progress Card
@@ -348,13 +443,14 @@ const styles = StyleSheet.create({
   progressHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   progressTitle: {
     fontFamily: fonts.poppins.semibold,
-    fontSize: 16,
+    fontSize: 15,
     color: colors.onSurface,
   },
   progressSubtitle: {
     fontFamily: fonts.inter.regular,
     fontSize: 12,
     color: colors.onSurfaceVariant,
+    marginTop: 2,
   },
   progressPercentBadge: {
     backgroundColor: colors.primaryContainer,
@@ -385,33 +481,58 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
   },
 
-  // Section Header & Filters
-  historySectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  historySectionTitle: {
+  // Search Section
+  searchSection: { marginTop: 8 },
+  sectionTitle: {
     fontFamily: fonts.poppins.bold,
     fontSize: 18,
     color: colors.onSurface,
+    marginBottom: 8,
   },
-  filterTabs: { flexDirection: "row", backgroundColor: colors.cream, borderRadius: 12, padding: 3, gap: 4 },
-  filterTab: {
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.cream,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    height: 44,
   },
-  filterTabActive: {
-    backgroundColor: colors.pujaWhite,
-  },
-  filterTabText: {
-    fontFamily: fonts.inter.semibold,
-    fontSize: 12,
-    color: colors.onSurfaceVariant,
-  },
-  filterTabTextActive: {
-    color: colors.primaryBrand,
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: fonts.inter.medium,
+    color: colors.charcoal,
+    marginLeft: 8,
   },
 
-  // Cards Grid
-  cardsGrid: { gap: 12 },
+  // Mode Filter Chips
+  filterRow: { marginTop: 4 },
+  filterChipsScroll: { gap: 8, paddingRight: 16 },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.cream,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primaryContainer,
+    borderColor: colors.primaryContainer,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontFamily: fonts.inter.semibold,
+    color: colors.outline,
+  },
+  filterChipTextActive: {
+    color: colors.onPrimaryContainer,
+    fontFamily: fonts.inter.bold,
+  },
+
+  // Donation Cards
   donationCard: {
     backgroundColor: colors.surfaceContainerLowest,
     borderWidth: 1,
@@ -419,6 +540,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     gap: 12,
+    marginBottom: 12,
   },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   iconContainer: {
@@ -445,11 +567,32 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     textTransform: "uppercase",
   },
-  cardContent: { gap: 4 },
+  cardContent: { gap: 6 },
   cardPurpose: {
     fontFamily: fonts.poppins.semibold,
     fontSize: 14,
     color: colors.onSurface,
+  },
+  donorMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  donorName: {
+    fontFamily: fonts.inter.medium,
+    fontSize: 12,
+    color: colors.outline,
+  },
+  modeBadge: {
+    backgroundColor: colors.cream,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  modeText: {
+    fontFamily: fonts.inter.bold,
+    fontSize: 9,
+    color: colors.primaryContainer,
   },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   cardDate: {
@@ -469,7 +612,7 @@ const styles = StyleSheet.create({
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: {
     fontFamily: fonts.inter.semibold,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.onSurfaceVariant,
   },
   receiptBtn: {
@@ -481,6 +624,38 @@ const styles = StyleSheet.create({
     fontFamily: fonts.inter.bold,
     fontSize: 12,
     color: colors.primaryBrand,
+  },
+
+  // Pagination Footer
+  footerContainer: { gap: 20, marginTop: 12, paddingBottom: 24 },
+  paginationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.cream,
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+  },
+  pageBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+  },
+  pageBtnDisabled: {
+    backgroundColor: "transparent",
+    borderColor: "transparent",
+  },
+  pageInfo: {
+    fontSize: 12,
+    fontFamily: fonts.inter.bold,
+    color: colors.charcoal,
   },
 
   // Impact Card
@@ -521,5 +696,16 @@ const styles = StyleSheet.create({
     fontFamily: fonts.poppins.bold,
     fontSize: 14,
     color: colors.primaryBrand,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 12,
+  },
+  emptyText: {
+    fontFamily: fonts.inter.medium,
+    fontSize: 14,
+    color: colors.outline,
   },
 });

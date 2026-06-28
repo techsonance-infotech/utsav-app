@@ -54,10 +54,12 @@ export async function GET(req: Request) {
   const status = searchParams.get("status");
   const mode = searchParams.get("mode");
   const search = searchParams.get("search");
+  const pageParam = searchParams.get("page");
+  const limitParam = searchParams.get("limit");
 
   let query = supabase
     .from("donations")
-    .select("*")
+    .select("*", { count: "exact" })
     .eq("tenant_id", tenantId);
 
   if (campaignId) {
@@ -76,13 +78,29 @@ export async function GET(req: Request) {
   // Sort by date descending
   query = query.order("created_at", { ascending: false });
 
-  const { data: donations, error: dbError } = await query;
+  if (pageParam) {
+    const page = parseInt(pageParam, 10) || 1;
+    const limit = parseInt(limitParam || "10", 10) || 10;
+    const offset = (page - 1) * limit;
+    query = query.range(offset, offset + limit - 1);
 
-  if (dbError) {
-    return NextResponse.json({ message: dbError.message }, { status: 500 });
+    const { data: donations, count, error: dbError } = await query;
+    if (dbError) {
+      return NextResponse.json({ message: dbError.message }, { status: 500 });
+    }
+    return NextResponse.json({
+      data: donations,
+      totalCount: count || 0,
+      page,
+      limit,
+    });
+  } else {
+    const { data: donations, error: dbError } = await query;
+    if (dbError) {
+      return NextResponse.json({ message: dbError.message }, { status: 500 });
+    }
+    return NextResponse.json(donations);
   }
-
-  return NextResponse.json(donations);
 }
 
 const CreateDonationSchema = z.object({

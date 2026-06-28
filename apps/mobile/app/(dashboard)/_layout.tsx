@@ -1,12 +1,25 @@
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform } from "react-native";
+import { Platform, View, Text, StyleSheet } from "react-native";
 import { colors, fonts } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useOfflineStore } from "@utsav/stores";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function DashboardLayout() {
+  const isOnline = useOfflineStore((state) => state.isOnline);
+  const insets = useSafeAreaInsets();
+  const paddingTop = Platform.OS === "ios" ? Math.max(insets.top, 20) : insets.top;
+
   return (
-    <Tabs
+    <View style={{ flex: 1 }}>
+      {!isOnline && (
+        <View style={[styles.offlineBanner, { paddingTop }]}>
+          <MaterialCommunityIcons name="alert-circle" size={16} color={colors.onPrimaryContainer} />
+          <Text style={styles.offlineText}>You're offline. Some features are unavailable.</Text>
+        </View>
+      )}
+      <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.primaryBrand,
         tabBarInactiveTintColor: colors.onSurfaceVariant,
@@ -122,6 +135,12 @@ export default function DashboardLayout() {
       />
       <Tabs.Screen
         name="create-event"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="create-shift"
         options={{
           href: null,
         }}
@@ -486,5 +505,23 @@ export default function DashboardLayout() {
         }}
       />
     </Tabs>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.primaryContainer,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  offlineText: {
+    fontFamily: fonts.inter.semibold,
+    fontSize: 12,
+    color: colors.onPrimaryContainer,
+  },
+});

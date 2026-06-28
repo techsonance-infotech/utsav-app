@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, logAuditEvent, checkRole } from "../../utils";
+import { verifySession, createServiceRoleClient, logAuditEvent, checkRole, uploadBase64ToStorage } from "../../utils";
 import { z } from "zod";
 import { BlogCategorySchema, ContentStatusSchema } from "@utsav/types";
 
@@ -13,7 +13,7 @@ const UpdateBlogSchema = z.object({
     .optional(),
   body: z.string().min(1, "Body cannot be empty").optional(),
   excerpt: z.string().nullable().optional(),
-  cover_image_url: z.string().url("Must be a valid URL").nullable().or(z.literal("")).optional(),
+  cover_image_url: z.string().nullable().optional(),
   category: BlogCategorySchema.optional(),
   tags: z.array(z.string()).optional(),
   language: z.string().optional(),
@@ -123,6 +123,19 @@ export async function PATCH(
       if (validatedData[field] !== undefined) {
         updatePayload[field] = validatedData[field];
       }
+    }
+
+    if (updatePayload.cover_image_url && updatePayload.cover_image_url.startsWith("data:")) {
+      const { publicUrl, error: uploadError } = await uploadBase64ToStorage(
+        tenantId,
+        userId,
+        updatePayload.cover_image_url,
+        "blog-banners"
+      );
+      if (uploadError || !publicUrl) {
+        return NextResponse.json({ message: uploadError || "Failed to upload image" }, { status: 500 });
+      }
+      updatePayload.cover_image_url = publicUrl;
     }
 
     if (updatePayload.cover_image_url === "") {

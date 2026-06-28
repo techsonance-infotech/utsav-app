@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Image, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useVolunteerDuties, useFetchMyProfile, useFetchTenant } from "@utsav/api-client";
+import { useVolunteerDuties, useFetchMyProfile, useFetchTenant, useDeleteVolunteerDuty } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
+import { ScreenHeader } from "../components/ScreenHeader";
+
 
 const FILTER_CHIPS = ["All", "My Duties", "Crowd Control", "Decoration", "Prasad Vitran"];
 
@@ -16,6 +18,32 @@ export default function VolunteerDutyRosterScreen() {
   const { data: tenant } = useFetchTenant(tenantId);
   const { data: myProfile } = useFetchMyProfile();
   const { data: duties = [], isLoading } = useVolunteerDuties();
+  const deleteMutation = useDeleteVolunteerDuty();
+
+  const isCommittee = ["owner", "admin", "treasurer", "committee_member", "super_admin"].includes(
+    myProfile?.role || ""
+  );
+
+  const handleDeleteDuty = (id: string) => {
+    Alert.alert(
+      "Delete Shift",
+      "Are you sure you want to delete this volunteer duty shift? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteMutation.mutateAsync(id);
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to delete shift");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Summary statistics calculations
   const openSlotsCount = duties.filter((d: any) => d.status === "open").length;
@@ -62,6 +90,27 @@ export default function VolunteerDutyRosterScreen() {
     }
   };
 
+  const getParsedDescription = (desc: string | null | undefined) => {
+    if (!desc) return "";
+    const unescaped = desc
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/&#x2F;/g, "/");
+    const trimmed = unescaped.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return parsed.description || "";
+      } catch (e) {
+        return desc;
+      }
+    }
+    return desc;
+  };
+
   const displayDuties = duties.filter((d: any) => getFilterMatch(d, activeFilter));
 
   // Group by start date
@@ -83,28 +132,9 @@ export default function VolunteerDutyRosterScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top App Bar */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarLeft}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
-          </TouchableOpacity>
-          <View style={styles.logoAvatarWrapper}>
-            <Image
-              style={styles.logoAvatar}
-              source={require("../../assets/image-only.png")}
-            />
-          </View>
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <View style={styles.profileAvatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
-          ) : (
-            <Text style={styles.avatarText}>{initials}</Text>
-          )}
-        </View>
-      </View>
+      <ScreenHeader
+        title="Duty Roster"
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Intro */}
@@ -186,17 +216,35 @@ export default function VolunteerDutyRosterScreen() {
                     key={duty.id}
                     style={styles.dutyCard}
                     activeOpacity={0.8}
-                    onPress={() => router.push({ pathname: "/(dashboard)/volunteer-duty-sign-up", params: { id: duty.id } })}
+                    onPress={() => router.push({ pathname: "/(dashboard)/duty-detail", params: { id: duty.id } })}
                   >
                     <View style={styles.dutyHeader}>
                       <View style={styles.dutyIconWrap}>
                         <MaterialCommunityIcons name={info.icon as any} size={24} color={colors.primaryBrand} />
                       </View>
                       <View style={styles.dutyInfo}>
-                        <Text style={styles.dutyTitle}>{duty.title || info.title}</Text>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.xs }}>
+                          <Text style={[styles.dutyTitle, { flex: 1 }]}>{duty.title || info.title}</Text>
+                          {isCommittee && (
+                            <View style={{ flexDirection: "row", gap: spacing.md, paddingLeft: spacing.xs }}>
+                              <TouchableOpacity
+                                onPress={() => router.push({ pathname: "/(dashboard)/create-shift" as any, params: { id: duty.id } })}
+                                style={{ padding: 2 }}
+                              >
+                                <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primaryBrand} />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleDeleteDuty(duty.id)}
+                                style={{ padding: 2 }}
+                              >
+                                <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.primaryContainer} />
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
                         {duty.description ? (
                           <Text style={styles.dutyDescText} numberOfLines={2}>
-                            {duty.description}
+                            {getParsedDescription(duty.description)}
                           </Text>
                         ) : null}
                         <View style={styles.dutyMeta}>
@@ -236,7 +284,7 @@ export default function VolunteerDutyRosterScreen() {
                       <TouchableOpacity
                         style={[styles.signUpBtn, isAssigned && styles.assignedBtn]}
                         activeOpacity={0.85}
-                        onPress={() => router.push({ pathname: "/(dashboard)/volunteer-duty-sign-up", params: { id: duty.id } })}
+                        onPress={() => router.push({ pathname: "/(dashboard)/duty-detail", params: { id: duty.id } })}
                       >
                         <Text style={[styles.signUpBtnText, isAssigned && styles.assignedBtnText]}>
                           {isAssigned ? (duty.assigned_to === userId ? "My Assignment" : "Filled") : "Sign Up"}
@@ -257,14 +305,16 @@ export default function VolunteerDutyRosterScreen() {
       </ScrollView>
 
       {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        activeOpacity={0.9}
-        onPress={() => router.push("/(dashboard)/create-event")}
-      >
-        <MaterialCommunityIcons name="plus" size={24} color={colors.onPrimaryContainer} />
-        <Text style={styles.fabText}>Create Shift</Text>
-      </TouchableOpacity>
+      {["owner", "admin", "treasurer", "committee_member", "super_admin"].includes(myProfile?.role || "") && (
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.9}
+          onPress={() => router.push("/(dashboard)/create-shift" as any)}
+        >
+          <MaterialCommunityIcons name="plus" size={24} color={colors.onPrimaryContainer} />
+          <Text style={styles.fabText}>Create Shift</Text>
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }

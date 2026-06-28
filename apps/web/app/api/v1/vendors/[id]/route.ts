@@ -246,3 +246,59 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  const { hasAccess, userId, errorResponse } = await checkRole(req, ["owner", "admin", "treasurer"]);
+  if (!hasAccess) return errorResponse!;
+
+  const tenantId = req.headers.get("x-tenant-id")!;
+  const { id } = params;
+
+  const supabase = createServiceRoleClient();
+
+  try {
+    const { data: existing, error: fetchError } = await supabase
+      .from("vendors")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !existing) {
+      return NextResponse.json({ message: fetchError?.message || "Vendor not found" }, { status: 404 });
+    }
+
+    const { error: deleteError } = await supabase
+      .from("vendors")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      return NextResponse.json({ message: deleteError.message }, { status: 500 });
+    }
+
+    // Retrieve active role
+    const { data: member } = await supabase
+      .from("tenant_members")
+      .select("role")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId)
+      .single();
+
+    // Log action
+    await logAuditEvent({
+      tenantId,
+      actorId: userId,
+      actorRole: member?.role || "admin",
+      action: "vendor_delete",
+      entityType: "vendor",
+      entityId: id,
+      beforeData: existing,
+      afterData: null,
+    });
+
+    return NextResponse.json({ message: "Vendor deleted successfully" });
+  } catch (err: any) {
+    return NextResponse.json({ message: err.message }, { status: 500 });
+  }
+}

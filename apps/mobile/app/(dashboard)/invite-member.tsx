@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform, Linking } from "react-native";
+import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform, Linking, Image as RNImage } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
@@ -316,7 +316,7 @@ export default function InviteMemberScreen() {
             <View style={styles.qrCard}>
               <View style={styles.qrPlaceholderBox}>
                 <View style={styles.qrInnerBlock}>
-                  <Print.Image
+                  <RNImage
                     source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(generatedLink)}` }}
                     style={{ width: 140, height: 140 }}
                   />
@@ -353,7 +353,7 @@ export default function InviteMemberScreen() {
             <View style={styles.qrCard}>
               <View style={styles.qrPlaceholderBox}>
                 <View style={styles.qrInnerBlock}>
-                  <Print.Image
+                  <RNImage
                     source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(volunteerLink)}` }}
                     style={{ width: 140, height: 140 }}
                   />
