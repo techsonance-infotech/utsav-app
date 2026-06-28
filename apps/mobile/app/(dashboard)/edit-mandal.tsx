@@ -172,7 +172,8 @@ export default function EditMandalScreen() {
   const [timezone, setTimezone] = useState("Asia/Kolkata");
   const [isPublicDonations, setIsPublicDonations] = useState(true);
   const [isPublicExpenses, setIsPublicExpenses] = useState(false);
-  const [logoUrl, setLogoUrl] = useState("");
+  const [mandalLogoUrl, setMandalLogoUrl] = useState("");
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
 
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -194,9 +195,34 @@ export default function EditMandalScreen() {
       setTimezone(tenant.timezone || "Asia/Kolkata");
       setIsPublicDonations(tenant.is_public_donations);
       setIsPublicExpenses(tenant.is_public_expenses);
-      setLogoUrl(tenant.logo_url || "");
+      setMandalLogoUrl(tenant.logo_url || "");
+      setQrCodeUrl(tenant.banner_url || "");
     }
   }, [tenant]);
+
+  const handlePickMandalLogo = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "We need gallery permissions to select a logo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0].base64) {
+        const base64Uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        setMandalLogoUrl(base64Uri);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to select image.");
+    }
+  };
 
   const handlePickQR = async () => {
     try {
@@ -215,7 +241,7 @@ export default function EditMandalScreen() {
 
       if (!result.canceled && result.assets && result.assets[0].base64) {
         const base64Uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        setLogoUrl(base64Uri);
+        setQrCodeUrl(base64Uri);
       }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to select image.");
@@ -257,7 +283,8 @@ export default function EditMandalScreen() {
         timezone: timezone.trim(),
         is_public_donations: isPublicDonations,
         is_public_expenses: isPublicExpenses,
-        logo_url: logoUrl || null,
+        logo_url: mandalLogoUrl || null,
+        banner_url: qrCodeUrl || null,
       });
 
       router.back();
@@ -348,6 +375,43 @@ export default function EditMandalScreen() {
               editable={!isSaving}
               placeholder="e.g. 2016"
             />
+          </View>
+
+          {/* Section 1.5: Mandal Brand Logo */}
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="image" size={20} color={colors.primaryBrand} />
+            <Text style={styles.sectionTitle}>Mandal Logo</Text>
+          </View>
+
+          <View style={styles.formCard}>
+            <Text style={styles.fieldLabel}>Mandal Brand Logo</Text>
+            <Text style={styles.fieldSubLabel}>
+              Upload a logo image for your Mandal. This logo will be displayed on the top left of the dashboard page.
+            </Text>
+
+            {mandalLogoUrl ? (
+              <View style={styles.qrImageContainer}>
+                <Image source={{ uri: mandalLogoUrl }} style={styles.qrPreview} resizeMode="contain" />
+                <View style={styles.qrActionsRow}>
+                  <TouchableOpacity style={styles.qrChangeBtn} onPress={handlePickMandalLogo} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="image-edit-outline" size={16} color={colors.primaryBrand} />
+                    <Text style={styles.qrChangeBtnText}>Change Logo</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.qrDeleteBtn} onPress={() => setMandalLogoUrl("")} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="delete-outline" size={16} color={colors.kumkumRed} />
+                    <Text style={styles.qrDeleteBtnText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.qrUploadBox} onPress={handlePickMandalLogo} activeOpacity={0.8}>
+                <View style={styles.qrUploadIconCircle}>
+                  <MaterialCommunityIcons name="image-plus" size={32} color={colors.primaryBrand} />
+                </View>
+                <Text style={styles.qrUploadTitle}>Upload Mandal Logo</Text>
+                <Text style={styles.qrUploadSubtitle}>JPG or PNG format, square aspect recommended</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Section 2: Contact & Social URLs */}
@@ -492,15 +556,15 @@ export default function EditMandalScreen() {
               Upload the static UPI QR Code image of your Mandal's bank account. This QR Code will be displayed on the donation screen for devotees to scan and pay directly.
             </Text>
 
-            {logoUrl ? (
+            {qrCodeUrl ? (
               <View style={styles.qrImageContainer}>
-                <Image source={{ uri: logoUrl }} style={styles.qrPreview} resizeMode="contain" />
+                <Image source={{ uri: qrCodeUrl }} style={styles.qrPreview} resizeMode="contain" />
                 <View style={styles.qrActionsRow}>
                   <TouchableOpacity style={styles.qrChangeBtn} onPress={handlePickQR} activeOpacity={0.8}>
                     <MaterialCommunityIcons name="image-edit-outline" size={16} color={colors.primaryBrand} />
                     <Text style={styles.qrChangeBtnText}>Change QR Code</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.qrDeleteBtn} onPress={() => setLogoUrl("")} activeOpacity={0.8}>
+                  <TouchableOpacity style={styles.qrDeleteBtn} onPress={() => setQrCodeUrl("")} activeOpacity={0.8}>
                     <MaterialCommunityIcons name="delete-outline" size={16} color={colors.kumkumRed} />
                     <Text style={styles.qrDeleteBtnText}>Remove</Text>
                   </TouchableOpacity>

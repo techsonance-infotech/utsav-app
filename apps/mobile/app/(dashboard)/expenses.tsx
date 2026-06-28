@@ -23,6 +23,7 @@ import {
   useUpdateExpense,
   useExpenseCategories,
   useFetchVendors,
+  useFetchTenant,
 } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
@@ -36,7 +37,8 @@ import * as ImagePicker from "expo-image-picker";
 const { width } = Dimensions.get("window");
 
 export default function MobileExpensesScreen() {
-  const { role, userFullName, userId } = useAuthStore();
+  const { tenantId, tenantName, role, userFullName, userId } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
   const { data: expenses = [], isLoading: loadingExpenses, refetch } = useExpenses() as any;
 
   const approveMutation = useApproveExpense();
@@ -430,7 +432,7 @@ export default function MobileExpensesScreen() {
         <body>
           <div class="header-container">
             <div>
-              <h1 class="mandal-title">UTSAV Mandal Expenses</h1>
+              <h1 class="mandal-title">${(tenant?.name || tenantName || "UTSAV").toUpperCase()} Mandal Expenses</h1>
               <p class="mandal-sub">Official Festival Expenditure & Disbursement Ledger</p>
             </div>
             <div>
@@ -471,7 +473,7 @@ export default function MobileExpensesScreen() {
           </table>
 
           <div class="footer">
-            <p>Generated via UTSAV Mandal Mobile Client</p>
+            <p>Generated via ${(tenant?.name || tenantName || "UTSAV").toUpperCase()} Mandal Mobile Client</p>
             <p>Page 1 of 1</p>
           </div>
         </body>

@@ -6,11 +6,15 @@ import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFetchTenant, useFetchMembers } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function AboutMandalScreen() {
   const { tenantId } = useAuthStore();
   const { data: tenant, isLoading: loadingTenant } = useFetchTenant(tenantId || null);
-  const { data: members = [], isLoading: loadingMembers } = useFetchMembers({ role: "admin" });
+  const { data: members = [], isLoading: loadingMembers } = useFetchMembers();
+
+  const committeeRoles = ["owner", "admin", "treasurer", "committee_member"];
+  const committeeMembers = members.filter((m) => m.role && committeeRoles.includes(m.role));
 
   const handleOpenMap = () => {
     const address = tenant?.address || "Plot 42, Ganesha Chowk, Sector 12, Navi Mumbai, Maharashtra 400706";
@@ -19,11 +23,13 @@ export default function AboutMandalScreen() {
   };
 
   const handleCall = () => {
-    Linking.openURL("tel:+919876543210").catch((err) => console.error("Couldn't place call", err));
+    const phone = committeeMembers.find((m) => m.phone)?.phone || "9876543210";
+    Linking.openURL(`tel:+91${phone}`).catch((err) => console.error("Couldn't place call", err));
   };
 
   const handleEmail = () => {
-    Linking.openURL("mailto:contact@saiganpati.org").catch((err) => console.error("Couldn't send email", err));
+    const email = tenant?.website_url ? `contact@${tenant.slug}.org` : "contact@saiganpati.org";
+    Linking.openURL(`mailto:${email}`).catch((err) => console.error("Couldn't send email", err));
   };
 
   // Mock committee data in case members list is empty
@@ -55,12 +61,13 @@ export default function AboutMandalScreen() {
   const getRoleTitle = (member: any) => {
     if (member.role === "owner") return "President";
     if (member.role === "admin") return "Secretary";
+    if (member.role === "treasurer") return "Treasurer";
     if (member.role === "committee_member") return "Committee Member";
     return member.role || "Volunteer";
   };
 
-  const committeeMembers = members.length
-    ? members.slice(0, 3).map((m: any) => ({
+  const committeeMembersData = committeeMembers.length
+    ? committeeMembers.slice(0, 6).map((m: any) => ({
         id: m.id,
         full_name: m.full_name,
         role: getRoleTitle(m),
@@ -71,24 +78,27 @@ export default function AboutMandalScreen() {
   const mandalName = tenant?.name || "Shri Sai Ganpati Mandal";
   const mandalDesc =
     tenant?.description ||
-    "Founded with a humble vision in a small neighborhood, Shri Sai Ganpati Mandal has grown into a pillar of community celebration. Our journey began with a handful of dedicated volunteers who sought to bring the spirit of Ganeshotsav to every doorstep.\n\nOver the decades, we have transitioned from simple celebrations to hosting some of the city's most visually stunning and spiritually uplifting festivals. Each year, our idol represents a unique theme, blending modern artistry with sacred Vedic traditions.\n\nBeyond the festivities, our Mandal is committed to social welfare, organizing annual blood donation camps, educational scholarships, and local infrastructure improvements.";
+    "Founded with a humble vision in a small neighborhood, our Mandal has grown into a pillar of community celebration. Our journey began with a handful of dedicated volunteers who sought to bring the spirit of Ganeshotsav to every doorstep.\n\nOver the decades, we have transitioned from simple celebrations to hosting some of the city's most visually stunning and spiritually uplifting festivals. Each year, our idol represents a unique theme, blending modern artistry with sacred Vedic traditions.\n\nBeyond the festivities, our Mandal is committed to social welfare, organizing annual blood donation camps, educational scholarships, and local infrastructure improvements.";
 
   const foundedYear = tenant?.founded_year || 1995;
 
+  const contactPhoneDisplay = committeeMembers.find((m) => m.phone)?.phone
+    ? `+91 ${committeeMembers.find((m) => m.phone)?.phone}`
+    : "+91 98765 43210";
+
+  const contactEmailDisplay = tenant?.website_url ? `contact@${tenant.slug}.org` : "contact@saiganpati.org";
+
+  if (loadingTenant || loadingMembers) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={colors.primaryBrand} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          About Our Mandal
-        </Text>
-        <TouchableOpacity style={styles.notifyBtn}>
-          <MaterialCommunityIcons name="bell-outline" size={22} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title="About Our Mandal" rightIcon="bell-outline" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Hero Section */}
@@ -137,28 +147,63 @@ export default function AboutMandalScreen() {
         {/* Meet the Committee */}
         <View style={[styles.section, { backgroundColor: colors.surfaceContainerLow }]}>
           <Text style={styles.sectionHeader}>Meet the Committee</Text>
-          {loadingMembers ? (
-            <ActivityIndicator size="small" color={colors.primaryContainer} style={{ marginVertical: 20 }} />
-          ) : (
-            <View style={styles.committeeGrid}>
-              {committeeMembers.map((member) => (
-                <View key={member.id} style={styles.committeeCard}>
-                  <View style={styles.avatarBorder}>
-                    {member.avatar_url ? (
-                      <Image source={{ uri: member.avatar_url }} style={styles.avatarImage} />
-                    ) : (
-                      <View style={styles.avatarPlaceholder}>
-                        <MaterialCommunityIcons name="account" size={32} color={colors.outline} />
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.committeeName}>{member.full_name}</Text>
-                  <Text style={styles.committeeRole}>{member.role}</Text>
+          <View style={styles.committeeGrid}>
+            {committeeMembersData.map((member) => (
+              <View key={member.id} style={styles.committeeCard}>
+                <View style={styles.avatarBorder}>
+                  {member.avatar_url ? (
+                    <Image source={{ uri: member.avatar_url }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <MaterialCommunityIcons name="account" size={32} color={colors.outline} />
+                    </View>
+                  )}
                 </View>
-              ))}
-            </View>
-          )}
+                <Text style={styles.committeeName}>{member.full_name}</Text>
+                <Text style={styles.committeeRole}>{member.role}</Text>
+              </View>
+            ))}
+          </View>
         </View>
+
+        {/* Social Links Row */}
+        {(tenant?.facebook_url || tenant?.instagram_url || tenant?.whatsapp_group_url) ? (
+          <View style={styles.socialSection}>
+            <Text style={styles.socialHeader}>Connect With Us</Text>
+            <View style={styles.socialRow}>
+              {tenant?.whatsapp_group_url && (
+                <TouchableOpacity
+                  style={styles.socialBadge}
+                  onPress={() => Linking.openURL(tenant.whatsapp_group_url!)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="whatsapp" size={20} color="#25D366" />
+                  <Text style={styles.socialText}>WhatsApp</Text>
+                </TouchableOpacity>
+              )}
+              {tenant?.facebook_url && (
+                <TouchableOpacity
+                  style={styles.socialBadge}
+                  onPress={() => Linking.openURL(tenant.facebook_url!)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="facebook" size={20} color="#1877F2" />
+                  <Text style={styles.socialText}>Facebook</Text>
+                </TouchableOpacity>
+              )}
+              {tenant?.instagram_url && (
+                <TouchableOpacity
+                  style={styles.socialBadge}
+                  onPress={() => Linking.openURL(tenant.instagram_url!)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="instagram" size={20} color="#E4405F" />
+                  <Text style={styles.socialText}>Instagram</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ) : null}
 
         {/* Contact and Location */}
         <View style={styles.section}>
@@ -183,7 +228,7 @@ export default function AboutMandalScreen() {
               </View>
               <View style={styles.contactInfo}>
                 <Text style={styles.contactLabel}>Call Us</Text>
-                <Text style={[styles.contactValue, styles.linkText]}>+91 98765 43210</Text>
+                <Text style={[styles.contactValue, styles.linkText]}>{contactPhoneDisplay}</Text>
               </View>
             </TouchableOpacity>
 
@@ -193,9 +238,7 @@ export default function AboutMandalScreen() {
               </View>
               <View style={styles.contactInfo}>
                 <Text style={styles.contactLabel}>Email</Text>
-                <Text style={[styles.contactValue, styles.linkText]}>
-                  {tenant?.website_url ? `contact@${tenant.slug}.org` : "contact@saiganpati.org"}
-                </Text>
+                <Text style={[styles.contactValue, styles.linkText]}>{contactEmailDisplay}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -382,6 +425,39 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 2,
     textAlign: "center",
+  },
+  socialSection: {
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.sandstone,
+    backgroundColor: "#FFFFFF",
+  },
+  socialHeader: {
+    fontSize: 16,
+    fontFamily: fonts.poppins.bold,
+    color: colors.primaryBrand,
+    marginBottom: spacing.md,
+  },
+  socialRow: {
+    flexDirection: "row",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  socialBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.cream,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  socialText: {
+    fontFamily: fonts.inter.semibold,
+    fontSize: 13,
+    color: colors.charcoal,
   },
   contactList: {
     gap: 16,

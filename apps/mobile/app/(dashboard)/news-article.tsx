@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Share, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
-import { useNewsArticles, useBlogPosts } from "@utsav/api-client";
+import { useNewsArticles, useBlogPosts, useFetchTenant } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -10,6 +11,11 @@ export default function NewsArticleScreen() {
   const { articleId, isBlog } = useLocalSearchParams();
   const idStr = typeof articleId === "string" ? articleId : "";
   const isBlogBool = isBlog === "true";
+
+  const { role: userRole, tenantId, tenantName } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
+  const currentTenantName = tenant?.name || tenantName || "Mandal";
+  const isAdmin = ["owner", "admin", "committee_member"].includes(userRole || "");
 
   const { data: articles = [] } = useNewsArticles(false);
   const { data: blogs = [] } = useBlogPosts();
@@ -55,7 +61,7 @@ export default function NewsArticleScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Read "${getLocalizedTitle()}" on UTSAV app: ${articleBannerUrl || ""}`,
+        message: `Read "${getLocalizedTitle()}" on ${currentTenantName} app: ${articleBannerUrl || ""}`,
       });
     } catch (err: any) {
       console.error(err);
@@ -77,9 +83,24 @@ export default function NewsArticleScreen() {
         <TouchableOpacity style={styles.headerCircleBtn} onPress={() => router.back()}>
           <MaterialCommunityIcons name="chevron-left" size={24} color={colors.charcoal} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerCircleBtn} onPress={handleShare}>
-          <MaterialCommunityIcons name="share-variant" size={20} color={colors.charcoal} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {isAdmin && (
+            <TouchableOpacity
+              style={styles.headerCircleBtn}
+              onPress={() =>
+                router.push({
+                  pathname: "/create-update",
+                  params: { editId: article.id, type: isBlogBool ? "blog" : "news" },
+                })
+              }
+            >
+              <MaterialCommunityIcons name="pencil" size={20} color={colors.charcoal} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.headerCircleBtn} onPress={handleShare}>
+            <MaterialCommunityIcons name="share-variant" size={20} color={colors.charcoal} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

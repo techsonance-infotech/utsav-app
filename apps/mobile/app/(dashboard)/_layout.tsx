@@ -127,6 +127,12 @@ export default function DashboardLayout() {
         }}
       />
       <Tabs.Screen
+        name="create-shift"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="event-detail"
         options={{
           href: null,

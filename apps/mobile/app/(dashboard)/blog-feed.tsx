@@ -48,10 +48,40 @@ export default function BlogFeedScreen() {
     return authors[index % authors.length];
   };
 
+  const getCategoryBadgeStyle = (category: string) => {
+    switch (category?.toLowerCase()) {
+      case "festival_story":
+      case "tradition_culture":
+        return { bg: "rgba(255, 149, 0, 0.15)", text: colors.primaryContainer };
+      case "volunteer_voice":
+      case "committee_update":
+        return { bg: "rgba(34, 197, 94, 0.15)", text: colors.tulsiGreen };
+      case "recipe":
+        return { bg: "rgba(244, 63, 94, 0.15)", text: "#F43F5E" };
+      default:
+        return { bg: colors.cream, text: colors.charcoal };
+    }
+  };
+
+  const formatCategoryName = (category: string) => {
+    if (!category) return "General";
+    return category
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const categoryMapping: Record<string, string[]> = {
+    "Traditions": ["tradition_culture", "festival_story"],
+    "Philanthropy": ["volunteer_voice"],
+    "Spotlight": ["committee_update", "other"],
+    "Food & Rituals": ["recipe"],
+  };
+
   const filteredBlogs = blogs.filter((blog) => {
     if (activeCategory === "All Stories") return true;
-    if (activeCategory === "Spotlight") return blog.category?.toLowerCase() === "community spotlight";
-    return blog.category?.toLowerCase() === activeCategory.toLowerCase();
+    const dbCategory = blog.category?.toLowerCase() || "";
+    const allowed = categoryMapping[activeCategory] || [];
+    return allowed.some(val => dbCategory === val);
   });
 
   return (
@@ -171,7 +201,7 @@ export default function BlogFeedScreen() {
                   />
                   <View style={styles.blogDetails}>
                     <View style={styles.blogTagRow}>
-                      <Text style={styles.blogTag}>{item.category || "TRADITIONS"}</Text>
+                      <Text style={styles.blogTag}>{formatCategoryName(item.category || "")}</Text>
                       <Text style={styles.blogReadTime}>6 min read</Text>
                     </View>
                     <Text style={styles.blogTitle} numberOfLines={2}>

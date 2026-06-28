@@ -1,87 +1,381 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useFinancialSummary } from "@utsav/api-client";
+import { useFinancialSummary, useFetchDonations, useExpenses, useExpenseCategories, useFetchTenant } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { ScreenHeader } from "../components/ScreenHeader";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 export default function FinancialReportsScreen() {
-  const { data: summary, isLoading } = useFinancialSummary();
+  const { tenantId } = useAuthStore();
   const [filterPeriod, setFilterPeriod] = useState<"festival" | "30days">("festival");
 
-  // Simulated leaderboard data matching html
-  const topBenefactors = [
-    {
-      id: "b1",
-      name: "Rahul Deshmukh",
-      tier: "Aarti Gold Tier",
-      amount: "₹ 2,50,000",
-      type: "Corp. Sponsor",
-      tierColor: colors.aartiGold,
-    },
-    {
-      id: "b2",
-      name: "Anjali Kulkarni",
-      tier: "Silver Patron",
-      amount: "₹ 1,25,000",
-      type: "Family Donation",
-      tierColor: colors.outline,
-    },
-    {
-      id: "b3",
-      name: "Vinayak Bhat",
-      tier: "Silver Patron",
-      amount: "₹ 95,000",
-      type: "Individual",
-      tierColor: colors.outline,
-    },
-    {
-      id: "b4",
-      name: "Prakash Mehra",
-      tier: "Member",
-      amount: "₹ 50,000",
-      type: "Online",
-      tierColor: colors.onSurfaceVariant,
-    },
-  ];
+  // Fetch all required data from backend
+  const { data: tenant } = useFetchTenant(tenantId);
+  const { data: summary, isLoading: isSummaryLoading } = useFinancialSummary(tenantId);
+  const { data: donations = [], isLoading: isDonationsLoading } = useFetchDonations();
+  const { data: expenses = [], isLoading: isExpensesLoading } = useExpenses();
+  const { data: categories = [], isLoading: isCategoriesLoading } = useExpenseCategories();
 
-  // Expense categories
-  const expenseCategories = [
-    { name: "Mandap & Decoration", amount: "₹ 1,85,400", pct: "45%", color: "rgba(140, 80, 0, 0.4)" },
-    { name: "Catering & Prasadam", amount: "₹ 1,03,000", pct: "25%", color: "rgba(185, 13, 24, 0.4)" },
-    { name: "Cultural Events", amount: "₹ 61,800", pct: "15%", color: "rgba(234, 179, 8, 0.4)" },
-  ];
+  const isLoading = isSummaryLoading || isDonationsLoading || isExpensesLoading || isCategoriesLoading;
+
+  // Currency formatter helper
+  const formatRupee = (value: number) => {
+    return "₹ " + new Intl.NumberFormat("en-IN", {
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  // 1. Calculate weekly trend
+  const getWeeklyTrend = () => {
+    const daysCount = filterPeriod === "festival" ? 60 : 30;
+    const now = new Date();
+    const startDate = new Date(now.getTime() - daysCount * 24 * 60 * 60 * 1000);
+
+    const bucketDurationMs = (daysCount * 24 * 60 * 60 * 1000) / 4;
+
+    const weeks = [
+      { donations: 0, expenses: 0, label: "W1" },
+      { donations: 0, expenses: 0, label: "W2" },
+      { donations: 0, expenses: 0, label: "W3" },
+      { donations: 0, expenses: 0, label: "W4" },
+    ];
+
+    const confirmedDonations = donations.filter((d) => d.status === "confirmed");
+    const approvedExpenses = expenses.filter((e) => ["approved", "paid"].includes(e.status));
+
+    confirmedDonations.forEach((d) => {
+      const date = new Date(d.paid_at || d.created_at);
+      const diff = date.getTime() - startDate.getTime();
+      if (diff >= 0 && diff < daysCount * 24 * 60 * 60 * 1000) {
+        const bucketIndex = Math.min(Math.floor(diff / bucketDurationMs), 3);
+        weeks[bucketIndex].donations += d.amount;
+      }
+    });
+
+    approvedExpenses.forEach((e) => {
+      const date = new Date(e.paid_at || e.expense_date || e.created_at);
+      const diff = date.getTime() - startDate.getTime();
+      if (diff >= 0 && diff < daysCount * 24 * 60 * 60 * 1000) {
+        const bucketIndex = Math.min(Math.floor(diff / bucketDurationMs), 3);
+        weeks[bucketIndex].expenses += e.amount;
+      }
+    });
+
+    return weeks;
+  };
+
+  const weeklyTrend = getWeeklyTrend();
+  const maxWeeklyValue = Math.max(
+    ...weeklyTrend.map((w) => Math.max(w.donations, w.expenses)),
+    1000 // Fallback minimum to avoid divide-by-zero
+  );
+
+  const getBarHeight = (value: number) => {
+    const pct = (value / maxWeeklyValue) * 85; // Max height is 85%
+    return `${Math.max(pct, 5)}%` as any; // Minimum height is 5% so bar is visible
+  };
+
+  // 2. Leaderboard Calculation
+  const getLeaderboard = () => {
+    return donations
+      .filter((d) => d.status === "confirmed" && !d.is_anonymous)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+      .map((d) => {
+        let tier = "Member";
+        let tierColor = colors.onSurfaceVariant;
+        if (d.amount >= 100000) {
+          tier = "Aarti Gold Tier";
+          tierColor = colors.aartiGold;
+        } else if (d.amount >= 25000) {
+          tier = "Silver Patron";
+          tierColor = colors.outline;
+        }
+
+        return {
+          id: d.id,
+          name: d.donor_name,
+          tier,
+          amount: formatRupee(d.amount),
+          type: d.mode === "cash" ? "Cash" : "Online",
+          tierColor,
+        };
+      });
+  };
+
+  const leaderboardData = getLeaderboard();
+
+  // 3. Expense Categories Breakdown
+  const getCategoriesBreakdown = () => {
+    const approvedExpenses = expenses.filter((e) => ["approved", "paid"].includes(e.status));
+    const totalExpenses = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+    const grouped: Record<string, number> = {};
+    approvedExpenses.forEach((e) => {
+      const catId = e.category_id || "other";
+      grouped[catId] = (grouped[catId] || 0) + e.amount;
+    });
+
+    return Object.entries(grouped)
+      .map(([catId, amount]) => {
+        const cat = categories.find((c) => c.id === catId);
+        const name = cat ? cat.name : "Other Expenses";
+        const pctVal = totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0;
+        const pct = `${Math.round(pctVal)}%`;
+        const color = cat?.color || "rgba(140, 80, 0, 0.4)";
+
+        return {
+          name,
+          amount: formatRupee(amount),
+          pct,
+          color,
+        };
+      })
+      .sort((a, b) => parseFloat(b.pct) - parseFloat(a.pct));
+  };
+
+  const categoriesBreakdown = getCategoriesBreakdown();
+
+  // 4. Smart Assistant Logic
+  const pendingDonationsCount = donations.filter((d) => d.status === "pending").length;
+  const pendingExpensesCount = expenses.filter((e) => ["pending_approval", "submitted"].includes(e.status)).length;
+
+  let assistantTitle = "Smart Assistant";
+  let assistantDesc = "Everything is up to date! Your treasury records are fully synced.";
+  let showAssistantActions = false;
+
+  if (pendingDonationsCount > 0 || pendingExpensesCount > 0) {
+    showAssistantActions = true;
+    if (pendingDonationsCount > 0 && pendingExpensesCount > 0) {
+      assistantDesc = `You have ${pendingDonationsCount} pending donation receipts and ${pendingExpensesCount} expenses awaiting approval. Action required.`;
+    } else if (pendingDonationsCount > 0) {
+      assistantDesc = `You have ${pendingDonationsCount} pending donation receipts to verify. Automate this process?`;
+    } else {
+      assistantDesc = `You have ${pendingExpensesCount} expenses waiting for your approval. Action required.`;
+    }
+  }
+
+  // 5. PDF Export
+  const handleExportPDF = async () => {
+    try {
+      const tenantName = tenant?.name || "Mandal Treasury";
+      const totalCollections = formatRupee(summary?.total_donations || 0);
+      const totalExpenses = formatRupee(summary?.total_expenses || 0);
+      const netBalance = formatRupee(summary?.net_balance || 0);
+
+      const leaderboardHtml = leaderboardData.length > 0
+        ? leaderboardData.map((item, idx) => `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${item.name}</td>
+              <td>${item.tier}</td>
+              <td>${item.amount}</td>
+              <td>${item.type}</td>
+            </tr>
+          `).join("")
+        : '<tr><td colspan="5" style="text-align: center;">No donors recorded.</td></tr>';
+
+      const categoriesHtml = categoriesBreakdown.length > 0
+        ? categoriesBreakdown.map(cat => `
+            <tr>
+              <td>${cat.name}</td>
+              <td>${cat.pct}</td>
+              <td>${cat.amount}</td>
+            </tr>
+          `).join("")
+        : '<tr><td colspan="3" style="text-align: center;">No expenses recorded.</td></tr>';
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Treasury Financial Report</title>
+            <style>
+              body {
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                color: #2D3748;
+                padding: 30px;
+                line-height: 1.5;
+              }
+              .header {
+                border-bottom: 2px solid #E2E8F0;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+              }
+              .mandal-name {
+                font-size: 24px;
+                font-weight: bold;
+                color: #8C5000;
+                margin: 0;
+              }
+              .title {
+                font-size: 18px;
+                color: #4A5568;
+                margin: 5px 0 0 0;
+              }
+              .date {
+                font-size: 12px;
+                color: #718096;
+                margin-top: 5px;
+              }
+              .kpi-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 30px;
+                gap: 15px;
+              }
+              .kpi-card {
+                flex: 1;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                padding: 15px;
+                background-color: #F8FAFC;
+              }
+              .kpi-label {
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: #718096;
+                margin-bottom: 5px;
+                font-weight: bold;
+              }
+              .kpi-val {
+                font-size: 20px;
+                font-weight: bold;
+                color: #1A202C;
+              }
+              .section-title {
+                font-size: 16px;
+                font-weight: bold;
+                color: #2D3748;
+                margin-top: 30px;
+                margin-bottom: 15px;
+                border-bottom: 1px solid #E2E8F0;
+                padding-bottom: 5px;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+              }
+              th, td {
+                border: 1px solid #E2E8F0;
+                padding: 10px;
+                text-align: left;
+                font-size: 13px;
+              }
+              th {
+                background-color: #F7FAFC;
+                color: #4A5568;
+                font-weight: bold;
+              }
+              .footer {
+                margin-top: 50px;
+                text-align: center;
+                font-size: 11px;
+                color: #A0AEC0;
+                border-top: 1px solid #E2E8F0;
+                padding-top: 15px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1 class="mandal-name">${tenantName}</h1>
+              <p class="title">Treasury Financial Report</p>
+              <p class="date">Report generated on ${new Date().toLocaleDateString("en-IN", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}</p>
+            </div>
+
+            <div class="kpi-row">
+              <div class="kpi-card">
+                <div class="kpi-label">Total Collections</div>
+                <div class="kpi-val">${totalCollections}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Total Expenses</div>
+                <div class="kpi-val">${totalExpenses}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Net Treasury Balance</div>
+                <div class="kpi-val" style="color: #2F855A;">${netBalance}</div>
+              </div>
+            </div>
+
+            <h2 class="section-title">Top Benefactors</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 8%;">Rank</th>
+                  <th>Name</th>
+                  <th>Tier</th>
+                  <th>Amount</th>
+                  <th>Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${leaderboardHtml}
+              </tbody>
+            </table>
+
+            <h2 class="section-title">Expense Breakdown by Category</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th style="width: 20%;">Percentage</th>
+                  <th>Total Spent</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${categoriesHtml}
+              </tbody>
+            </table>
+
+            <div class="footer">
+              Generated via Utsav App treasury platform. All values are digitally authenticated.
+            </div>
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/pdf",
+        dialogTitle: `${tenantName} Financial Report`,
+        UTI: "com.adobe.pdf",
+      });
+    } catch (err: any) {
+      Alert.alert("Export Error", "Failed to generate and share report: " + err.message);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={colors.primaryBrand} />
+        <Text style={{ marginTop: 12, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant }}>
+          Loading financial data...
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            style={styles.backBtn}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color={colors.primaryBrand}
-            />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerTitle}>Financials</Text>
-            <Text style={styles.headerSubtitle}>Real-time Treasury Reporting</Text>
-          </View>
-        </View>
-        <TouchableOpacity activeOpacity={0.7}>
-          <MaterialCommunityIcons
-            name="download"
-            size={24}
-            color={colors.primaryBrand}
-          />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title="Treasury Reports" rightIcon="download" onRightPress={handleExportPDF} />
 
       <ScrollView
         style={styles.scroll}
@@ -110,9 +404,9 @@ export default function FinancialReportsScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.calendarBtn} activeOpacity={0.7}>
+          <View style={styles.calendarBtn}>
             <MaterialCommunityIcons name="calendar-month-outline" size={20} color={colors.onSurfaceVariant} />
-          </TouchableOpacity>
+          </View>
         </View>
 
         {/* KPI Bento Cards */}
@@ -123,7 +417,7 @@ export default function FinancialReportsScreen() {
               <MaterialCommunityIcons name="trending-up" size={18} color={colors.primaryBrand} />
               <Text style={styles.kpiLabel}>Total Collections</Text>
             </View>
-            <Text style={styles.kpiValue}>₹ 12,45,800</Text>
+            <Text style={styles.kpiValue}>{formatRupee(summary?.total_donations || 0)}</Text>
             <Text style={styles.kpiTrending}>
               <MaterialCommunityIcons name="arrow-up" size={12} color={colors.tulsiGreen} />
               <Text style={{ color: colors.tulsiGreen, fontWeight: "600" }}> +12.5%</Text> from last year
@@ -136,8 +430,12 @@ export default function FinancialReportsScreen() {
               <MaterialCommunityIcons name="receipt" size={18} color={colors.secondaryBrand} />
               <Text style={styles.kpiLabel}>Total Expenses</Text>
             </View>
-            <Text style={styles.kpiValue}>₹ 4,12,000</Text>
-            <Text style={styles.kpiSubtext}>33% of total revenue</Text>
+            <Text style={styles.kpiValue}>{formatRupee(summary?.total_expenses || 0)}</Text>
+            <Text style={styles.kpiSubtext}>
+              {summary?.total_donations && summary.total_donations > 0
+                ? `${Math.round((summary.total_expenses / summary.total_donations) * 100)}% of total revenue`
+                : "0% of total revenue"}
+            </Text>
           </View>
 
           {/* Net Balance */}
@@ -146,7 +444,7 @@ export default function FinancialReportsScreen() {
               <MaterialCommunityIcons name="wallet-outline" size={18} color={colors.primaryBrand} />
               <Text style={[styles.kpiLabel, { color: colors.onPrimaryContainer }]}>Net Balance</Text>
             </View>
-            <Text style={[styles.kpiValue, { color: colors.primaryBrand }]}>₹ 8,33,800</Text>
+            <Text style={[styles.kpiValue, { color: colors.primaryBrand }]}>{formatRupee(summary?.net_balance || 0)}</Text>
             <View style={styles.statusBadge}>
               <Text style={styles.statusBadgeText}>AVAILABLE FUNDS</Text>
             </View>
@@ -167,40 +465,17 @@ export default function FinancialReportsScreen() {
             </View>
           </View>
 
-          {/* Simulated chart bars */}
+          {/* Dynamic chart bars */}
           <View style={styles.chartVisualization}>
-            {/* Week 1 */}
-            <View style={styles.chartCol}>
-              <View style={styles.chartBarGroup}>
-                <View style={[styles.chartBar, { height: "40%", backgroundColor: colors.primaryContainer }]} />
-                <View style={[styles.chartBar, { height: "15%", backgroundColor: colors.secondaryBrand, opacity: 0.6 }]} />
+            {weeklyTrend.map((week, idx) => (
+              <View key={idx} style={styles.chartCol}>
+                <View style={styles.chartBarGroup}>
+                  <View style={[styles.chartBar, { height: getBarHeight(week.donations), backgroundColor: colors.primaryContainer }]} />
+                  <View style={[styles.chartBar, { height: getBarHeight(week.expenses), backgroundColor: colors.secondaryBrand, opacity: 0.6 }]} />
+                </View>
+                <Text style={styles.chartColLabel}>{week.label}</Text>
               </View>
-              <Text style={styles.chartColLabel}>W1</Text>
-            </View>
-            {/* Week 2 */}
-            <View style={styles.chartCol}>
-              <View style={styles.chartBarGroup}>
-                <View style={[styles.chartBar, { height: "65%", backgroundColor: colors.primaryContainer }]} />
-                <View style={[styles.chartBar, { height: "25%", backgroundColor: colors.secondaryBrand, opacity: 0.6 }]} />
-              </View>
-              <Text style={styles.chartColLabel}>W2</Text>
-            </View>
-            {/* Week 3 */}
-            <View style={styles.chartCol}>
-              <View style={styles.chartBarGroup}>
-                <View style={[styles.chartBar, { height: "85%", backgroundColor: colors.primaryContainer }]} />
-                <View style={[styles.chartBar, { height: "10%", backgroundColor: colors.secondaryBrand, opacity: 0.6 }]} />
-              </View>
-              <Text style={styles.chartColLabel}>W3</Text>
-            </View>
-            {/* Week 4 */}
-            <View style={styles.chartCol}>
-              <View style={styles.chartBarGroup}>
-                <View style={[styles.chartBar, { height: "55%", backgroundColor: colors.primaryContainer }]} />
-                <View style={[styles.chartBar, { height: "45%", backgroundColor: colors.secondaryBrand, opacity: 0.6 }]} />
-              </View>
-              <Text style={styles.chartColLabel}>W4</Text>
-            </View>
+            ))}
           </View>
 
           {/* Note */}
@@ -209,7 +484,7 @@ export default function FinancialReportsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.noteTitle}>Treasurer's Note</Text>
               <Text style={styles.noteDesc}>
-                Collections peaked during week 2 of Ganesh Chaturthi. Week 4 expenses reflect mandap dismantling.
+                Weekly metrics reflect confirmed donations and processed expenses. Swings match high festival activity periods.
               </Text>
             </View>
           </View>
@@ -219,31 +494,39 @@ export default function FinancialReportsScreen() {
         <View style={styles.leaderboardCard}>
           <View style={styles.leaderboardHeader}>
             <Text style={styles.leaderboardTitle}>Top Benefactors</Text>
-            <TouchableOpacity activeOpacity={0.7}>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(dashboard)/donation-history")}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.leaderboardList}>
-            {topBenefactors.map((item, idx) => (
-              <View key={item.id} style={styles.leaderboardItem}>
-                <View style={styles.leaderboardLeft}>
-                  <View style={styles.rankBadge}>
-                    <Text style={styles.rankText}>{idx + 1}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.benefactorName}>{item.name}</Text>
-                    <View style={styles.tierRow}>
-                      <View style={[styles.tierIndicator, { backgroundColor: item.tierColor }]} />
-                      <Text style={[styles.tierText, { color: item.tierColor }]}>{item.tier}</Text>
+            {leaderboardData.length > 0 ? (
+              leaderboardData.map((item, idx) => (
+                <View key={item.id} style={styles.leaderboardItem}>
+                  <View style={styles.leaderboardLeft}>
+                    <View style={styles.rankBadge}>
+                      <Text style={styles.rankText}>{idx + 1}</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.benefactorName}>{item.name}</Text>
+                      <View style={styles.tierRow}>
+                        <View style={[styles.tierIndicator, { backgroundColor: item.tierColor }]} />
+                        <Text style={[styles.tierText, { color: item.tierColor }]}>{item.tier}</Text>
+                      </View>
                     </View>
                   </View>
+                  <View style={styles.leaderboardRight}>
+                    <Text style={styles.benefactorAmount}>{item.amount}</Text>
+                    <Text style={styles.benefactorType}>{item.type}</Text>
+                  </View>
                 </View>
-                <View style={styles.leaderboardRight}>
-                  <Text style={styles.benefactorAmount}>{item.amount}</Text>
-                  <Text style={styles.benefactorType}>{item.type}</Text>
-                </View>
+              ))
+            ) : (
+              <View style={{ padding: 20, alignItems: "center" }}>
+                <Text style={{ fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant, fontSize: 13 }}>
+                  No benefactors recorded yet.
+                </Text>
               </View>
-            ))}
+            )}
           </View>
         </View>
 
@@ -251,15 +534,23 @@ export default function FinancialReportsScreen() {
         <View style={styles.expensesCard}>
           <Text style={styles.expensesTitle}>Expense Categories</Text>
           <View style={styles.categoriesList}>
-            {expenseCategories.map((cat, idx) => (
-              <View key={idx} style={styles.categoryRow}>
-                <View style={[styles.categoryBarFill, { width: cat.pct as any, backgroundColor: cat.color }]} />
-                <View style={styles.categoryInfoRow}>
-                  <Text style={styles.categoryName}>{cat.name}</Text>
-                  <Text style={styles.categoryAmt}>{cat.amount}</Text>
+            {categoriesBreakdown.length > 0 ? (
+              categoriesBreakdown.map((cat, idx) => (
+                <View key={idx} style={styles.categoryRow}>
+                  <View style={[styles.categoryBarFill, { width: cat.pct as any, backgroundColor: cat.color }]} />
+                  <View style={styles.categoryInfoRow}>
+                    <Text style={styles.categoryName}>{cat.name}</Text>
+                    <Text style={styles.categoryAmt}>{cat.amount}</Text>
+                  </View>
                 </View>
+              ))
+            ) : (
+              <View style={{ padding: 10, alignItems: "center" }}>
+                <Text style={{ fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant, fontSize: 13 }}>
+                  No expenses recorded yet.
+                </Text>
               </View>
-            ))}
+            )}
           </View>
         </View>
 
@@ -267,20 +558,32 @@ export default function FinancialReportsScreen() {
         <View style={styles.assistantCard}>
           <View style={styles.assistantHeader}>
             <MaterialCommunityIcons name="robot" size={24} color="#FFFFFF" />
-            <Text style={styles.assistantTitle}>Smart Assistant</Text>
+            <Text style={styles.assistantTitle}>{assistantTitle}</Text>
           </View>
-          <Text style={styles.assistantDesc}>
-            You have 12 pending donation receipts to verify. Automate this process?
-          </Text>
-          <View style={styles.assistantActions}>
-            <TouchableOpacity style={styles.primaryActionBtn} activeOpacity={0.8}>
-              <MaterialCommunityIcons name="flash" size={16} color={colors.primaryBrand} />
-              <Text style={styles.primaryActionBtnText}>Verify All</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryActionBtn} activeOpacity={0.8}>
-              <Text style={styles.secondaryActionBtnText}>Review Manually</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.assistantDesc}>{assistantDesc}</Text>
+          {showAssistantActions && (
+            <View style={styles.assistantActions}>
+              {pendingDonationsCount > 0 && (
+                <TouchableOpacity
+                  style={styles.primaryActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push("/(dashboard)/donation-history")}
+                >
+                  <MaterialCommunityIcons name="flash" size={16} color={colors.onPrimaryContainer} />
+                  <Text style={styles.primaryActionBtnText}>Verify Receipts</Text>
+                </TouchableOpacity>
+              )}
+              {pendingExpensesCount > 0 && (
+                <TouchableOpacity
+                  style={styles.secondaryActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push("/(dashboard)/expense-approval")}
+                >
+                  <Text style={styles.secondaryActionBtnText}>Approve Expenses</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

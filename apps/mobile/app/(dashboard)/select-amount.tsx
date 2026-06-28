@@ -6,6 +6,8 @@ import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFetchCampaigns, useCreateRazorpayOrder, useFetchMyProfile, useFetchTenant } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
+import { ScreenHeader } from "../components/ScreenHeader";
+
 
 const AMOUNT_CHIPS = [
   { value: 101, label: "Shagun" },
@@ -72,28 +74,9 @@ export default function SelectAmountScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top App Bar */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarLeft}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
-          </TouchableOpacity>
-          <View style={styles.logoAvatarWrapper}>
-            <Image
-              style={styles.logoAvatar}
-              source={require("../../assets/image-only.png")}
-            />
-          </View>
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <View style={styles.profileAvatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
-          ) : (
-            <Text style={styles.avatarText}>{initials}</Text>
-          )}
-        </View>
-      </View>
+      <ScreenHeader
+        title="Select Amount"
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Campaign Progress Card */}

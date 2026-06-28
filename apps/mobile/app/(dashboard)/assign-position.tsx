@@ -6,6 +6,7 @@ import { useFetchMembers, useUpdateMemberRole, useFetchTenant, useFetchMyProfile
 import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function AssignPositionScreen() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,28 +62,7 @@ export default function AssignPositionScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top App Bar */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarLeft}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
-          </TouchableOpacity>
-          <View style={styles.logoAvatarWrapper}>
-            <Image
-              style={styles.logoAvatar}
-              source={require("../../assets/image-only.png")}
-            />
-          </View>
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <View style={styles.profileAvatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
-          ) : (
-            <Text style={styles.avatarText}>{initials}</Text>
-          )}
-        </View>
-      </View>
+      <ScreenHeader title="Assign Position" />
 
       {/* Header Info */}
       <View style={styles.introSection}>

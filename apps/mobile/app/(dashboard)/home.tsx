@@ -7,17 +7,21 @@ import {
   useEvents,
   useFetchDonations,
   useExpenses,
+  useFetchTenant,
 } from "@utsav/api-client";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { registerForPushNotifications } from "../lib/notifications";
+import { ScreenHeader } from "../components/ScreenHeader";
+
 
 const { width } = Dimensions.get("window");
 
 export default function MobileHomeScreen() {
   const { tenantId, tenantName, role, userId } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
   const { data: summary, isLoading: isSummaryLoading } = useFinancialSummary(tenantId);
   const { data: events, isLoading: isEventsLoading } = useEvents();
   const { data: donations } = useFetchDonations();
@@ -220,25 +224,13 @@ export default function MobileHomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Top Header */}
-      <View style={styles.topHeader}>
-        <View style={styles.logoGroup}>
-          <Image
-            style={styles.logoAvatar}
-            source={{
-              uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuDkaGZlWcWVao1wOw9nnmiyw1Sjc4dUKoqHFv4USXLKIzzs56UTJxFYKLSudOs1UCUTkODyZUtvnrdNkFvgOfYiZ4dGJZ9_tyo14Bm641x49TqKJKWHCPAmnPDUgDy7sSwByNnv_jNVG6fOM7oYRiK5ru9goAgM9y_OfFAWYypAEderPMlvdbQm0uW1H_2_mVW3NWLlzkixffoMHhCu6_CrUP4G9_ZRNGQVh4Zt53xrPzSZ6Ot6pC5u",
-            }}
-          />
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.bellButton}
-          onPress={() => router.push("/(dashboard)/notifications")}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
-          <View style={styles.bellBadge} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={tenantName || tenant?.name || "UTSAV"}
+        showBack={false}
+        logoUri={tenant?.logo_url || undefined}
+        rightIcon="bell-outline"
+        onRightPress={() => router.push("/(dashboard)/notifications")}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Greetings Section */}

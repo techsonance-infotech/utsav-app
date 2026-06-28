@@ -1,35 +1,226 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, Image } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  Image,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useVolunteerDuties, useCreateVolunteerDuty } from "@utsav/api-client";
+import {
+  useFetchVolunteerDuty,
+  useUpdateVolunteerDuty,
+  useDeleteVolunteerDuty,
+  useFetchMyProfile,
+  useFetchMembers,
+  useEvents,
+} from "@utsav/api-client";
+
+const CATEGORY_MAP: Record<string, { label: string; icon: string }> = {
+  prasad_distribution: { label: "Prasad Distribution", icon: "flower-tulip" },
+  crowd_control: { label: "Crowd Control", icon: "account-group" },
+  entry_management: { label: "Entry Management", icon: "gate" },
+  decoration: { label: "Decoration", icon: "palette" },
+  parking: { label: "Parking Seva", icon: "parking" },
+  first_aid: { label: "First Aid", icon: "medical-bag" },
+  registration_desk: { label: "Registration Desk", icon: "card-account-details" },
+  photo_video: { label: "Photo / Video", icon: "camera" },
+  other: { label: "Other Seva", icon: "hand-heart" },
+};
+
+const DEFAULT_BANNER = "https://images.unsplash.com/photo-1609137144814-6fa286392095?auto=format&fit=crop&q=80&w=800";
 
 export default function DutyDetailScreen() {
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [isSigningUp, setIsSigningUp] = useState(false);
-  const [isConfirmed, setIsConfirmed] = useState(false);
-  const signUpMutation = useCreateVolunteerDuty();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  const handleSignUp = async () => {
-    setIsSigningUp(true);
-    try {
-      await signUpMutation.mutateAsync({
-        title: "Prasad Distribution - Shift A",
-        duty_type: "prasad_distribution",
-        start_at: new Date().toISOString(),
-        status: "open",
-      });
-    } catch {
-      // Continue with UI flow
+  const { data: duty, isLoading: isDutyLoading, error, isError, refetch } = useFetchVolunteerDuty(id);
+  const { data: myProfile } = useFetchMyProfile();
+  const { data: members = [] } = useFetchMembers();
+  const { data: events = [] } = useEvents();
+
+  const updateMutation = useUpdateVolunteerDuty();
+  const deleteMutation = useDeleteVolunteerDuty();
+
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successAction, setSuccessAction] = useState<"signup" | "cancel">("signup");
+
+  if (isDutyLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primaryBrand} />
+        <Text style={styles.loadingText}>Loading shift details...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (isError || !duty) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <MaterialCommunityIcons name="alert-circle-outline" size={48} color={colors.primaryContainer} />
+        <Text style={styles.loadingText}>Failed to load shift details</Text>
+        <Text style={{ color: colors.onSurfaceVariant, textAlign: "center", paddingHorizontal: spacing.xl, marginBottom: spacing.md, marginTop: spacing.xs }}>
+          {error?.message || "Volunteer duty details not found or failed to fetch."}
+        </Text>
+        <TouchableOpacity
+          style={{
+            backgroundColor: colors.primaryBrand,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.sm,
+            borderRadius: borderRadius.md,
+          }}
+          onPress={() => refetch()}
+        >
+          <Text style={{ color: "#FFFFFF", fontFamily: fonts.inter.bold }}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  const isCommittee = ["owner", "admin", "treasurer", "committee_member", "super_admin"].includes(
+    myProfile?.role || ""
+  );
+
+  const isAssignedToMe = duty.assigned_to === myProfile?.user_id;
+  const isAssignedToOthers = duty.assigned_to && !isAssignedToMe;
+
+  // Find assigned volunteer's name
+  const assignedMemberName = isAssignedToOthers
+    ? members.find((m) => m.user_id === duty.assigned_to)?.full_name || "Another Devotee"
+    : "";
+
+  // Parse description and banner URL
+  let parsedDescription = duty.description || "";
+  let bannerUrl = DEFAULT_BANNER;
+  if (duty.description) {
+    const unescaped = duty.description
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/&#x2F;/g, "/");
+    const trimmed = unescaped.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        parsedDescription = parsed.description || "";
+        bannerUrl = parsed.banner_url || DEFAULT_BANNER;
+      } catch (e) {
+        // Fallback
+      }
     }
-    setTimeout(() => {
-      setIsSigningUp(false);
-      setIsConfirmed(true);
-      setShowSuccess(true);
-    }, 1200);
+  }
+
+  // Map category
+  const categoryInfo = CATEGORY_MAP[duty.duty_type] || CATEGORY_MAP.other;
+
+  // Format shift dates
+  const formatShiftTime = (isoString: string) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
   };
+
+  const formatShiftDate = (isoString: string) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const shiftDateText = formatShiftDate(duty.start_at);
+  const shiftTimeText = `${formatShiftTime(duty.start_at)}${
+    duty.end_at ? ` - ${formatShiftTime(duty.end_at)}` : ""
+  }`;
+
+  // Handle Edit Navigation
+  const handleEdit = () => {
+    router.push({ pathname: "/(dashboard)/create-shift" as any, params: { id: duty.id } });
+  };
+
+  // Handle Delete
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Shift",
+      "Are you sure you want to delete this volunteer duty shift? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteMutation.mutateAsync(duty.id);
+              router.replace("/(dashboard)/volunteer-duty-roster");
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to delete shift");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle Sign Up
+  const handleSignUp = async () => {
+    if (!myProfile) return;
+    try {
+      await updateMutation.mutateAsync({
+        id: duty.id,
+        assigned_to: myProfile.user_id,
+        status: "assigned",
+      });
+      setSuccessAction("signup");
+      setShowSuccess(true);
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to sign up for duty");
+    }
+  };
+
+  // Handle Cancellation
+  const handleCancelAssignment = () => {
+    Alert.alert(
+      "Cancel Assignment",
+      "Are you sure you want to withdraw from this volunteer duty?",
+      [
+        { text: "Keep Assignment", style: "default" },
+        {
+          text: "Withdraw",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await updateMutation.mutateAsync({
+                id: duty.id,
+                assigned_to: null,
+                status: "open",
+              });
+              setSuccessAction("cancel");
+              setShowSuccess(true);
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to cancel assignment");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const spotsFilled = duty.assigned_to ? 1 : 0;
+  const spotsRemaining = duty.max_volunteers - spotsFilled;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -40,25 +231,33 @@ export default function DutyDetailScreen() {
             <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
           </TouchableOpacity>
           <Text style={styles.appBarTitle} numberOfLines={1}>
-            Prasad Distribution - Shift A
+            {duty.title}
           </Text>
         </View>
-        <TouchableOpacity style={styles.shareBtn}>
-          <MaterialCommunityIcons name="share-variant-outline" size={22} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
+
+        {isCommittee && (
+          <View style={styles.adminActions}>
+            <TouchableOpacity onPress={handleEdit} style={styles.actionIconButton}>
+              <MaterialCommunityIcons name="pencil-outline" size={22} color={colors.primaryBrand} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleDelete} style={styles.actionIconButton}>
+              <MaterialCommunityIcons name="trash-can-outline" size={22} color={colors.primaryContainer} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Hero Banner */}
         <View style={styles.heroBanner}>
+          <Image source={{ uri: bannerUrl }} style={styles.bannerImage} />
           <View style={styles.heroOverlay}>
-            <MaterialCommunityIcons name="flower-tulip" size={64} color="rgba(255,255,255,0.3)" />
-          </View>
-          <View style={styles.heroContent}>
             <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>Volunteering Open</Text>
+              <Text style={styles.statusBadgeText}>
+                {duty.assigned_to ? "Shift Assigned" : "Volunteering Open"}
+              </Text>
             </View>
-            <Text style={styles.heroTitle}>Ganesh Utsav 2024</Text>
+            <Text style={styles.heroTitle}>{categoryInfo.label}</Text>
           </View>
         </View>
 
@@ -72,7 +271,7 @@ export default function DutyDetailScreen() {
               </View>
               <View>
                 <Text style={styles.overviewLabel}>Date</Text>
-                <Text style={styles.overviewValue}>Saturday, Sept 14</Text>
+                <Text style={styles.overviewValue}>{shiftDateText}</Text>
               </View>
             </View>
             <View style={styles.overviewItem}>
@@ -81,7 +280,7 @@ export default function DutyDetailScreen() {
               </View>
               <View>
                 <Text style={styles.overviewLabel}>Shift Time</Text>
-                <Text style={styles.overviewValue}>08:00 AM - 12:00 PM</Text>
+                <Text style={styles.overviewValue}>{shiftTimeText}</Text>
               </View>
             </View>
           </View>
@@ -91,85 +290,113 @@ export default function DutyDetailScreen() {
             </View>
             <View style={styles.locationInfo}>
               <Text style={styles.overviewLabel}>Location</Text>
-              <Text style={styles.overviewValue}>Main Prasad Pandal, Gate 3</Text>
-              <Text style={styles.locationAddress}>Siddhivinayak Mandal Complex, Prabhadevi, Mumbai</Text>
+              <Text style={styles.overviewValue}>{duty.location || "Mandal Complex"}</Text>
             </View>
           </View>
         </View>
+
+        {/* Linked Event Details */}
+        {duty.event_id && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Linked Event</Text>
+            <View style={styles.eventRow}>
+              <MaterialCommunityIcons name="calendar-star" size={24} color={colors.primaryBrand} />
+              <Text style={styles.eventName}>
+                {events.find((e) => e.id === duty.event_id)?.title || "Active Mandal Pooja"}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Description */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Description</Text>
-          <Text style={styles.descriptionText}>
-            Ensuring the orderly distribution of Prasad (Modaks and sweets) to all visiting devotees. You will be responsible for managing the queue flow, maintaining cleanliness in the distribution area, and providing guidance to senior citizens and families.
-          </Text>
-        </View>
-
-        {/* Prerequisites */}
-        <View style={styles.prerequisitesCard}>
-          <Text style={styles.sectionTitle}>Prerequisites</Text>
-          <View style={styles.prerequisiteList}>
-            {[
-              "Wear the official Mandal volunteer scarf (provided at check-in).",
-              "Arrive 15 minutes early for a quick briefing with the team lead.",
-              "Basic knowledge of the temple layout to guide devotees.",
-            ].map((item, idx) => (
-              <View key={idx} style={styles.prerequisiteItem}>
-                <MaterialCommunityIcons name="check-circle" size={20} color={colors.tulsiGreen} />
-                <Text style={styles.prerequisiteText}>{item}</Text>
-              </View>
-            ))}
+        {parsedDescription ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Prerequisites & Details</Text>
+            <Text style={styles.descriptionText}>{parsedDescription}</Text>
           </View>
-        </View>
+        ) : null}
 
-        {/* Team Section */}
+        {/* Team / Slots Progress */}
         <View style={styles.sectionCard}>
           <View style={styles.teamHeader}>
-            <Text style={styles.sectionTitle}>The Team</Text>
-            <Text style={styles.teamCount}>8/12 Slots Filled</Text>
+            <Text style={styles.sectionTitle}>Volunteer Roster</Text>
+            <Text style={styles.teamCount}>
+              {spotsFilled} / {duty.max_volunteers} Slots Filled
+            </Text>
           </View>
-          <View style={styles.avatarStack}>
-            {[colors.primaryContainer, colors.aartiGold, colors.tulsiGreen, "#E07B00"].map((c, i) => (
-              <View key={i} style={[styles.avatar, { backgroundColor: c, marginLeft: i > 0 ? -12 : 0 }]}>
-                <MaterialCommunityIcons name="account" size={20} color="#FFFFFF" />
+
+          {/* Slots Progress Bar */}
+          <View style={styles.progressBarBg}>
+            <View
+              style={[
+                styles.progressBarFill,
+                { width: `${Math.min(100, (spotsFilled / duty.max_volunteers) * 100)}%` },
+              ]}
+            />
+          </View>
+
+          {duty.assigned_to ? (
+            <View style={styles.assignedUserBox}>
+              <MaterialCommunityIcons name="account-circle" size={32} color={colors.primaryBrand} />
+              <View style={styles.assignedUserInfo}>
+                <Text style={styles.assignedUserLabel}>Assigned Volunteer</Text>
+                <Text style={styles.assignedUserName}>
+                  {isAssignedToMe ? "You (Signed up)" : assignedMemberName}
+                </Text>
               </View>
-            ))}
-            <View style={[styles.avatar, styles.moreAvatar, { marginLeft: -12 }]}>
-              <Text style={styles.moreText}>+4</Text>
             </View>
-          </View>
-          <Text style={styles.teamNote}>Join Rahul, Priya, and 6 others on this shift.</Text>
+          ) : (
+            <Text style={styles.teamNote}>Be the first to sign up for this volunteering shift!</Text>
+          )}
         </View>
 
         {/* CTA Card */}
         <View style={styles.ctaCard}>
           <View style={styles.ctaHeader}>
             <Text style={styles.ctaLabel}>Availability</Text>
-            <Text style={styles.ctaPriority}>High Priority</Text>
+            <Text style={[styles.ctaPriority, duty.assigned_to ? styles.ctaPriorityFilled : null]}>
+              {duty.assigned_to ? "Reserved" : "High Priority"}
+            </Text>
           </View>
-          <TouchableOpacity
-            style={[
-              styles.signUpBtn,
-              isConfirmed && styles.signUpBtnConfirmed,
-            ]}
-            activeOpacity={0.85}
-            onPress={handleSignUp}
-            disabled={isSigningUp || isConfirmed}
-          >
-            {isSigningUp ? (
-              <Text style={styles.signUpBtnText}>Processing...</Text>
-            ) : isConfirmed ? (
-              <>
-                <Text style={[styles.signUpBtnText, { color: "#FFFFFF" }]}>Duty Confirmed</Text>
-                <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
-              </>
-            ) : (
-              <>
-                <Text style={styles.signUpBtnText}>Sign Up for Duty</Text>
-                <MaterialCommunityIcons name="account-check" size={20} color={colors.onPrimaryContainer} />
-              </>
-            )}
-          </TouchableOpacity>
+
+          {isAssignedToMe ? (
+            <TouchableOpacity
+              style={[styles.signUpBtn, styles.cancelAssignmentBtn]}
+              activeOpacity={0.85}
+              onPress={handleCancelAssignment}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.cancelAssignmentBtnText}>Withdraw from Duty</Text>
+                  <MaterialCommunityIcons name="account-minus-outline" size={20} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+          ) : isAssignedToOthers ? (
+            <View style={[styles.signUpBtn, styles.signUpBtnFilled]}>
+              <Text style={styles.signUpBtnTextFilled}>Shift Closed</Text>
+              <MaterialCommunityIcons name="lock-outline" size={20} color={colors.outline} />
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.signUpBtn}
+              activeOpacity={0.85}
+              onPress={handleSignUp}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? (
+                <ActivityIndicator size="small" color={colors.onPrimaryContainer} />
+              ) : (
+                <>
+                  <Text style={styles.signUpBtnText}>Sign Up for Duty</Text>
+                  <MaterialCommunityIcons name="account-check-outline" size={20} color={colors.onPrimaryContainer} />
+                </>
+              )}
+            </TouchableOpacity>
+          )}
           <Text style={styles.ctaDisclaimer}>
             By signing up, you commit to being present at the designated time.
           </Text>
@@ -181,21 +408,26 @@ export default function DutyDetailScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalCheckIcon}>
-              <MaterialCommunityIcons name="check-circle" size={48} color={colors.tulsiGreen} />
+              <MaterialCommunityIcons
+                name={successAction === "signup" ? "check-circle" : "alert-circle-outline"}
+                size={48}
+                color={successAction === "signup" ? colors.tulsiGreen : colors.primaryContainer}
+              />
             </View>
-            <Text style={styles.modalTitle}>Har Har Mahadev!</Text>
-            <Text style={styles.modalSubtitle}>You've successfully signed up.</Text>
-            <View style={styles.modalBooking}>
-              <Text style={styles.bookingLabel}>BOOKING REFERENCE</Text>
-              <Text style={styles.bookingCode}>UTSV-PRASAD-A-421</Text>
-              <View style={styles.calendarRow}>
-                <MaterialCommunityIcons name="calendar-today" size={16} color={colors.onSurfaceVariant} />
-                <Text style={styles.calendarText}>Added to your calendar</Text>
-              </View>
-            </View>
+            <Text style={styles.modalTitle}>
+              {successAction === "signup" ? "Har Har Mahadev!" : "Assignment Cancelled"}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              {successAction === "signup"
+                ? "You have successfully signed up for this duty shift."
+                : "You have withdrawn from this volunteer duty shift."}
+            </Text>
             <TouchableOpacity
               style={styles.modalDoneBtn}
-              onPress={() => setShowSuccess(false)}
+              onPress={() => {
+                setShowSuccess(false);
+                refetch();
+              }}
             >
               <Text style={styles.modalDoneBtnText}>Done</Text>
             </TouchableOpacity>
@@ -208,112 +440,104 @@ export default function DutyDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  loadingContainer: { flex: 1, backgroundColor: colors.background, justifyContent: "center", alignItems: "center", gap: spacing.md },
+  loadingText: { fontSize: 16, fontFamily: fonts.inter.semibold, color: colors.onSurfaceVariant },
   appBar: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingHorizontal: spacing.md, height: 56,
-    backgroundColor: "rgba(255, 248, 244, 0.9)", borderBottomWidth: 1, borderBottomColor: colors.outlineVariant,
+    backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "rgba(232, 226, 214, 0.4)",
   },
   appBarLeft: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 },
   backBtn: { padding: spacing.xs },
-  appBarTitle: { fontSize: 18, fontFamily: fonts.poppins.semibold, color: colors.onSurface, flex: 1 },
-  shareBtn: { padding: spacing.xs },
-  scrollContent: { paddingBottom: 100 },
-  heroBanner: {
-    height: 200, backgroundColor: colors.charcoal, justifyContent: "flex-end",
-    position: "relative", overflow: "hidden",
-  },
+  appBarTitle: { fontSize: 18, fontFamily: fonts.poppins.bold, color: colors.primaryBrand, flex: 1 },
+  adminActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  actionIconButton: { padding: spacing.xs },
+  scrollContent: { paddingBottom: 60 },
+  heroBanner: { height: 180, position: "relative", backgroundColor: colors.charcoal },
+  bannerImage: { width: "100%", height: "100%", resizeMode: "cover" },
   heroOverlay: {
-    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-    alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(140, 80, 0, 0.3)",
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(140, 80, 0, 0.25)", justifyContent: "flex-end", padding: spacing.lg,
   },
-  heroContent: { padding: spacing.lg, gap: spacing.sm },
   statusBadge: {
     alignSelf: "flex-start", backgroundColor: colors.primaryContainer,
-    paddingHorizontal: spacing.md, paddingVertical: 4, borderRadius: 9999,
+    paddingHorizontal: spacing.md, paddingVertical: 4, borderRadius: 9999, marginBottom: spacing.xs,
   },
-  statusBadgeText: { fontSize: 14, fontFamily: fonts.inter.medium, color: colors.onPrimaryContainer },
-  heroTitle: { fontSize: 32, fontFamily: fonts.poppins.bold, color: "#FFFFFF" },
+  statusBadgeText: { fontSize: 12, fontFamily: fonts.inter.bold, color: colors.onPrimaryContainer },
+  heroTitle: { fontSize: 26, fontFamily: fonts.poppins.bold, color: "#FFFFFF" },
   sectionCard: {
-    backgroundColor: colors.pujaWhite, borderWidth: 1, borderColor: colors.sandstone,
+    backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: colors.sandstone,
     borderRadius: borderRadius.xl, padding: spacing.lg, marginHorizontal: spacing.md,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
   },
-  sectionTitle: { fontSize: 20, fontFamily: fonts.poppins.semibold, color: colors.primaryBrand, marginBottom: spacing.lg },
+  sectionTitle: { fontSize: 16, fontFamily: fonts.poppins.bold, color: colors.primaryBrand, marginBottom: spacing.sm },
   overviewGrid: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },
   overviewItem: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },
   overviewIcon: {
-    width: 48, height: 48, borderRadius: 8,
-    backgroundColor: colors.surfaceContainer, alignItems: "center", justifyContent: "center",
+    width: 44, height: 44, borderRadius: 8,
+    backgroundColor: colors.cream, alignItems: "center", justifyContent: "center",
   },
-  overviewLabel: { fontSize: 12, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant },
-  overviewValue: { fontSize: 16, fontFamily: fonts.inter.semibold, color: colors.onSurface },
+  overviewLabel: { fontSize: 11, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant },
+  overviewValue: { fontSize: 14, fontFamily: fonts.inter.bold, color: colors.charcoal },
   locationRow: {
-    flexDirection: "row", alignItems: "flex-start", gap: spacing.md,
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
     paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.sandstone,
   },
   locationInfo: { flex: 1 },
-  locationAddress: { fontSize: 14, fontFamily: fonts.inter.regular, color: colors.onSurfaceVariant, marginTop: 2 },
-  descriptionText: { fontSize: 16, fontFamily: fonts.inter.regular, color: colors.onSurfaceVariant, lineHeight: 24 },
-  prerequisitesCard: {
-    backgroundColor: colors.surfaceContainerLow, borderWidth: 1, borderColor: colors.sandstone,
-    borderRadius: borderRadius.xl, padding: spacing.lg, marginHorizontal: spacing.md, marginTop: spacing.lg,
+  eventRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  eventName: { fontSize: 15, fontFamily: fonts.inter.semibold, color: colors.charcoal },
+  descriptionText: { fontSize: 14, fontFamily: fonts.inter.regular, color: colors.onSurfaceVariant, lineHeight: 22 },
+  teamHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
+  teamCount: { fontSize: 13, fontFamily: fonts.inter.semibold, color: colors.primaryBrand },
+  progressBarBg: { height: 8, backgroundColor: colors.sandstone, borderRadius: 4, overflow: "hidden", marginBottom: spacing.md },
+  progressBarFill: { height: "100%", backgroundColor: colors.primaryBrand, borderRadius: 4 },
+  assignedUserBox: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    backgroundColor: colors.cream, padding: spacing.md, borderRadius: borderRadius.lg,
+    borderWidth: 1, borderColor: colors.sandstone,
   },
-  prerequisiteList: { gap: spacing.md },
-  prerequisiteItem: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
-  prerequisiteText: { fontSize: 16, fontFamily: fonts.inter.regular, color: colors.onSurface, flex: 1 },
-  teamHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg },
-  teamCount: { fontSize: 14, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant },
-  avatarStack: { flexDirection: "row", alignItems: "center", marginBottom: spacing.md },
-  avatar: {
-    width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: "#FFFFFF",
-    alignItems: "center", justifyContent: "center",
-  },
-  moreAvatar: { backgroundColor: colors.primaryFixed },
-  moreText: { fontSize: 12, fontFamily: fonts.inter.bold, color: colors.onPrimaryFixed },
-  teamNote: { fontSize: 14, fontFamily: fonts.inter.regular, color: colors.onSurfaceVariant, fontStyle: "italic" },
+  assignedUserInfo: { flex: 1 },
+  assignedUserLabel: { fontSize: 11, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant },
+  assignedUserName: { fontSize: 15, fontFamily: fonts.inter.bold, color: colors.charcoal },
+  teamNote: { fontSize: 13, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant, fontStyle: "italic" },
   ctaCard: {
-    backgroundColor: colors.pujaWhite, borderWidth: 1, borderColor: colors.sandstone,
-    borderRadius: borderRadius.xl, padding: spacing.lg, marginHorizontal: spacing.md, marginTop: spacing.lg,
-    shadowColor: "rgba(255, 149, 0, 0.15)", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 20, elevation: 4,
+    backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: colors.sandstone,
+    borderRadius: borderRadius.xl, padding: spacing.lg, marginHorizontal: spacing.md, marginTop: spacing.md,
+    shadowColor: "rgba(255, 149, 0, 0.1)", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 10, elevation: 4,
   },
   ctaHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
-  ctaLabel: { fontSize: 14, fontFamily: fonts.inter.semibold, color: colors.onSurface },
-  ctaPriority: { fontSize: 14, fontFamily: fonts.inter.semibold, color: colors.tulsiGreen },
+  ctaLabel: { fontSize: 13, fontFamily: fonts.inter.semibold, color: colors.onSurface },
+  ctaPriority: { fontSize: 13, fontFamily: fonts.inter.bold, color: colors.tulsiGreen },
+  ctaPriorityFilled: { color: colors.outline },
   signUpBtn: {
-    height: 56, backgroundColor: colors.primaryContainer, borderRadius: borderRadius.xl,
+    height: 52, backgroundColor: colors.primaryContainer, borderRadius: borderRadius.md,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
-  signUpBtnConfirmed: { backgroundColor: colors.tulsiGreen },
-  signUpBtnText: { fontSize: 20, fontFamily: fonts.poppins.semibold, color: colors.charcoal },
-  ctaDisclaimer: { fontSize: 12, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant, textAlign: "center" },
+  cancelAssignmentBtn: { backgroundColor: colors.primaryContainer },
+  cancelAssignmentBtnText: { fontSize: 16, fontFamily: fonts.poppins.bold, color: "#FFFFFF" },
+  signUpBtnFilled: { backgroundColor: colors.sandstone },
+  signUpBtnTextFilled: { fontSize: 16, fontFamily: fonts.poppins.bold, color: colors.outline },
+  signUpBtnText: { fontSize: 16, fontFamily: fonts.poppins.bold, color: colors.onPrimaryContainer },
+  ctaDisclaimer: { fontSize: 11, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant, textAlign: "center", marginTop: spacing.xs },
   modalOverlay: {
     flex: 1, backgroundColor: "rgba(58, 53, 48, 0.6)", alignItems: "center", justifyContent: "center", padding: spacing.md,
   },
   modalCard: {
-    backgroundColor: colors.pujaWhite, width: "100%", maxWidth: 400,
+    backgroundColor: colors.pujaWhite, width: "100%", maxWidth: 360,
     borderRadius: 16, padding: spacing.xl, alignItems: "center",
     borderWidth: 1, borderColor: colors.aartiGold,
   },
   modalCheckIcon: {
-    width: 80, height: 80, borderRadius: 40,
+    width: 74, height: 74, borderRadius: 37,
     backgroundColor: "rgba(34, 197, 94, 0.1)",
     alignItems: "center", justifyContent: "center", marginBottom: spacing.lg,
   },
-  modalTitle: { fontSize: 32, fontFamily: fonts.poppins.bold, color: colors.primaryBrand, marginBottom: spacing.sm },
-  modalSubtitle: { fontSize: 20, fontFamily: fonts.poppins.semibold, color: colors.onSurface, marginBottom: spacing.lg },
-  modalBooking: {
-    backgroundColor: colors.cream, padding: spacing.md, borderRadius: borderRadius.xl,
-    width: "100%", borderWidth: 1, borderColor: colors.sandstone, marginBottom: spacing.xl,
-  },
-  bookingLabel: { fontSize: 12, fontFamily: fonts.inter.medium, color: colors.onSurfaceVariant, letterSpacing: 1, marginBottom: spacing.xs },
-  bookingCode: { fontSize: 16, fontFamily: fonts.inter.bold, color: colors.charcoal, marginBottom: spacing.sm },
-  calendarRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingTop: spacing.sm },
-  calendarText: { fontSize: 14, fontFamily: fonts.inter.regular, color: colors.onSurfaceVariant },
+  modalTitle: { fontSize: 24, fontFamily: fonts.poppins.bold, color: colors.primaryBrand, marginBottom: spacing.xs },
+  modalSubtitle: { fontSize: 14, fontFamily: fonts.inter.semibold, color: colors.charcoal, marginBottom: spacing.xl, textAlign: "center", lineHeight: 20 },
   modalDoneBtn: {
-    width: "100%", paddingVertical: spacing.md,
-    backgroundColor: colors.primaryBrand, borderRadius: borderRadius.xl, alignItems: "center",
+    width: "100%", paddingVertical: 12,
+    backgroundColor: colors.primaryBrand, borderRadius: borderRadius.md, alignItems: "center",
   },
-  modalDoneBtnText: { fontSize: 16, fontFamily: fonts.inter.bold, color: "#FFFFFF" },
+  modalDoneBtnText: { fontSize: 15, fontFamily: fonts.inter.bold, color: "#FFFFFF" },
 });

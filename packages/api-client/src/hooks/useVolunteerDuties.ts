@@ -42,3 +42,41 @@ export function useVolunteerCheckIn() {
     },
   });
 }
+
+export function useFetchVolunteerDuty(id: string) {
+  const { tenantId } = useAuthStore();
+  return useQuery({
+    queryKey: ["volunteer-duty", id, tenantId],
+    queryFn: () => apiClient<VolunteerDuty>(`/volunteer-duties/${id}`),
+    enabled: !!tenantId && !!id,
+  });
+}
+
+export function useUpdateVolunteerDuty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: Partial<VolunteerDuty> & { id: string }) =>
+      apiClient<VolunteerDuty>(`/volunteer-duties/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["volunteer-duties"] });
+      qc.invalidateQueries({ queryKey: ["volunteer-duty", variables.id] });
+    },
+  });
+}
+
+export function useDeleteVolunteerDuty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<{ message: string }>(`/volunteer-duties/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["volunteer-duties"] });
+    },
+  });
+}
+

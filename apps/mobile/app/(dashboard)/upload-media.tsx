@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Image, Switch, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { useFetchAlbums, useAddAlbumMedia } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -16,69 +17,103 @@ export default function UploadMediaScreen() {
   // Form state
   const [selectedAlbumId, setSelectedAlbumId] = useState(initialAlbumId);
   const [caption, setCaption] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [enableWatermark, setEnableWatermark] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // Selected file mocks
-  const [selectedMockFile, setSelectedMockFile] = useState<string | null>(null);
+  // Selected file base64 state
+  const [selectedFileUri, setSelectedFileUri] = useState<string | null>(null);
+  const [selectedFileBase64, setSelectedFileBase64] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const mockPhotosList = [
-    "https://images.unsplash.com/photo-1561361513-2d000a50f0db?w=600&auto=format&fit=crop&q=60",
-    "https://images.unsplash.com/photo-1609137948924-f7253597c413?w=600&auto=format&fit=crop&q=60",
-    "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=600&auto=format&fit=crop&q=60",
-  ];
+  const handleSelectFile = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "We need photo library permissions to select media.");
+        return;
+      }
 
-  const handleSelectMockFile = () => {
-    // Cycle through mock files or choose random
-    const randomUrl = mockPhotosList[Math.floor(Math.random() * mockPhotosList.length)];
-    setSelectedMockFile(randomUrl);
-    setUploadProgress(0);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setSelectedFileUri(asset.uri);
+        if (asset.base64) {
+          const base64Str = `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`;
+          setSelectedFileBase64(base64Str);
+        } else {
+          // If base64 is missing, construct one or use URI
+          setSelectedFileBase64(null);
+        }
+        setUploadProgress(0);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to select image");
+    }
   };
 
   const handleUpload = async () => {
     const finalAlbumId = selectedAlbumId || (albums[0] ? albums[0].id : "");
     if (!finalAlbumId) {
-      Alert.alert("Album Required", "Please select or create an album first.");
+      Alert.alert("Album Required", "Please select a destination album first.");
       return;
     }
-    if (!selectedMockFile) {
-      Alert.alert("File Required", "Please select a photo to upload by tapping the upload area.");
+
+    const trimmedYt = youtubeUrl.trim();
+    if (!selectedFileBase64 && !trimmedYt) {
+      Alert.alert("Validation Error", "Please select a photo from your gallery OR enter a YouTube video URL.");
       return;
+    }
+
+    if (trimmedYt) {
+      const ytReg = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/;
+      if (!ytReg.test(trimmedYt)) {
+        Alert.alert("Validation Error", "Please enter a valid YouTube video URL.");
+        return;
+      }
     }
 
     setIsUploading(true);
-    setUploadProgress(10);
+    setUploadProgress(20);
 
-    // Simulate progress ticks
     const interval = setInterval(() => {
       setUploadProgress((prev) => {
-        if (prev >= 90) {
+        if (prev >= 85) {
           clearInterval(interval);
-          return 90;
+          return 85;
         }
-        return prev + 20;
+        return prev + 15;
       });
     }, 150);
 
     try {
-      // Call mutation
       await addMediaMutation.mutateAsync({
         albumId: finalAlbumId,
-        media_url: selectedMockFile,
-        media_type: "image",
+        media_url: selectedFileBase64 || undefined,
+        media_type: trimmedYt ? "video" : "photo",
+        youtube_url: trimmedYt || undefined,
         caption: caption.trim() || undefined,
-        size_bytes: 1450000,
+        is_public: isPublic,
+        watermark_enabled: enableWatermark,
+        size_bytes: 1024 * 512, // estimate 512kb
       });
 
       clearInterval(interval);
       setUploadProgress(100);
       setTimeout(() => {
         Alert.alert("Success", "Media uploaded successfully to the album!");
-        // Reset states
-        setSelectedMockFile(null);
+        setSelectedFileUri(null);
+        setSelectedFileBase64(null);
         setCaption("");
+        setYoutubeUrl("");
         setIsUploading(false);
         setUploadProgress(0);
         router.back();
@@ -114,16 +149,19 @@ export default function UploadMediaScreen() {
 
         {/* Dropzone area */}
         <TouchableOpacity
-          style={[styles.dropZone, selectedMockFile ? styles.dropZoneWithFile : null]}
-          activeOpacity={0.8}
-          onPress={handleSelectMockFile}
+          style={[styles.dropZone, selectedFileUri ? styles.dropZoneWithFile : null]}
+          activeOpacity={0.85}
+          onPress={handleSelectFile}
         >
-          {selectedMockFile ? (
+          {selectedFileUri ? (
             <View style={styles.previewContainer}>
-              <Image source={{ uri: selectedMockFile }} style={styles.previewImage} />
+              <Image source={{ uri: selectedFileUri }} style={styles.previewImage} />
               <TouchableOpacity
                 style={styles.removeFileBtn}
-                onPress={() => setSelectedMockFile(null)}
+                onPress={() => {
+                  setSelectedFileUri(null);
+                  setSelectedFileBase64(null);
+                }}
               >
                 <MaterialCommunityIcons name="close-circle" size={24} color={colors.kumkumRed} />
               </TouchableOpacity>
@@ -134,42 +172,70 @@ export default function UploadMediaScreen() {
                 <MaterialCommunityIcons name="cloud-upload-outline" size={32} color={colors.primaryBrand} />
               </View>
               <Text style={styles.dropZoneTitle}>Tap to Select Photo</Text>
-              <Text style={styles.dropZoneSub}>Supports high-res JPG, PNG, and MP4 (Max 50MB)</Text>
+              <Text style={styles.dropZoneSub}>Choose an image from your photo library</Text>
             </View>
           )}
         </TouchableOpacity>
 
         {/* Form parameters */}
         <View style={styles.card}>
-          {/* Destination Album select */}
+          {/* Destination Album select dropdown */}
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Select Destination Album</Text>
+            <Text style={styles.fieldLabel}>Select Destination Album *</Text>
             {loadingAlbums ? (
               <ActivityIndicator size="small" color={colors.primaryBrand} style={{ alignSelf: "flex-start" }} />
             ) : albums.length === 0 ? (
               <Text style={styles.errorText}>No albums exist. Please create one in Gallery Hub first.</Text>
             ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.albumChips}>
-                {albums.map((album) => {
-                  const isSelected = selectedAlbumId === album.id;
-                  return (
-                    <TouchableOpacity
-                      key={album.id}
-                      style={[styles.albumChip, isSelected && styles.albumChipActive]}
-                      onPress={() => setSelectedAlbumId(album.id)}
-                    >
-                      <MaterialCommunityIcons
-                        name={isSelected ? "folder-open" : "folder-outline"}
-                        size={16}
-                        color={isSelected ? "#FFFFFF" : colors.primaryBrand}
-                      />
-                      <Text style={[styles.albumChipText, isSelected && styles.albumChipTextActive]}>
-                        {album.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+              <View style={styles.dropdownContainer}>
+                <TouchableOpacity
+                  style={styles.dropdownHeader}
+                  activeOpacity={0.8}
+                  onPress={() => setDropdownOpen(!dropdownOpen)}
+                >
+                  <View style={styles.dropdownHeaderLeft}>
+                    <MaterialCommunityIcons name="folder" size={20} color={colors.primaryBrand} />
+                    <Text style={styles.dropdownHeaderText}>
+                      {activeAlbum ? activeAlbum.name : "Select destination album..."}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name={dropdownOpen ? "chevron-up" : "chevron-down"}
+                    size={20}
+                    color={colors.charcoal}
+                  />
+                </TouchableOpacity>
+
+                {dropdownOpen && (
+                  <View style={styles.dropdownList}>
+                    {albums.map((album) => {
+                      const isSelected = selectedAlbumId === album.id;
+                      return (
+                        <TouchableOpacity
+                          key={album.id}
+                          style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                          onPress={() => {
+                            setSelectedAlbumId(album.id);
+                            setDropdownOpen(false);
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextActive]}>
+                              {album.name}
+                            </Text>
+                            {album.description && (
+                              <Text style={styles.dropdownItemSubText} numberOfLines={1}>
+                                {album.description}
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={styles.dropdownItemCount}>{album.media_count || 0} items</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
             )}
           </View>
 
@@ -182,6 +248,20 @@ export default function UploadMediaScreen() {
               placeholderTextColor={colors.outline}
               value={caption}
               onChangeText={setCaption}
+            />
+          </View>
+
+          {/* YouTube Link Input (Optional) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.fieldLabel}>YouTube Video URL (Optional)</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="e.g. https://www.youtube.com/watch?v=..."
+              placeholderTextColor={colors.outline}
+              value={youtubeUrl}
+              onChangeText={setYoutubeUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
@@ -221,14 +301,14 @@ export default function UploadMediaScreen() {
         </View>
 
         {/* Upload Queue details */}
-        {selectedMockFile && (
+        {selectedFileUri && (
           <View style={styles.queueContainer}>
             <Text style={styles.queueTitle}>Upload Queue (1 File)</Text>
             <View style={styles.queueCard}>
               <MaterialCommunityIcons name="image" size={24} color={colors.outline} />
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={styles.fileName} numberOfLines={1}>
-                  mock_utsav_upload_{activeAlbum?.name || "gallery"}.jpg
+                  photo_{activeAlbum ? activeAlbum.name.toLowerCase().replace(/[^a-z0-9]/g, "_") : "gallery"}.jpg
                 </Text>
                 {isUploading && (
                   <View style={styles.progressRow}>
@@ -566,5 +646,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fonts.inter.semibold,
     color: colors.charcoal,
+  },
+  dropdownContainer: {
+    position: "relative",
+    zIndex: 1000,
+  },
+  dropdownHeader: {
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.pujaWhite,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  dropdownHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dropdownHeaderText: {
+    fontSize: 14,
+    fontFamily: fonts.inter.regular,
+    color: colors.charcoal,
+  },
+  dropdownList: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    borderRadius: 12,
+    marginTop: 4,
+    maxHeight: 200,
+    overflow: "scroll",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.sandstone,
+  },
+  dropdownItemActive: {
+    backgroundColor: colors.cream,
+  },
+  dropdownItemText: {
+    fontSize: 13,
+    fontFamily: fonts.inter.medium,
+    color: colors.charcoal,
+  },
+  dropdownItemTextActive: {
+    fontFamily: fonts.inter.bold,
+    color: colors.primaryBrand,
+  },
+  dropdownItemSubText: {
+    fontSize: 10,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+  dropdownItemCount: {
+    fontSize: 11,
+    fontFamily: fonts.inter.semibold,
+    color: colors.outline,
   },
 });

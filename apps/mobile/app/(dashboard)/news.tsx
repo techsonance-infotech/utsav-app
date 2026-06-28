@@ -6,6 +6,7 @@ import { useNewsArticles } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function NewsFeedScreen() {
   const { role: userRole } = useAuthStore();
@@ -30,6 +31,7 @@ export default function NewsFeedScreen() {
   const getCategoryBadgeStyle = (category: string) => {
     switch (category?.toLowerCase()) {
       case "festival":
+      case "festival_update":
         return { bg: "rgba(255, 149, 0, 0.15)", text: colors.primaryContainer };
       case "charity":
         return { bg: "rgba(34, 197, 94, 0.15)", text: colors.tulsiGreen };
@@ -40,31 +42,32 @@ export default function NewsFeedScreen() {
     }
   };
 
+  const formatCategoryName = (category: string) => {
+    if (!category) return "General";
+    return category
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
   const filteredArticles = articles.filter((art) => {
     if (activeCategory === "All") return true;
-    return art.category?.toLowerCase() === activeCategory.toLowerCase();
+    const mapped = activeCategory === "Festival"
+      ? "festival_update"
+      : activeCategory === "Announcements"
+      ? "announcement"
+      : activeCategory.toLowerCase();
+    return art.category?.toLowerCase() === mapped;
   });
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoBadge}>
-            <MaterialIcons name="temple-hindu" size={20} color="#FFFFFF" />
-          </View>
-          <Text style={styles.headerLogo}>UTSAV</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerNotifyBtn} onPress={() => refetch()}>
-            <MaterialCommunityIcons name="refresh" size={22} color={colors.onSurfaceVariant} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerNotifyBtn}>
-            <MaterialCommunityIcons name="bell-outline" size={22} color={colors.onSurfaceVariant} />
-            <View style={styles.notifyBadge} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ScreenHeader
+        title="Mandal News"
+        showBack={false}
+        showLogo={false}
+        rightIcon="refresh"
+        onRightPress={() => refetch()}
+      />
 
       {/* Main content scroll */}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -132,7 +135,7 @@ export default function NewsFeedScreen() {
                     />
                     <View style={[styles.categoryBadge, { backgroundColor: badgeColors.bg }]}>
                       <Text style={[styles.categoryBadgeText, { color: badgeColors.text }]}>
-                        {item.category || "General"}
+                        {formatCategoryName(item.category || "")}
                       </Text>
                     </View>
                   </View>

@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCreateDonation, useFetchCampaigns, useFetchMyProfile, useFetchTenant } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function RecordCashEntryScreen() {
   const [amount, setAmount] = useState("");
@@ -15,6 +16,7 @@ export default function RecordCashEntryScreen() {
   const [receiptRef, setReceiptRef] = useState("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<"confirmed" | "pending">("confirmed");
+  const [isCampaignModalVisible, setIsCampaignModalVisible] = useState(false);
 
   const { tenantId, userFullName } = useAuthStore();
   const { data: tenant } = useFetchTenant(tenantId);
@@ -49,7 +51,7 @@ export default function RecordCashEntryScreen() {
 
     try {
       await createDonationMutation.mutateAsync({
-        donor_name: donorName,
+        donor_name: donorName.trim(),
         donor_phone: formattedPhone,
         amount: donationAmount,
         mode: "cash",
@@ -68,8 +70,9 @@ export default function RecordCashEntryScreen() {
 
   const profileName = myProfile?.full_name || userFullName || "Admin";
   const avatarUrl = myProfile?.avatar_url || null;
-  const initials = profileName
+  const initials = (profileName || "Admin")
     .split(" ")
+    .filter(Boolean)
     .map((n) => n[0])
     .join("")
     .toUpperCase()
@@ -77,28 +80,9 @@ export default function RecordCashEntryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top App Bar */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarLeft}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
-          </TouchableOpacity>
-          <View style={styles.logoAvatarWrapper}>
-            <Image
-              style={styles.logoAvatar}
-              source={require("../../assets/image-only.png")}
-            />
-          </View>
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <View style={styles.profileAvatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
-          ) : (
-            <Text style={styles.avatarText}>{initials}</Text>
-          )}
-        </View>
-      </View>
+      <ScreenHeader
+        title="Record Cash"
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Intro */}
@@ -220,14 +204,19 @@ export default function RecordCashEntryScreen() {
         <View style={styles.formSection}>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Campaign Selector</Text>
-            <View style={styles.dropdownWrap}>
+            <TouchableOpacity
+              style={styles.dropdownWrap}
+              activeOpacity={0.7}
+              onPress={() => setIsCampaignModalVisible(true)}
+            >
               <Text style={styles.dropdownSelected}>
                 {selectedCampaign === "general"
                   ? "General Fund"
                   : campaigns?.find((c) => c.id === selectedCampaign)?.name ?? "General Fund"}
               </Text>
               <MaterialCommunityIcons name="chevron-down" size={20} color={colors.outline} />
-            </View>
+            </TouchableOpacity>
+
             {/* Quick campaign selectors below */}
             <View style={styles.campaignList}>
               <TouchableOpacity
@@ -303,6 +292,68 @@ export default function RecordCashEntryScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Campaign Selection Modal */}
+      <Modal
+        visible={isCampaignModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsCampaignModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsCampaignModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Campaign</Text>
+              <TouchableOpacity onPress={() => setIsCampaignModalVisible(false)} style={styles.closeBtn}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.charcoal} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalList} showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[
+                  styles.campaignOption,
+                  selectedCampaign === "general" && styles.campaignOptionActive
+                ]}
+                onPress={() => {
+                  setSelectedCampaign("general");
+                  setIsCampaignModalVisible(false);
+                }}
+              >
+                <Text style={[styles.campaignOptionText, selectedCampaign === "general" && styles.campaignOptionTextActive]}>
+                  General Fund
+                </Text>
+                {selectedCampaign === "general" && (
+                  <MaterialCommunityIcons name="check" size={20} color={colors.primaryBrand} />
+                )}
+              </TouchableOpacity>
+              {campaigns?.map((camp) => (
+                <TouchableOpacity
+                  key={camp.id}
+                  style={[
+                    styles.campaignOption,
+                    selectedCampaign === camp.id && styles.campaignOptionActive
+                  ]}
+                  onPress={() => {
+                    setSelectedCampaign(camp.id);
+                    setIsCampaignModalVisible(false);
+                  }}
+                >
+                  <Text style={[styles.campaignOptionText, selectedCampaign === camp.id && styles.campaignOptionTextActive]}>
+                    {camp.name}
+                  </Text>
+                  {selectedCampaign === camp.id && (
+                    <MaterialCommunityIcons name="check" size={20} color={colors.primaryBrand} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -643,5 +694,64 @@ const styles = StyleSheet.create({
   },
   statusSelectBadgeTextActive: {
     color: colors.onSurface,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "60%",
+    padding: spacing.md,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.sandstone,
+    paddingBottom: spacing.sm,
+  },
+  modalTitle: {
+    fontFamily: fonts.poppins.bold,
+    fontSize: 18,
+    color: colors.charcoal,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  modalList: {
+    gap: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
+  campaignOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    backgroundColor: colors.cream,
+  },
+  campaignOptionActive: {
+    borderColor: colors.primaryContainer,
+    backgroundColor: "rgba(255, 149, 0, 0.05)",
+  },
+  campaignOptionText: {
+    fontFamily: fonts.inter.medium,
+    fontSize: 14,
+    color: colors.charcoal,
+  },
+  campaignOptionTextActive: {
+    color: colors.primaryBrand,
+    fontFamily: fonts.inter.semibold,
   },
 });

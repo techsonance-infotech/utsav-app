@@ -1,19 +1,19 @@
 import React from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Image, Alert } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Image, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFinancialSummary, useFetchMembers } from "@utsav/api-client";
+import { useFinancialSummary, useFetchMembers, useFetchDonations } from "@utsav/api-client";
 import { useAuthStore } from "@utsav/stores";
-
-const { width } = Dimensions.get("window");
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function AnalyticsHubScreen() {
   const { tenantId } = useAuthStore();
-  const { data: summary } = useFinancialSummary(tenantId);
-  const { data: members } = useFetchMembers();
+  const { data: summary, isLoading: loadingSummary } = useFinancialSummary(tenantId);
+  const { data: members = [], isLoading: loadingMembers } = useFetchMembers();
+  const { data: donations = [], isLoading: loadingDonations } = useFetchDonations();
 
   const formatAmount = (num: number) => {
     if (!num) return "₹0";
@@ -21,6 +21,9 @@ export default function AnalyticsHubScreen() {
     if (num >= 100000) return `₹${(num / 100000).toFixed(2)} L`;
     return `₹${num.toLocaleString("en-IN")}`;
   };
+
+  const activeMembersCount = members.filter(m => m.status === "active").length;
+  const nonGeneralMembersCount = members.filter(m => m.role && m.role !== "member").length;
 
   const kpis = [
     {
@@ -33,8 +36,8 @@ export default function AnalyticsHubScreen() {
     },
     {
       title: "Committee Members",
-      value: String(members?.length || 0),
-      subtitle: `${members?.filter(m => m.status === "active").length || 0} active currently`,
+      value: String(nonGeneralMembersCount),
+      subtitle: `${activeMembersCount} active members`,
       icon: "account-multiple",
       iconColor: colors.primaryBrand,
       bg: "rgba(140, 80, 0, 0.08)",
@@ -80,43 +83,78 @@ export default function AnalyticsHubScreen() {
     },
   ];
 
-  // Render a mock line graph using native layout
-  const mockChartData = [45, 60, 55, 78, 85, 95];
-  const chartMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+  // Dynamic Platform Pulse Calculation: Sum of events (donations + signups) over the last 6 months
+  const getPlatformPulseData = () => {
+    const now = new Date();
+    const months: Date[] = [];
+    const chartMonths: string[] = [];
+    const counts = [0, 0, 0, 0, 0, 0];
+
+    // Build the last 6 months starting points
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(d);
+      chartMonths.push(d.toLocaleDateString("en-IN", { month: "short" }));
+    }
+
+    // Count donations in each month bucket
+    donations.forEach((d) => {
+      if (!d.created_at) return;
+      const date = new Date(d.paid_at || d.created_at);
+      for (let i = 0; i < 6; i++) {
+        const mStart = months[i];
+        const mEnd = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 1);
+        if (date >= mStart && date < mEnd) {
+          counts[i] += 1;
+        }
+      }
+    });
+
+    // Count members joined in each month bucket
+    members.forEach((m) => {
+      if (!m.joined_at) return;
+      const date = new Date(m.joined_at);
+      for (let i = 0; i < 6; i++) {
+        const mStart = months[i];
+        const mEnd = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 1);
+        if (date >= mStart && date < mEnd) {
+          counts[i] += 1;
+        }
+      }
+    });
+
+    // Scale counts to percentage (15% to 95%) for display in the bar chart
+    const maxVal = Math.max(...counts, 1);
+    const chartData = counts.map((c) => {
+      const scaled = (c / maxVal) * 80 + 15;
+      return Math.round(scaled);
+    });
+
+    return { chartData, chartMonths };
+  };
+
+  const { chartData, chartMonths } = getPlatformPulseData();
+
+  if (loadingSummary || loadingMembers || loadingDonations) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={colors.primaryBrand} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.topHeader}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primaryBrand} />
-          </TouchableOpacity>
-          <View style={styles.logoAvatarWrapper}>
-            <Image
-              style={styles.logoAvatar}
-              source={require("../../assets/image-only.png")}
-            />
-          </View>
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.infoButton}
-          activeOpacity={0.8}
-          onPress={() =>
-            Alert.alert(
-              "Analytics Hub",
-              "Real-time overview of mandal collections, committee members activity, and operational reports."
-            )
-          }
-        >
-          <MaterialCommunityIcons name="information-outline" size={24} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Mandal Analytics"
+        rightIcon="information-outline"
+        onRightPress={() =>
+          Alert.alert(
+            "Analytics Hub",
+            "Real-time overview of mandal collections, committee members activity, and operational reports."
+          )
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Subtitle intro */}
@@ -160,7 +198,7 @@ export default function AnalyticsHubScreen() {
           {/* Chart bar visualizer */}
           <View style={styles.chartVisualizer}>
             <View style={styles.chartBarsContainer}>
-              {mockChartData.map((val, idx) => (
+              {chartData.map((val, idx) => (
                 <View key={idx} style={styles.chartBarWrapper}>
                   <View style={styles.barBackground}>
                     <LinearGradient
@@ -310,8 +348,9 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: 12,
     fontFamily: fonts.inter.medium,
-    color: colors.tulsiGreen,
+    color: colors.onSurfaceVariant,
     marginLeft: 4,
+    opacity: 0.8,
   },
   chartCard: {
     backgroundColor: colors.charcoal,
