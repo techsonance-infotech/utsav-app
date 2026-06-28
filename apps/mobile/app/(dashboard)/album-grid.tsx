@@ -2,7 +2,8 @@ import React from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Image, Dimensions, Share, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
-import { useFetchAlbumMedia } from "@utsav/api-client";
+import { useFetchAlbumMedia, useFetchTenant } from "@utsav/api-client";
+import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -10,6 +11,10 @@ const { width } = Dimensions.get("window");
 const COLUMN_WIDTH = (width - 48) / 2;
 
 export default function AlbumGridScreen() {
+  const { tenantId, tenantName } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
+  const currentTenantName = tenant?.name || tenantName || "Mandal";
+
   const { albumId, albumName } = useLocalSearchParams();
   const idStr = typeof albumId === "string" ? albumId : "";
   const nameStr = typeof albumName === "string" ? albumName : "Album Gallery";
@@ -19,7 +24,7 @@ export default function AlbumGridScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Check out the "${nameStr}" album on UTSAV!`,
+        message: `Check out the "${nameStr}" album on ${currentTenantName}!`,
       });
     } catch (err: any) {
       console.error(err);
@@ -53,7 +58,7 @@ export default function AlbumGridScreen() {
         {/* Album description section */}
         <View style={styles.descSection}>
           <Text style={styles.descText}>
-            Celebrating the arrival of Bappa at the UTSAV Mandal. A week of devotion, cultural performances, and community feasts.
+            Celebrating the arrival of Bappa at the {currentTenantName}. A week of devotion, cultural performances, and community feasts.
           </Text>
         </View>
 
@@ -87,6 +92,9 @@ export default function AlbumGridScreen() {
                         mediaUrl: item.media_url,
                         mediaType: item.media_type,
                         caption: item.caption || "",
+                        uploadedByName: item.uploaded_by_name || "",
+                        uploadedByAvatar: item.uploaded_by_avatar || "",
+                        createdAt: item.created_at || "",
                       },
                     })
                   }

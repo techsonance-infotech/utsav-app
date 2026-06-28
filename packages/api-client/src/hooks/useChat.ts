@@ -72,6 +72,8 @@ export function useChatMessages(channelId?: string, cursor?: string) {
 
 export function useSendMessage() {
   const qc = useQueryClient();
+  const { userId, userFullName } = useAuthStore();
+
   return useMutation({
     mutationFn: ({
       channelId,
@@ -88,6 +90,42 @@ export function useSendMessage() {
         method: "POST",
         body: JSON.stringify({ text, media_url, media_type }),
       }),
+    onMutate: async (newMsg) => {
+      await qc.cancelQueries({ queryKey: ["chat-messages", newMsg.channelId, undefined] });
+
+      const previousData = qc.getQueryData<{ messages: ChatMessage[]; nextCursor: string | null }>([
+        "chat-messages",
+        newMsg.channelId,
+        undefined,
+      ]);
+
+      if (previousData) {
+        const optimisticMsg: ChatMessage = {
+          id: `opt_${Date.now()}`,
+          channel_id: newMsg.channelId,
+          sender_id: userId || "self",
+          sender_name: userFullName || "Me",
+          message_text: newMsg.text || null,
+          media_url: newMsg.media_url || null,
+          media_type: (newMsg.media_type as any) || null,
+          is_deleted: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        qc.setQueryData(["chat-messages", newMsg.channelId, undefined], {
+          ...previousData,
+          messages: [...previousData.messages, optimisticMsg],
+        });
+      }
+
+      return { previousData };
+    },
+    onError: (err, newMsg, context) => {
+      if (context?.previousData) {
+        qc.setQueryData(["chat-messages", newMsg.channelId, undefined], context.previousData);
+      }
+    },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["chat-messages", data.channel_id] });
       qc.invalidateQueries({ queryKey: ["chat-channels"] });

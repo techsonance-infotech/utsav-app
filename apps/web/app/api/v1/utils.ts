@@ -291,3 +291,53 @@ export function sanitizeInputText(str: string | null | undefined): string {
     .replace(/'/g, "&#x27;")
     .replace(/\//g, "&#x2F;");
 }
+
+// Upload base64 image string to public bucket and return public URL
+export async function uploadBase64ToStorage(
+  tenantId: string,
+  userId: string,
+  base64String: string,
+  bucketName: string = "gallery"
+): Promise<{ publicUrl?: string; error?: string }> {
+  const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    return { error: "Invalid base64 format" };
+  }
+  const type = matches[1];
+  const buffer = Buffer.from(matches[2], "base64");
+  let ext = "jpg";
+  if (type === "image/png") ext = "png";
+  else if (type === "image/webp") ext = "webp";
+  else if (type === "image/gif") ext = "gif";
+
+  const filePath = `${tenantId}/${userId}/media_${Date.now()}.${ext}`;
+  const supabase = createServiceRoleClient();
+
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some((b: any) => b.name === bucketName);
+    if (!bucketExists) {
+      await supabase.storage.createBucket(bucketName, { public: true });
+    }
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, buffer, {
+        contentType: type,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return { error: uploadError.message };
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(filePath);
+
+    return { publicUrl: urlData.publicUrl };
+  } catch (err: any) {
+    return { error: err.message || "Storage upload failed" };
+  }
+}
+

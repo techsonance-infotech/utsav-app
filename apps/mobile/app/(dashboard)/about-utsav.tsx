@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Animated, Linking, Alert, Platform } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Animated, Linking, Alert, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, spacing, borderRadius } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-const APP_VERSION = "2.4.0";
-const APP_BUILD = "108";
+const APP_VERSION = "2.4.1";
+const APP_BUILD = "109";
 
 export default function AboutUtsavScreen() {
   const breatheAnim = useRef(new Animated.Value(1)).current;
@@ -45,39 +45,114 @@ export default function AboutUtsavScreen() {
     return () => breathe.stop();
   }, []);
 
-  const handleLink = (type: "website" | "support" | "rate") => {
-    const urls: Record<string, string> = {
-      website: "https://utsav.app",
-      support: "mailto:support@utsav.app",
-      rate:
-        Platform.OS === "ios"
-          ? "https://apps.apple.com/app/utsav"
-          : "https://play.google.com/store/apps/details?id=com.utsav.app",
+  const handleContactLink = (type: "phone" | "email" | "website" | "address") => {
+    const urls = {
+      phone: "tel:9173101711",
+      email: "mailto:admin@techsonance.co.in",
+      website: "https://www.techsonance.co.in",
+      address: "https://www.google.com/maps/search/?api=1&query=UG-15,+Palladium+plaza,+VIP+Road,+Vesu+Surat,+Gujarat,+India+-+395007",
     };
     Linking.openURL(urls[type]).catch(() =>
-      Alert.alert("Error", "Could not open link.")
+      Alert.alert("Error", `Could not launch ${type} link.`)
     );
   };
 
-  const connectLinks = [
+  const businessDetails = [
+    {
+      icon: "domain" as const,
+      label: "Developer & Publisher",
+      value: "TechSonance Infotech LLP",
+      action: null,
+    },
+    {
+      icon: "phone-outline" as const,
+      label: "Contact Mobile",
+      value: "+91 91731 01711",
+      action: () => handleContactLink("phone"),
+    },
+    {
+      icon: "email-outline" as const,
+      label: "Email Support",
+      value: "admin@techsonance.co.in",
+      action: () => handleContactLink("email"),
+    },
     {
       icon: "web" as const,
-      label: "Visit Website",
-      type: "website" as const,
-      showChevron: true,
+      label: "Official Website",
+      value: "www.techsonance.co.in",
+      action: () => handleContactLink("website"),
     },
     {
-      icon: "face-agent" as const,
-      label: "Contact Support",
-      type: "support" as const,
-      showChevron: true,
+      icon: "map-marker-outline" as const,
+      label: "Corporate Office Address",
+      value: "UG-15, Palladium plaza, VIP Road, Vesu Surat, Gujarat, India - 395007",
+      action: () => handleContactLink("address"),
+    },
+  ];
+
+  const features = [
+    {
+      icon: "palette-outline" as const,
+      iconBg: "rgba(140, 80, 0, 0.08)",
+      iconColor: colors.primaryBrand,
+      title: "Tenant Branding Integration",
+      desc: "Upload custom logos (circular cropped) and dynamic names replacing default brandings on dashboards and media feeds.",
     },
     {
-      icon: "star-outline" as const,
-      label: "Rate the App",
-      type: "rate" as const,
-      showChevron: false,
-      rating: "4.9",
+      icon: "qrcode-scan" as const,
+      iconBg: "rgba(201, 146, 26, 0.08)",
+      iconColor: colors.aartiGold,
+      title: "Flexible QR & Payment Setup",
+      desc: "Configure devotee profile URLs and UPI QR codes independently, enabling quick merchant payments and digital sharing.",
+    },
+    {
+      icon: "wallet-outline" as const,
+      iconBg: "rgba(217, 43, 43, 0.08)",
+      iconColor: colors.kumkumRed,
+      title: "Expense & Voucher Management",
+      desc: "Submit and approve vouchers, track mandal expenses, and generate detailed PDF statement reports on demand.",
+    },
+    {
+      icon: "calendar-month-outline" as const,
+      iconBg: "rgba(34, 197, 94, 0.08)",
+      iconColor: colors.tulsiGreen,
+      title: "Events & Scheduling",
+      desc: "Schedule community events, manage devotee RSVP listings, track attendance, and plan schedules.",
+    },
+    {
+      icon: "newspaper-variant-outline" as const,
+      iconBg: "rgba(255, 149, 0, 0.08)",
+      iconColor: colors.primaryContainer,
+      title: "News Feed & Announcements",
+      desc: "Publish blogs, articles, board decisions, and festival updates directly to devotees with instant sharing support.",
+    },
+    {
+      icon: "store-outline" as const,
+      iconBg: "rgba(140, 80, 0, 0.08)",
+      iconColor: colors.primaryBrand,
+      title: "Vendor Directory & Invoice Portal",
+      desc: "Register vendor accounts, manage corporate invoice listings, and view historic purchase orders.",
+    },
+    {
+      icon: "image-multiple-outline" as const,
+      iconBg: "rgba(201, 146, 26, 0.08)",
+      iconColor: colors.aartiGold,
+      title: "Photo Gallery & Albums",
+      desc: "Upload, browse, and organize event memories with beautiful photo grids, masonry layouts, and viewer features.",
+    },
+    {
+      icon: "account-check-outline" as const,
+      iconBg: "rgba(34, 197, 94, 0.08)",
+      iconColor: colors.tulsiGreen,
+      title: "Volunteer Duties & Check-In",
+      desc: "Assign duty rosters, coordinate shifts, track check-ins via volunteer QR scan codes, and manage rosters.",
+    },
+    {
+      icon: "translate" as const,
+      iconBg: "rgba(140, 80, 0, 0.08)",
+      iconColor: colors.primaryBrand,
+      title: "Multi-Language Support",
+      desc: "Fully localized user experience across English, Hindi, and Gujarati to cater to diverse community demographics.",
     },
   ];
 
@@ -97,7 +172,7 @@ export default function AboutUtsavScreen() {
               color={colors.primaryBrand}
             />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>About Utsav</Text>
+          <Text style={styles.headerTitle}>About Product</Text>
         </View>
         <TouchableOpacity activeOpacity={0.7}>
           <MaterialCommunityIcons
@@ -124,10 +199,9 @@ export default function AboutUtsavScreen() {
               },
             ]}
           >
-            <MaterialCommunityIcons
-              name="fire"
-              size={64}
-              color={colors.primaryBrand}
+            <Image
+              source={require("../../assets/image-only.png")}
+              style={{ width: 60, height: 60, resizeMode: "contain" }}
             />
           </Animated.View>
           <Text style={styles.brandName}>Utsav</Text>
@@ -136,98 +210,81 @@ export default function AboutUtsavScreen() {
           </Text>
         </View>
 
-        {/* Mission & Vision Cards */}
-        <View style={styles.cardsRow}>
-          <View style={styles.missionCard}>
-            <View style={styles.cardIconRow}>
-              <View style={styles.cardIconBg}>
-                <MaterialCommunityIcons
-                  name="flag"
-                  size={22}
-                  color={colors.primaryBrand}
-                />
-              </View>
-              <Text style={styles.cardTitle}>Our Mission</Text>
-            </View>
-            <Text style={styles.cardBody}>
-              Empowering Indian festivals through digital transparency. We
-              bridge the gap between ancient traditions and modern
-              organizational rigor, ensuring community leaders have the
-              precision tools needed to thrive.
-            </Text>
-          </View>
-
-          <View style={styles.missionCard}>
-            <View style={styles.cardIconRow}>
-              <View style={styles.cardIconBg}>
-                <MaterialCommunityIcons
-                  name="eye-outline"
-                  size={22}
-                  color={colors.primaryBrand}
-                />
-              </View>
-              <Text style={styles.cardTitle}>Our Vision</Text>
-            </View>
-            <Text style={styles.cardBody}>
-              Becoming the definitive digital OS for cultural celebrations. Our
-              goal is to preserve the soul of the community while automating
-              the logistics of the sacred.
-            </Text>
-          </View>
-        </View>
-
-        {/* Community Stats Banner */}
-        <View style={styles.statsBanner}>
-          <View style={styles.statsOverlay} />
-          <View style={styles.statsContent}>
-            <View style={styles.statsTag}>
-              <Text style={styles.statsTagText}>GLOBAL COMMUNITY</Text>
-            </View>
-            <Text style={styles.statsHeading}>
-              Serving 500+ Cultural Communities
-            </Text>
-          </View>
-        </View>
-
-        {/* Connect Links */}
-        <View style={styles.connectSection}>
-          <Text style={styles.sectionLabel}>CONNECT WITH US</Text>
-          <View style={styles.connectCard}>
-            {connectLinks.map((link, idx) => (
-              <TouchableOpacity
-                key={link.type}
-                style={[
-                  styles.connectRow,
-                  idx < connectLinks.length - 1 && styles.connectRowBorder,
-                ]}
-                onPress={() => handleLink(link.type)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.connectLeft}>
-                  <MaterialCommunityIcons
-                    name={link.icon}
-                    size={22}
-                    color={colors.primaryBrand}
-                  />
-                  <Text style={styles.connectLabel}>{link.label}</Text>
-                </View>
-                {link.showChevron ? (
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={22}
-                    color={colors.outlineVariant}
-                  />
-                ) : (
-                  <View style={styles.ratingBadge}>
+        {/* Business Details Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionLabel}>BUSINESS DETAILS</Text>
+          <View style={styles.card}>
+            {businessDetails.map((detail, idx) => (
+              <View key={idx}>
+                {detail.action ? (
+                  <TouchableOpacity
+                    style={styles.detailRow}
+                    onPress={detail.action}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.detailLeft}>
+                      <View style={styles.iconBg}>
+                        <MaterialCommunityIcons
+                          name={detail.icon}
+                          size={18}
+                          color={colors.primaryBrand}
+                        />
+                      </View>
+                      <View style={styles.detailTextWrapper}>
+                        <Text style={styles.detailLabel}>{detail.label}</Text>
+                        <Text style={[styles.detailValue, styles.linkText]}>
+                          {detail.value}
+                        </Text>
+                      </View>
+                    </View>
                     <MaterialCommunityIcons
-                      name="star"
-                      size={14}
-                      color={colors.aartiGold}
+                      name="open-in-new"
+                      size={16}
+                      color={colors.primaryBrand}
+                      style={{ opacity: 0.8 }}
                     />
-                    <Text style={styles.ratingText}>{link.rating}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLeft}>
+                      <View style={styles.iconBg}>
+                        <MaterialCommunityIcons
+                          name={detail.icon}
+                          size={18}
+                          color={colors.onSurfaceVariant}
+                        />
+                      </View>
+                      <View style={styles.detailTextWrapper}>
+                        <Text style={styles.detailLabel}>{detail.label}</Text>
+                        <Text style={styles.detailValue}>{detail.value}</Text>
+                      </View>
+                    </View>
                   </View>
                 )}
-              </TouchableOpacity>
+                {idx < businessDetails.length - 1 && <View style={styles.divider} />}
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Implemented Features Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionLabel}>IMPLEMENTED FEATURES</Text>
+          <View style={styles.featuresList}>
+            {features.map((feature, idx) => (
+              <View key={idx} style={styles.featureCard}>
+                <View style={[styles.featureIconContainer, { backgroundColor: feature.iconBg }]}>
+                  <MaterialCommunityIcons
+                    name={feature.icon}
+                    size={22}
+                    color={feature.iconColor}
+                  />
+                </View>
+                <View style={styles.featureTextContainer}>
+                  <Text style={styles.featureTitle}>{feature.title}</Text>
+                  <Text style={styles.featureDesc}>{feature.desc}</Text>
+                </View>
+              </View>
             ))}
           </View>
         </View>
@@ -238,7 +295,7 @@ export default function AboutUtsavScreen() {
             Version {APP_VERSION} (Build {APP_BUILD})
           </Text>
           <Text style={styles.footerText}>
-            © 2024 Utsav Technologies Pvt Ltd.
+            © 2026 TechSonance Infotech LLP. All rights reserved.
           </Text>
         </View>
       </ScrollView>
@@ -266,138 +323,145 @@ const styles = StyleSheet.create({
     color: colors.primaryBrand,
   },
   scroll: { flex: 1 },
-  scrollContent: { padding: spacing.md, paddingBottom: 40, gap: 28 },
+  scrollContent: { padding: spacing.md, paddingBottom: 40, gap: 24 },
 
-  // Hero
-  heroSection: { alignItems: "center", paddingVertical: 16, gap: 12 },
+  // Hero Section
+  heroSection: { alignItems: "center", paddingVertical: 8, gap: 8 },
   diyaContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: "rgba(255,149,0,0.1)",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#FF9500",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 3,
   },
   brandName: {
     fontFamily: fonts.poppins.bold,
-    fontSize: 32,
+    fontSize: 28,
     color: colors.primaryBrand,
   },
   brandTagline: {
     fontFamily: fonts.poppins.semibold,
-    fontSize: 16,
+    fontSize: 14,
     color: colors.onSurfaceVariant,
     fontStyle: "italic",
     textAlign: "center",
   },
 
-  // Cards
-  cardsRow: { gap: 12 },
-  missionCard: {
-    backgroundColor: colors.cream,
-    borderWidth: 1,
-    borderColor: colors.sandstone,
-    borderRadius: 12,
-    padding: spacing.lg,
-  },
-  cardIconRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  cardIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,149,0,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cardTitle: {
-    fontFamily: fonts.poppins.semibold,
-    fontSize: 20,
-    color: colors.primaryBrand,
-  },
-  cardBody: {
-    fontFamily: fonts.inter.regular,
-    fontSize: 15,
-    lineHeight: 24,
-    color: colors.onSurfaceVariant,
-  },
-
-  // Stats Banner
-  statsBanner: {
-    height: 180,
-    borderRadius: 12,
-    backgroundColor: colors.charcoal,
-    overflow: "hidden",
-    justifyContent: "flex-end",
-  },
-  statsOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(58,53,48,0.6)",
-  },
-  statsContent: { padding: 16, zIndex: 1 },
-  statsTag: {
-    backgroundColor: "rgba(140,80,0,0.9)",
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 8,
-  },
-  statsTagText: {
-    fontFamily: fonts.inter.medium,
-    fontSize: 10,
-    color: "#FFFFFF",
-    letterSpacing: 1.5,
-  },
-  statsHeading: {
-    fontFamily: fonts.poppins.semibold,
-    fontSize: 18,
-    color: colors.pujaWhite,
-  },
-
-  // Connect
-  connectSection: { gap: 10 },
+  // Section Container
+  sectionContainer: { gap: 10 },
   sectionLabel: {
-    fontFamily: fonts.inter.medium,
+    fontFamily: fonts.inter.bold,
     fontSize: 12,
     color: colors.onSurfaceVariant,
-    letterSpacing: 1.5,
-    paddingHorizontal: 4,
+    opacity: 0.7,
+    letterSpacing: 2,
+    paddingLeft: spacing.xs,
   },
-  connectCard: {
-    backgroundColor: colors.surfaceContainer,
-    borderRadius: 12,
+
+  // Card & Detail Rows
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: borderRadius.xl,
     borderWidth: 1,
-    borderColor: colors.sandstone,
+    borderColor: "rgba(232, 226, 214, 0.4)",
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.01,
+    shadowRadius: 6,
   },
-  connectRow: {
+  detailRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 16,
+    padding: spacing.md,
   },
-  connectRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.sandstone },
-  connectLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
-  connectLabel: {
+  detailLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    flex: 1,
+  },
+  iconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceContainer,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  detailTextWrapper: {
+    flex: 1,
+    gap: 2,
+  },
+  detailLabel: {
+    fontSize: 11,
     fontFamily: fonts.inter.medium,
-    fontSize: 16,
+    color: colors.onSurfaceVariant,
+    opacity: 0.8,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontFamily: fonts.inter.semibold,
+    color: colors.onSurface,
+    lineHeight: 20,
+  },
+  linkText: {
+    color: colors.primaryBrand,
+    textDecorationLine: "underline",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(232, 226, 214, 0.3)",
+    marginHorizontal: spacing.md,
+  },
+
+  // Features List
+  featuresList: {
+    gap: spacing.sm,
+  },
+  featureCard: {
+    flexDirection: "row",
+    padding: spacing.md,
+    backgroundColor: "#FFFFFF",
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: "rgba(232, 226, 214, 0.4)",
+    gap: spacing.md,
+  },
+  featureIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "flex-start",
+  },
+  featureTextContainer: {
+    flex: 1,
+    gap: 4,
+  },
+  featureTitle: {
+    fontSize: 15,
+    fontFamily: fonts.poppins.semibold,
     color: colors.onSurface,
   },
-  ratingBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
-  ratingText: {
-    fontFamily: fonts.inter.medium,
-    fontSize: 14,
-    color: colors.aartiGold,
+  featureDesc: {
+    fontSize: 12,
+    fontFamily: fonts.inter.regular,
+    color: colors.onSurfaceVariant,
+    lineHeight: 18,
+    opacity: 0.9,
   },
 
   // Footer
-  footer: { alignItems: "center", paddingVertical: 8, gap: 4 },
+  footer: { alignItems: "center", paddingVertical: 16, gap: 4 },
   footerText: {
     fontFamily: fonts.inter.medium,
     fontSize: 11,

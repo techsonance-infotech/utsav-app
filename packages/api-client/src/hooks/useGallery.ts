@@ -10,6 +10,8 @@ export interface GalleryAlbum {
   cover_image_url?: string | null;
   media_count: number;
   is_public: boolean;
+  watermark_enabled?: boolean;
+  category?: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -22,10 +24,13 @@ export interface GalleryMedia {
   media_url: string;
   media_type: "image" | "video";
   caption?: string | null;
+  youtube_url?: string | null;
   width?: number | null;
   height?: number | null;
   size_bytes?: number | null;
   uploaded_by: string;
+  uploaded_by_name?: string | null;
+  uploaded_by_avatar?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,7 +47,7 @@ export function useFetchAlbums() {
 export function useCreateAlbum() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; description?: string; is_public?: boolean; cover_image_url?: string }) =>
+    mutationFn: (data: { name: string; description?: string; is_public?: boolean; cover_image_url?: string; category?: string; watermark_enabled?: boolean }) =>
       apiClient<GalleryAlbum>("/gallery/albums", {
         method: "POST",
         body: JSON.stringify(data),
@@ -69,9 +74,12 @@ export function useAddAlbumMedia() {
       ...data
     }: {
       albumId: string;
-      media_url: string;
+      media_url?: string;
       media_type?: string;
       caption?: string;
+      youtube_url?: string;
+      is_public?: boolean;
+      watermark_enabled?: boolean;
       width?: number;
       height?: number;
       size_bytes?: number;

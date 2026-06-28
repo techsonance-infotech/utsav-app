@@ -5,6 +5,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEvents, useRSVP } from "@utsav/api-client";
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -85,16 +86,12 @@ export default function EventDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>UTSAV</Text>
-        <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
-          <MaterialCommunityIcons name="share-variant" size={20} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Event Details"
+        showBack={true}
+        rightIcon="share-variant"
+        onRightPress={handleShare}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Hero Banner */}

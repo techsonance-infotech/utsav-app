@@ -11,9 +11,9 @@
     "clean": "pnpm -r exec rm -rf .turbo .next node_modules dist build"
   },
   "devDependencies": {
-    "turbo": "2.0.4",
-    "typescript": "5.4.5",
     "eslint": "8.57.0",
-    "prettier": "3.3.2"
+    "prettier": "3.3.2",
+    "turbo": "2.0.4",
+    "typescript": "5.4.5"
   }
 }

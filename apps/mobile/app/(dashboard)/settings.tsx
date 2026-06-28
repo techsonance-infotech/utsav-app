@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -26,6 +27,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTranslation } from "../lib/i18n";
 import LoaderOverlay from "../components/LoaderOverlay";
 import * as ImagePicker from "expo-image-picker";
+import { ScreenHeader } from "../components/ScreenHeader";
+
 
 export default function MobileSettingsScreen() {
   const { t, language, setLanguage } = useTranslation();
@@ -41,6 +44,7 @@ export default function MobileSettingsScreen() {
   // Modal states
   const [securityModalVisible, setSecurityModalVisible] = useState(false);
   const [langModalVisible, setLangModalVisible] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
 
   // Sync auth store when profile data arrives from backend
   useEffect(() => {
@@ -322,24 +326,13 @@ export default function MobileSettingsScreen() {
       <LoaderOverlay visible={isPending} message="Please wait..." />
 
       {/* Top App Bar */}
-      <View style={styles.topHeader}>
-        <View style={styles.logoGroup}>
-          <View style={styles.logoAvatarWrapper}>
-            <Image
-              style={styles.logoAvatar}
-              source={require("../../assets/image-only.png")}
-            />
-          </View>
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.bellButton}
-          onPress={() => router.push("/(dashboard)/notifications")}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Settings"
+        showBack={false}
+        showLogo={false}
+        rightIcon="bell-outline"
+        onRightPress={() => router.push("/(dashboard)/notifications")}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Profile Header Section */}
@@ -661,6 +654,38 @@ export default function MobileSettingsScreen() {
                     <MaterialCommunityIcons name="translate" size={20} color={colors.onSurfaceVariant} />
                   </View>
                   <Text style={styles.groupItemText}>Language (EN/हि/ગુ)</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              <View style={styles.itemSeparator} />
+
+              <TouchableOpacity
+                style={styles.groupItem}
+                onPress={() => router.push("/(dashboard)/offline-mode")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.groupItemLeft}>
+                  <View style={[styles.iconContainer, { backgroundColor: colors.surfaceContainer }]}>
+                    <MaterialCommunityIcons name="cloud-off-outline" size={20} color={colors.onSurfaceVariant} />
+                  </View>
+                  <Text style={styles.groupItemText}>Offline Mode Dashboard</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              <View style={styles.itemSeparator} />
+
+              <TouchableOpacity
+                style={styles.groupItem}
+                onPress={() => router.push("/(dashboard)/about-utsav")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.groupItemLeft}>
+                  <View style={[styles.iconContainer, { backgroundColor: colors.surfaceContainer }]}>
+                    <MaterialCommunityIcons name="information-outline" size={20} color={colors.onSurfaceVariant} />
+                  </View>
+                  <Text style={styles.groupItemText}>About Product</Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
               </TouchableOpacity>

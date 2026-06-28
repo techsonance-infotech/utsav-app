@@ -40,11 +40,11 @@ function getSlugFromHost(hostName: string, baseDomain: string): string | null {
   }
 
   // Treat localhost, baseDomain and techsonance production domains as base main domain
-  const isBaseDomain = 
-    hostName === "utsav.techsonance.co.in" || 
+  const isBaseDomain =
+    hostName === "utsav.techsonance.co.in" ||
     hostName === "www.utsav.techsonance.co.in" ||
-    hostName === baseDomain || 
-    hostName === "localhost" || 
+    hostName === baseDomain ||
+    hostName === "localhost" ||
     hostName === "127.0.0.1";
 
   if (isBaseDomain) {

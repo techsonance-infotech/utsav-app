@@ -7,6 +7,8 @@ const albumCreateSchema = z.object({
   description: z.string().trim().max(1000).transform(val => sanitizeInputText(val)).optional().nullable(),
   is_public: z.boolean().default(true),
   cover_image_url: z.string().trim().optional().nullable().or(z.literal("")),
+  category: z.string().default("others"),
+  watermark_enabled: z.boolean().default(false),
 });
 
 export async function GET(req: Request) {
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: parsed.error.errors[0].message }, { status: 400 });
     }
 
-    const { name, description, is_public, cover_image_url } = parsed.data;
+    const { name, description, is_public, cover_image_url, category, watermark_enabled } = parsed.data;
 
     const supabase = createServiceRoleClient();
 
@@ -64,6 +66,8 @@ export async function POST(req: Request) {
         description: description || null,
         is_public,
         cover_image_url: cover_image_url || null,
+        category: category.toLowerCase(),
+        watermark_enabled,
         created_by: userId,
       })
       .select()

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifySession, createServiceRoleClient, logAuditEvent, checkRole } from "../utils";
+import { verifySession, createServiceRoleClient, logAuditEvent, checkRole, uploadBase64ToStorage } from "../utils";
 import { z } from "zod";
 import { BlogCategorySchema, ContentStatusSchema } from "@utsav/types";
 
@@ -12,7 +12,7 @@ const CreateBlogSchema = z.object({
     .regex(/^[a-z0-9-_]+$/, "Slug must only contain lowercase alphanumeric characters, dashes, and underscores"),
   body: z.string().min(1, "Body is required"),
   excerpt: z.string().nullable().optional(),
-  cover_image_url: z.string().url("Must be a valid URL").nullable().or(z.literal("")).optional(),
+  cover_image_url: z.string().url("Must be a valid URL").or(z.string().regex(/^data:image\//, "Must be a base64 image data URI")).nullable().or(z.literal("")).optional(),
   category: BlogCategorySchema.default("other"),
   tags: z.array(z.string()).default([]),
   language: z.string().default("en"),
@@ -107,6 +107,20 @@ export async function POST(req: Request) {
         ? new Date(validatedData.scheduled_at).toISOString()
         : null;
 
+    let uploadedCoverUrl = validatedData.cover_image_url;
+    if (validatedData.cover_image_url && validatedData.cover_image_url.startsWith("data:image/")) {
+      const { publicUrl, error: uploadError } = await uploadBase64ToStorage(
+        tenantId,
+        userId,
+        validatedData.cover_image_url,
+        "gallery"
+      );
+      if (uploadError) {
+        return NextResponse.json({ message: `Cover image upload failed: ${uploadError}` }, { status: 400 });
+      }
+      uploadedCoverUrl = publicUrl;
+    }
+
     const { data: post, error: insertError } = await supabase
       .from("blog_posts")
       .insert({
@@ -117,7 +131,7 @@ export async function POST(req: Request) {
         slug: validatedData.slug,
         body: validatedData.body,
         excerpt: validatedData.excerpt || null,
-        cover_image_url: validatedData.cover_image_url || null,
+        cover_image_url: uploadedCoverUrl || null,
         category: validatedData.category,
         tags: validatedData.tags,
         language: validatedData.language,

@@ -4,12 +4,34 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAuthStore } from "@utsav/stores";
+import { useFetchTenant } from "@utsav/api-client";
 
 export default function MediaViewerScreen() {
-  const { mediaUrl, mediaType, caption } = useLocalSearchParams();
+  const { tenantId, tenantName } = useAuthStore();
+  const { data: tenant } = useFetchTenant(tenantId);
+  const currentTenantName = tenant?.name || tenantName || "Mandal";
+
+  const { mediaUrl, mediaType, caption, uploadedByName, uploadedByAvatar, createdAt } = useLocalSearchParams();
   const urlStr = typeof mediaUrl === "string" ? mediaUrl : "https://images.unsplash.com/photo-1561361513-2d000a50f0db?w=600";
   const typeStr = typeof mediaType === "string" ? mediaType : "image";
-  const captionStr = typeof caption === "string" ? caption : "Festive celebrations at the UTSAV Mandal";
+  const captionStr = typeof caption === "string" ? caption : `Festive celebrations at the ${currentTenantName}`;
+  const uploaderNameStr = typeof uploadedByName === "string" && uploadedByName ? uploadedByName : "Mandal Member";
+  const uploaderAvatarStr = typeof uploadedByAvatar === "string" && uploadedByAvatar ? uploadedByAvatar : "https://lh3.googleusercontent.com/aida-public/AB6AXuAhvaZhz8JdwGPg1mmlpJkJ9o1D9JEKbsMxTzXU4AntkWihJmhRwcf7JihK3RDm5u_HP-BIUDcnHo5H_f-Ap5FVX5N3-HtYhur3VSrDFAqItE8Qktu_DCEtJIuY_QSpQN8Sgo4DOjXa4L11dp4MSJcyd3ItCjZvHem5KRQSaTZPK5S-OEwmXh3EUsAD9qu7YBVtCRRP7QWfR8KheoH64oEjwn_xZNcBpQb6Mip3vI96-C-Y21-EUMo4";
+
+  // Format creation date
+  let dateText = "Today";
+  if (typeof createdAt === "string" && createdAt) {
+    try {
+      const d = new Date(createdAt);
+      if (!isNaN(d.getTime())) {
+        const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+        dateText = d.toLocaleDateString("en-US", options);
+      }
+    } catch {
+      // fallback
+    }
+  }
 
   // Interaction States
   const [isLiked, setIsLiked] = useState(false);
@@ -27,7 +49,7 @@ export default function MediaViewerScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Take a look at this beautiful moment from UTSAV: ${urlStr}`,
+        message: `Take a look at this beautiful moment from ${currentTenantName}: ${urlStr}`,
       });
     } catch (err: any) {
       console.error(err);
@@ -76,7 +98,7 @@ export default function MediaViewerScreen() {
         <View style={styles.userRow}>
           <View style={styles.avatar}>
             <Image
-              source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuAhvaZhz8JdwGPg1mmlpJkJ9o1D9JEKbsMxTzXU4AntkWihJmhRwcf7JihK3RDm5u_HP-BIUDcnHo5H_f-Ap5FVX5N3-HtYhur3VSrDFAqItE8Qktu_DCEtJIuY_QSpQN8Sgo4DOjXa4L11dp4MSJcyd3ItCjZvHem5KRQSaTZPK5S-OEwmXh3EUsAD9qu7YBVtCRRP7QWfR8KheoH64oEjwn_xZNcBpQb6Mip3vI96-C-Y21-EUMo4" }}
+              source={{ uri: uploaderAvatarStr }}
               style={styles.avatarImg}
             />
             <View style={styles.activeDot} />
@@ -87,7 +109,7 @@ export default function MediaViewerScreen() {
               {captionStr}
             </Text>
             <Text style={styles.mediaSubtitle}>
-              Uploaded by Arjun Varma • Today
+              Uploaded by {uploaderNameStr} • {dateText}
             </Text>
           </View>
         </View>
@@ -120,12 +142,12 @@ export default function MediaViewerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Tags */}
+        {/* Dynamic Tags */}
         <View style={styles.tagsRow}>
-          <Text style={styles.tag}>RITUALS</Text>
-          <Text style={styles.tag}>COMMUNITY</Text>
-          <Text style={styles.tag}>FESTIVAL</Text>
-          <Text style={[styles.tag, styles.tagFeatured]}>FEATURED</Text>
+          <Text style={styles.tag}>{typeStr.toUpperCase()}</Text>
+          {urlStr.includes("youtube.com") || urlStr.includes("youtu.be") ? (
+            <Text style={[styles.tag, styles.tagFeatured]}>YOUTUBE</Text>
+          ) : null}
         </View>
       </View>
     </SafeAreaView>

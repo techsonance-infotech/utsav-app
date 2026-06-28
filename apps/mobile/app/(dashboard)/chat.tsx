@@ -6,6 +6,8 @@ import { useChatChannels, useFetchMembers, useCreateChatChannel, useFetchMyProfi
 import { useAuthStore } from "@utsav/stores";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { ScreenHeader } from "../components/ScreenHeader";
+
 
 export default function ChatScreen() {
   const { tenantId, userId, userFullName } = useAuthStore();
@@ -145,30 +147,13 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Unified Top App Bar */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarLeft}>
-          <View style={styles.logoAvatarWrapper}>
-            <Image
-              style={styles.logoAvatar}
-              source={require("../../assets/image-only.png")}
-            />
-          </View>
-          <Text style={styles.logoText}>UTSAV</Text>
-        </View>
-        <View style={styles.profileAvatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.headerAvatarImage} />
-          ) : (
-            <Text style={styles.avatarText}>{initials}</Text>
-          )}
-        </View>
-      </View>
+      <ScreenHeader
+        title="Mandal Chat"
+        showBack={false}
+        showLogo={false}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Title */}
-        <View style={styles.titleContainer}>
-          <Text style={styles.screenTitle}>Messages</Text>
-        </View>
 
         {/* Search Bar */}
         <View style={styles.searchContainer}>

@@ -14,6 +14,7 @@ export interface Vendor {
   payment_terms?: string | null;
   gst_number?: string | null;
   status: "active" | "inactive";
+  notes?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,7 +65,18 @@ export function useFetchVendors() {
 export function useCreateVendor() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<Vendor> & { name: string }) =>
+    mutationFn: (data: {
+      name: string;
+      category: string;
+      contact_person: string;
+      phone: string;
+      email?: string;
+      gst_number?: string;
+      payment_terms?: string;
+      bank_account_number?: string;
+      bank_ifsc_code?: string;
+      notes?: string;
+    }) =>
       apiClient<Vendor>("/vendors", {
         method: "POST",
         body: JSON.stringify(data),
@@ -132,6 +144,48 @@ export function useCreateVendorInvoice() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendor-invoices"] });
+    },
+  });
+}
+
+export function useUpdateVendor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: {
+      id: string;
+      data: {
+        name?: string;
+        category?: string;
+        contact_person?: string;
+        phone?: string;
+        email?: string;
+        gst_number?: string;
+        payment_terms?: string;
+        bank_account_number?: string;
+        bank_ifsc_code?: string;
+        notes?: string;
+        status?: string;
+      };
+    }) =>
+      apiClient<Vendor>(`/vendors/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendors"] });
+    },
+  });
+}
+
+export function useDeleteVendor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<{ message: string }>(`/vendors/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendors"] });
     },
   });
 }

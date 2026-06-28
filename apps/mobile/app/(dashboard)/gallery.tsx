@@ -6,6 +6,7 @@ import { useAuthStore } from "@utsav/stores";
 import { useFetchAlbums, useCreateAlbum } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function GalleryHubScreen() {
   const { role: userRole } = useAuthStore();
@@ -21,33 +22,55 @@ export default function GalleryHubScreen() {
   const [newAlbumName, setNewAlbumName] = useState("");
   const [newAlbumDesc, setNewAlbumDesc] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+  const [newAlbumCategory, setNewAlbumCategory] = useState("Moments");
+  const [watermarkEnabled, setWatermarkEnabled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = [
     "All",
+    "Moments",
     "Festivals",
     "Donations",
     "Cultural",
     "Mandal",
+    "Others",
   ];
 
   const handleCreateAlbum = async () => {
-    if (!newAlbumName.trim()) {
-      Alert.alert("Name Required", "Please enter an album name.");
+    const trimmedName = newAlbumName.trim();
+    if (!trimmedName) {
+      Alert.alert("Validation Error", "Please enter an album name.");
       return;
     }
+    if (trimmedName.length < 3) {
+      Alert.alert("Validation Error", "Album name must be at least 3 characters.");
+      return;
+    }
+    if (trimmedName.length > 100) {
+      Alert.alert("Validation Error", "Album name must be under 100 characters.");
+      return;
+    }
+    if (newAlbumDesc.trim().length > 1000) {
+      Alert.alert("Validation Error", "Description must be under 1000 characters.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await createAlbumMutation.mutateAsync({
-        name: newAlbumName.trim(),
+        name: trimmedName,
         description: newAlbumDesc.trim() || undefined,
         is_public: isPublic,
+        category: newAlbumCategory.toLowerCase(),
+        watermark_enabled: watermarkEnabled,
       });
-      Alert.alert("Album Created", `Album "${newAlbumName}" has been created successfully.`);
+      Alert.alert("Album Created", `Album "${trimmedName}" has been created successfully.`);
       // Reset form
       setNewAlbumName("");
       setNewAlbumDesc("");
       setIsPublic(true);
+      setNewAlbumCategory("Moments");
+      setWatermarkEnabled(false);
       setIsModalOpen(false);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to create album");
@@ -57,11 +80,15 @@ export default function GalleryHubScreen() {
   };
 
   const filteredAlbums = albums.filter((album) => {
-    const matchesSearch = album.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (album.description && album.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    const nameMatch = album.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const descMatch = album.description ? album.description.toLowerCase().includes(searchQuery.toLowerCase()) : false;
+    const matchesSearch = nameMatch || descMatch;
     
-    // In demo, we can just do matchesSearch. 
-    return matchesSearch;
+    if (!matchesSearch) return false;
+    if (activeCategory === "All") return true;
+    
+    const albumCategory = (album.category || "others").toLowerCase();
+    return albumCategory === activeCategory.toLowerCase();
   });
 
   const getFallbackCover = (index: number) => {
@@ -78,19 +105,11 @@ export default function GalleryHubScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoBadge}>
-            <MaterialIcons name="temple-hindu" size={20} color="#FFFFFF" />
-          </View>
-          <Text style={styles.headerLogo}>UTSAV</Text>
-        </View>
-        <TouchableOpacity style={styles.headerNotifyBtn}>
-          <MaterialCommunityIcons name="bell-outline" size={24} color={colors.onSurfaceVariant} />
-          <View style={styles.notifyBadge} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Gallery Hub"
+        showBack={false}
+        showLogo={false}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Intro */}
@@ -246,6 +265,24 @@ export default function GalleryHubScreen() {
                   onChangeText={setNewAlbumDesc}
                 />
               </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Category *</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsScroll}>
+                  {["Moments", "Festivals", "Donations", "Cultural", "Mandal", "Others"].map((cat) => {
+                    const isSel = newAlbumCategory === cat;
+                    return (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[styles.modalChip, isSel && styles.modalChipActive]}
+                        onPress={() => setNewAlbumCategory(cat)}
+                      >
+                        <Text style={[styles.modalChipText, isSel && styles.modalChipTextActive]}>{cat}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
 
               <View style={styles.switchGroup}>
                 <View style={{ flex: 1 }}>
@@ -255,6 +292,19 @@ export default function GalleryHubScreen() {
                 <Switch
                   value={isPublic}
                   onValueChange={setIsPublic}
+                  trackColor={{ false: colors.sandstone, true: colors.primaryContainer }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <View style={styles.switchGroup}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.switchTitle}>Enable Watermark</Text>
+                  <Text style={styles.switchSub}>Apply digital watermark to photos in this album</Text>
+                </View>
+                <Switch
+                  value={watermarkEnabled}
+                  onValueChange={setWatermarkEnabled}
                   trackColor={{ false: colors.sandstone, true: colors.primaryContainer }}
                   thumbColor="#FFFFFF"
                 />
@@ -615,5 +665,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fonts.inter.bold,
     color: "#FFFFFF",
+  },
+  modalChipsScroll: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  modalChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.sandstone,
+    backgroundColor: colors.pujaWhite,
+    marginRight: 6,
+  },
+  modalChipActive: {
+    backgroundColor: colors.primaryContainer,
+    borderColor: colors.primaryContainer,
+  },
+  modalChipText: {
+    fontSize: 11,
+    fontFamily: fonts.inter.medium,
+    color: colors.onSurface,
+  },
+  modalChipTextActive: {
+    color: "#FFFFFF",
+    fontFamily: fonts.inter.bold,
   },
 });

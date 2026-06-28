@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useBlogPosts, useIncrementNewsRead } from "@utsav/api-client";
 import { colors, fonts, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function BlogArticleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -62,23 +63,10 @@ export default function BlogArticleScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            style={styles.backBtn}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color={colors.primaryBrand}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerBrand}>UTSAV</Text>
-        </View>
-        <View style={styles.headerRight}>
+      <ScreenHeader
+        title="Article"
+        showBack={true}
+        rightComponent={
           <TouchableOpacity
             onPress={() => setIsBookmarked(!isBookmarked)}
             activeOpacity={0.7}
@@ -89,8 +77,8 @@ export default function BlogArticleScreen() {
               color={colors.onSurfaceVariant}
             />
           </TouchableOpacity>
-        </View>
-      </View>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}

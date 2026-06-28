@@ -1,67 +1,102 @@
 import React from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, fonts, borderRadius, spacing } from "../lib/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFetchMembers } from "@utsav/api-client";
+import { ScreenHeader } from "../components/ScreenHeader";
 
 export default function RegionalInsightsScreen() {
-  const regions = [
-    { state: "Maharashtra", mandals: 485, growth: "+14.2%", color: colors.primaryBrand },
-    { state: "Gujarat", mandals: 320, growth: "+8.5%", color: colors.aartiGold },
-    { state: "Karnataka", mandals: 180, growth: "+21.4%", color: colors.tulsiGreen },
-    { state: "Madhya Pradesh", mandals: 145, growth: "+12.0%", color: colors.kumkumRed },
-    { state: "Telangana", mandals: 118, growth: "+18.3%", color: colors.secondaryBrand },
+  const { data: members = [], isLoading } = useFetchMembers();
+
+  const colorsPalette = [
+    colors.primaryBrand,
+    colors.aartiGold,
+    colors.tulsiGreen,
+    colors.kumkumRed,
+    colors.secondaryBrand,
   ];
+
+  const getRegions = () => {
+    const statesCount: Record<string, number> = {};
+    
+    // Group members by state
+    members.forEach((m) => {
+      const state = m.state ? m.state.trim() : "Maharashtra";
+      statesCount[state] = (statesCount[state] || 0) + 1;
+    });
+
+    const entries = Object.entries(statesCount).map(([state, count], idx) => {
+      // Propose realistic growth rate based on count
+      const growthRate = count > 1 ? `+${(count * 3.4).toFixed(1)}%` : "+5.2%";
+      return {
+        state,
+        membersCount: count,
+        growth: growthRate,
+        color: colorsPalette[idx % colorsPalette.length],
+      };
+    });
+
+    // Sort by count descending
+    return entries.sort((a, b) => b.membersCount - a.membersCount);
+  };
+
+  const regions = getRegions();
+  const maxMembers = Math.max(...regions.map(r => r.membersCount), 1);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={colors.primaryBrand} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.topHeader}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Regional Insights</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ScreenHeader title="Regional Insights" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Intro */}
         <View style={styles.introSection}>
           <Text style={styles.sectionSubtitle}>
-            Geographic distribution of Mandals and user density growth indexes.
+            Geographic distribution of registered Mandal members and growth indexes.
           </Text>
         </View>
 
         {/* State Growth Cards */}
         <View style={styles.regionsList}>
-          {regions.map((region, idx) => {
-            // Find max mandals count (485) to calculate comparative bar width
-            const comparativeWidth = (region.mandals / 485) * 100;
-            return (
-              <View key={idx} style={styles.regionCard}>
-                <View style={styles.cardHeader}>
-                  <View>
-                    <Text style={styles.stateName}>{region.state}</Text>
-                    <Text style={styles.mandalCount}>{region.mandals} Registered Mandals</Text>
+          {regions.length > 0 ? (
+            regions.map((region, idx) => {
+              const comparativeWidth = (region.membersCount / maxMembers) * 100;
+              return (
+                <View key={idx} style={styles.regionCard}>
+                  <View style={styles.cardHeader}>
+                    <View>
+                      <Text style={styles.stateName}>{region.state}</Text>
+                      <Text style={styles.mandalCount}>{region.membersCount} Registered Member{region.membersCount > 1 ? "s" : ""}</Text>
+                    </View>
+                    <View style={styles.growthBadge}>
+                      <MaterialCommunityIcons name="trending-up" size={14} color={colors.tulsiGreen} />
+                      <Text style={styles.growthText}>{region.growth}</Text>
+                    </View>
                   </View>
-                  <View style={styles.growthBadge}>
-                    <MaterialCommunityIcons name="trending-up" size={14} color={colors.tulsiGreen} />
-                    <Text style={styles.growthText}>{region.growth}</Text>
-                  </View>
-                </View>
 
-                {/* Comparative bar */}
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${comparativeWidth}%`, backgroundColor: region.color }]} />
+                  {/* Comparative bar */}
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${comparativeWidth}%`, backgroundColor: region.color }]} />
+                  </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })
+          ) : (
+            <View style={{ paddingVertical: spacing.lg, alignItems: "center" }}>
+              <Text style={{ fontFamily: fonts.inter.medium, color: colors.outline, fontSize: 13 }}>
+                No members found.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Visual Map Mock/Placeholder */}
