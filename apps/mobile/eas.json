@@ -14,7 +14,10 @@
       },
       "node": "22.13.0",
       "env": {
-        "PNPM_VERSION": "11.6.0"
+        "PNPM_VERSION": "11.6.0",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://xyjohiqaiarlbvacxkvv.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5am9oaXFhaWFybGJ2YWN4a3Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MTgyOTgsImV4cCI6MjA5NzA5NDI5OH0.ENWbCl0CuQon7YRJP5xzw0AnJ3Q1OjOe6JyQ9SQWfXA",
+        "EXPO_PUBLIC_API_URL": "https://utsav.techsonance.co.in"
       }
     },
     "production": {}
