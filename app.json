@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "8956b73a-64e9-42a5-9818-a7191b4bc354"
+      }
+    },
+    "android": {
+      "package": "com.admintechsonance.utsavmonorepo"
+    }
+  }
+}
