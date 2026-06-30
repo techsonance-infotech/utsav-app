@@ -64,10 +64,18 @@ export async function POST(req: Request) {
     }
 
     // Append origin link mapping to response payload
-    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://utsav.app";
+    const host = req.headers.get("host") || "";
+    let baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || "utsav.techsonance.co.in";
+    if (host && !host.includes("localhost") && !host.includes("127.0.0.1")) {
+      baseDomain = host;
+    }
+    const isLocal = host.includes("localhost") || host.includes("127.0.0.1") || baseDomain.includes("localhost");
+    const domainPart = isLocal ? `${tenant.slug}.localhost:3000` : `${tenant.slug}.${baseDomain}`;
+    const protocol = isLocal ? "http" : "https";
+
     const mappedInvitations = invitations.map((inv: any) => ({
       ...inv,
-      link: `${origin}/join/${tenant.slug}/${inv.role}/${inv.token}`,
+      link: `${protocol}://${domainPart}/join/${inv.token}?name=${encodeURIComponent(inv.invitee_name || "")}&phone=${encodeURIComponent(inv.phone || "")}&role=${inv.role}`,
     }));
 
     await logAuditEvent({
