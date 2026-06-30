@@ -8,7 +8,8 @@
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "test": "turbo test",
-    "clean": "pnpm -r exec rm -rf .turbo .next node_modules dist build"
+    "clean": "pnpm -r exec rm -rf .turbo .next node_modules dist build",
+    "eas-build-pre-install": "npm install -g pnpm@11.6.0"
   },
   "devDependencies": {
     "eslint": "8.57.0",
