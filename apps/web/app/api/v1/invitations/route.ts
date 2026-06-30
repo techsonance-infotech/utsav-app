@@ -54,9 +54,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Construct link with tenant slug subdomain and metadata query params
+    // Construct link with the correct tenant subdomain and metadata query params
     const host = req.headers.get("host") || "";
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || "techsonance.co.in";
+    
+    // Base domain should default to "utsav.techsonance.co.in" in production.
+    let baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || "utsav.techsonance.co.in";
+    if (host && !host.includes("localhost") && !host.includes("127.0.0.1")) {
+      baseDomain = host;
+    }
+    
     const isLocal = host.includes("localhost") || host.includes("127.0.0.1") || baseDomain.includes("localhost");
     const domainPart = isLocal ? `${tenant.slug}.localhost:3000` : `${tenant.slug}.${baseDomain}`;
     const protocol = isLocal ? "http" : "https";
@@ -129,7 +135,7 @@ export async function GET(req: Request) {
 
     const mappedInvitations = (invitations || []).map((inv: any) => ({
       ...inv,
-      link: `${origin}/join/${tenant.slug}/${inv.role}/${inv.token}`,
+      link: `${origin}/join/${inv.token}?name=${encodeURIComponent(inv.invitee_name || "")}&phone=${encodeURIComponent(inv.phone || "")}&role=${inv.role}`,
     }));
 
     return NextResponse.json(mappedInvitations);
