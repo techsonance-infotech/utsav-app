@@ -33,9 +33,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "This email address is already verified." }, { status: 400 });
     }
 
-    // Generate new 6-digit verification code
-    const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log("DEBUG RESEND OTP FOR", email, ":", verificationToken);
+    // Generate new secure 6-digit verification code using CSPRNG
+    const verificationToken = crypto.randomInt(100000, 1000000).toString();
 
     // Update user metadata with new token
     const { error: updateError } = await supabase.auth.admin.updateUserById(targetUser.id, {

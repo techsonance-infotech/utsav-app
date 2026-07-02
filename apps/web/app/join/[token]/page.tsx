@@ -253,24 +253,46 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
     
     const targetToken = token === "volunteer" || token === "member" ? "00000000-0000-0000-0000-000000000000" : token;
     
+    // Set cross-subdomain cookies for PII data (name & phone) to prevent URL leaks
+    if (typeof window !== "undefined") {
+      const getBaseDomainCookieOptions = () => {
+        const hostname = window.location.hostname;
+        if (hostname.includes("localhost") || hostname.includes("127.0.0.1")) {
+          return "";
+        }
+        if (hostname.includes("techsonance.co.in")) {
+          return "; domain=.techsonance.co.in";
+        }
+        const parts = hostname.split(".");
+        if (parts.length > 2) {
+          return `; domain=.${parts.slice(1).join(".")}`;
+        }
+        return "";
+      };
+
+      const cookieDomain = getBaseDomainCookieOptions();
+      const piiName = fullName.trim() || searchParams.get("name") || "";
+      const piiPhone = phone.trim() || searchParams.get("phone") || "";
+
+      // Cookies expire in 10 minutes (600 seconds), secure & cross-subdomain shared
+      document.cookie = `utsav_pending_invite_name=${encodeURIComponent(piiName)}; path=/${cookieDomain}; max-age=600; SameSite=Lax; Secure`;
+      document.cookie = `utsav_pending_invite_phone=${encodeURIComponent(piiPhone)}; path=/${cookieDomain}; max-age=600; SameSite=Lax; Secure`;
+      
+      // SessionStorage as fallback local storage
+      sessionStorage.setItem("utsav_pending_invite_token", targetToken);
+      sessionStorage.setItem("utsav_pending_invite_name", piiName);
+      sessionStorage.setItem("utsav_pending_invite_phone", piiPhone);
+      sessionStorage.setItem("utsav_pending_invite_tenant_slug", tenantSlug || "");
+      sessionStorage.setItem("utsav_pending_invite_role", roleSelection || "");
+    }
+
     const queryParams = new URLSearchParams({
       invite_token: targetToken,
-      invite_name: fullName.trim() || searchParams.get("name") || "",
-      invite_phone: phone.trim() || searchParams.get("phone") || "",
       tenant_slug: tenantSlug || "",
       role: roleSelection || "",
     });
 
     const redirectTo = `${redirectOrigin}/auth/callback?${queryParams.toString()}`;
-
-    // Save metadata in sessionStorage so callback route can parse it as fallback
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("utsav_pending_invite_token", targetToken);
-      sessionStorage.setItem("utsav_pending_invite_name", fullName.trim() || searchParams.get("name") || "");
-      sessionStorage.setItem("utsav_pending_invite_phone", phone.trim() || searchParams.get("phone") || "");
-      sessionStorage.setItem("utsav_pending_invite_tenant_slug", tenantSlug || "");
-      sessionStorage.setItem("utsav_pending_invite_role", roleSelection || "");
-    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

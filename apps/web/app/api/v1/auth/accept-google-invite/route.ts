@@ -28,6 +28,15 @@ export async function POST(req: Request) {
       if (!tenantSlug || !role) {
         return NextResponse.json({ message: "Tenant slug and role are required for public links" }, { status: 400 });
       }
+
+      // Constrain public role options server-side to prevent privilege escalation
+      let resolvedRole = "member";
+      if (role === "volunteer") {
+        resolvedRole = "volunteer";
+      } else if (role !== "member") {
+        return NextResponse.json({ message: "Invalid role specified for public links" }, { status: 400 });
+      }
+
       const { data: tenant, error: tenantErr } = await supabase
         .from("tenants")
         .select("id")
@@ -38,7 +47,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: "Mandal/Tenant not found" }, { status: 404 });
       }
       tenantId = tenant.id;
-      targetRole = role;
+      targetRole = resolvedRole;
     } else {
       // Fetch invitation and verify
       const { data: invitation, error: inviteError } = await supabase

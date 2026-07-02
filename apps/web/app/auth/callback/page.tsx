@@ -66,7 +66,7 @@ export default function AuthCallbackPage() {
 
       setUserFullName(fullName);
 
-      // 1. Check for pending Google OAuth signup invitations (check query params first, then fallback to sessionStorage)
+      // 1. Check for pending Google OAuth signup invitations (check secure cookies first, then fallback to parameters or sessionStorage)
       let pendingToken = null;
       let pendingName = "";
       let pendingPhone = "";
@@ -74,12 +74,39 @@ export default function AuthCallbackPage() {
       let pendingRole = "";
 
       if (typeof window !== "undefined") {
+        const getCookie = (name: string) => {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return decodeURIComponent(parts.pop()!.split(";").shift() || "");
+          return "";
+        };
+
+        const deleteCookie = (name: string) => {
+          const hostname = window.location.hostname;
+          let cookieDomain = "";
+          if (!hostname.includes("localhost") && !hostname.includes("127.0.0.1")) {
+            if (hostname.includes("techsonance.co.in")) {
+              cookieDomain = "; domain=.techsonance.co.in";
+            } else {
+              const parts = hostname.split(".");
+              if (parts.length > 2) {
+                cookieDomain = `; domain=.${parts.slice(1).join(".")}`;
+              }
+            }
+          }
+          document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${cookieDomain}`;
+        };
+
         const searchParams = new URLSearchParams(window.location.search);
         pendingToken = searchParams.get("invite_token") || sessionStorage.getItem("utsav_pending_invite_token");
-        pendingName = searchParams.get("invite_name") || sessionStorage.getItem("utsav_pending_invite_name") || "";
-        pendingPhone = searchParams.get("invite_phone") || sessionStorage.getItem("utsav_pending_invite_phone") || "";
+        pendingName = getCookie("utsav_pending_invite_name") || searchParams.get("invite_name") || sessionStorage.getItem("utsav_pending_invite_name") || "";
+        pendingPhone = getCookie("utsav_pending_invite_phone") || searchParams.get("invite_phone") || sessionStorage.getItem("utsav_pending_invite_phone") || "";
         pendingTenantSlug = searchParams.get("tenant_slug") || sessionStorage.getItem("utsav_pending_invite_tenant_slug") || "";
         pendingRole = searchParams.get("role") || sessionStorage.getItem("utsav_pending_invite_role") || "";
+
+        // Clean up secure cookies immediately to prevent leftover state
+        deleteCookie("utsav_pending_invite_name");
+        deleteCookie("utsav_pending_invite_phone");
       }
 
       let inviteAccepted = false;
@@ -175,7 +202,7 @@ export default function AuthCallbackPage() {
             }
 
             // If we just successfully joined via the portal invitation, show the premium confirmation screen!
-            if (inviteAccepted || pendingToken) {
+            if (inviteAccepted) {
               setJoinedTenantName(data.tenant.name);
               setJoinedTenantSlug(data.tenant.slug);
               setJoinedRole(data.tenant.role);
@@ -214,7 +241,7 @@ export default function AuthCallbackPage() {
     };
 
     handleOAuthCallback();
-  }, [router, setAuth, joinedTenantSlug]);
+  }, [router, setAuth]);
 
   const handleGoToDashboard = () => {
     const host = window.location.host;
