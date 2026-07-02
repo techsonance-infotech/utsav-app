@@ -53,11 +53,12 @@ export async function POST(req: Request) {
     const origin = req.headers.get("origin") || "http://localhost:3000";
     const firstName = targetUser.user_metadata?.first_name || "";
     const lastName = targetUser.user_metadata?.last_name || "";
+    const fullName = targetUser.user_metadata?.full_name || `${firstName} ${lastName}`.trim() || "User";
     
     await sendEmail({
       to: email,
       subject: "Verify your Utsav account (Resend)",
-      html: getVerificationEmailTemplate(`${firstName} ${lastName}`.trim() || "User", verificationToken, email, origin),
+      html: getVerificationEmailTemplate(fullName, verificationToken, email, origin),
     });
 
     return NextResponse.json({
