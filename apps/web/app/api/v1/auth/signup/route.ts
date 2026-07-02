@@ -61,9 +61,8 @@ export async function POST(req: Request) {
 
     const supabase = createServiceRoleClient();
 
-    // Generate unique 6-digit verification code
-    const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log("DEBUG SIGNUP OTP FOR", email, ":", verificationToken);
+    // Generate unique secure 6-digit verification code using CSPRNG
+    const verificationToken = crypto.randomInt(100000, 1000000).toString();
 
     // Set 14-day trial period
     const trialExpiresAt = new Date();

@@ -44,6 +44,15 @@ export async function POST(req: Request) {
       if (!tenantSlug || !role) {
         return NextResponse.json({ message: "Tenant slug and role are required for public registration" }, { status: 400 });
       }
+
+      // Constrain public role options server-side to prevent privilege escalation
+      let resolvedRole = "member";
+      if (role === "volunteer") {
+        resolvedRole = "volunteer";
+      } else if (role !== "member") {
+        return NextResponse.json({ message: "Invalid role specified for public registration" }, { status: 400 });
+      }
+
       const { data: tenant, error: tenantErr } = await supabase
         .from("tenants")
         .select("id")
@@ -54,7 +63,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: "Mandal/Tenant not found" }, { status: 404 });
       }
       tenantId = tenant.id;
-      targetRole = role;
+      targetRole = resolvedRole;
     } else {
       // Fetch the invitation to verify and link
       const { data: invitation, error: inviteError } = await supabase
@@ -69,6 +78,10 @@ export async function POST(req: Request) {
 
       if (invitation.used_at) {
         return NextResponse.json({ message: "This invitation link has already been used" }, { status: 410 });
+      }
+
+      if (new Date(invitation.expires_at) < new Date()) {
+        return NextResponse.json({ message: "This invitation link has expired" }, { status: 410 });
       }
 
       tenantId = invitation.tenant_id;

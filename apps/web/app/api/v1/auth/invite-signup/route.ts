@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceRoleClient, logSecurityEvent } from "../../utils";
 import { z } from "zod";
 import { sendEmail, getVerificationEmailTemplate } from "../email-helper";
+import crypto from "crypto";
 
 const signupSchema = z.object({
   fullName: z
@@ -41,7 +42,50 @@ export async function POST(req: Request) {
 
     const supabase = createServiceRoleClient();
 
-    // 1. Uniqueness & Verification Check
+    // 1. Validate invite token / public link details first to prevent side effects on invalid tokens
+    const isPublicLink = token === "volunteer" || token === "member" || token === "00000000-0000-0000-0000-000000000000";
+
+    if (isPublicLink) {
+      if (!tenantSlug) {
+        return NextResponse.json({ message: "Tenant slug is required for public registrations" }, { status: 400 });
+      }
+      if (role) {
+        // Constrain public role options server-side to prevent privilege escalation
+        if (role !== "volunteer" && role !== "member") {
+          return NextResponse.json({ message: "Invalid role specified for public registrations" }, { status: 400 });
+        }
+      }
+      const { data: tenant, error: tenantErr } = await supabase
+        .from("tenants")
+        .select("id")
+        .eq("slug", tenantSlug)
+        .maybeSingle();
+
+      if (tenantErr || !tenant) {
+        return NextResponse.json({ message: "Mandal/Tenant not found" }, { status: 404 });
+      }
+    } else {
+      // Validate invite token
+      const { data: invitation, error: inviteError } = await supabase
+        .from("invitations")
+        .select("*")
+        .eq("token", token)
+        .maybeSingle();
+
+      if (inviteError || !invitation) {
+        return NextResponse.json({ message: "Invitation not found or invalid" }, { status: 404 });
+      }
+
+      if (invitation.used_at) {
+        return NextResponse.json({ message: "This invitation link has already been used" }, { status: 410 });
+      }
+
+      if (new Date(invitation.expires_at) < new Date()) {
+        return NextResponse.json({ message: "This invitation link has expired" }, { status: 410 });
+      }
+    }
+
+    // 2. Uniqueness & Verification Check
     const { data: usersData, error: findError } = await supabase.auth.admin.listUsers();
     if (findError) {
       return NextResponse.json({ message: findError.message }, { status: 400 });
@@ -78,9 +122,8 @@ export async function POST(req: Request) {
           );
         }
       } else {
-        // Unverified user exists: generate a new OTP, send email, and redirect to OTP screen.
-        const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        console.log("DEBUG INVITE SIGNUP RESENT OTP FOR", matchedUser.email, ":", newOtp);
+        // Unverified user exists: generate a new secure OTP using CSPRNG, send email, and redirect to OTP screen.
+        const newOtp = crypto.randomInt(100000, 1000000).toString();
 
         const { error: updateError } = await supabase.auth.admin.updateUserById(matchedUser.id, {
           user_metadata: {
@@ -116,46 +159,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Validate invite token / public link details
-    const isPublicLink = token === "volunteer" || token === "member" || token === "00000000-0000-0000-0000-000000000000";
-
-    if (isPublicLink) {
-      if (!tenantSlug) {
-        return NextResponse.json({ message: "Tenant slug is required for public registrations" }, { status: 400 });
-      }
-      const { data: tenant, error: tenantErr } = await supabase
-        .from("tenants")
-        .select("id")
-        .eq("slug", tenantSlug)
-        .maybeSingle();
-
-      if (tenantErr || !tenant) {
-        return NextResponse.json({ message: "Mandal/Tenant not found" }, { status: 404 });
-      }
-    } else {
-      // Validate invite token
-      const { data: invitation, error: inviteError } = await supabase
-        .from("invitations")
-        .select("*")
-        .eq("token", token)
-        .maybeSingle();
-
-      if (inviteError || !invitation) {
-        return NextResponse.json({ message: "Invitation not found or invalid" }, { status: 404 });
-      }
-
-      if (invitation.used_at) {
-        return NextResponse.json({ message: "This invitation link has already been used" }, { status: 410 });
-      }
-
-      if (new Date(invitation.expires_at) < new Date()) {
-        return NextResponse.json({ message: "This invitation link has expired" }, { status: 410 });
-      }
-    }
-
-    // 3. Generate unique 6-digit verification code
-    const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log("DEBUG INVITE SIGNUP OTP FOR", email, ":", verificationToken);
+    // 3. Generate unique secure 6-digit verification code using CSPRNG
+    const verificationToken = crypto.randomInt(100000, 1000000).toString();
 
     // Create the user via Supabase Auth Admin API (unconfirmed by default)
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
