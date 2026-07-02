@@ -95,10 +95,15 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
     fetchInviteDetails();
   }, [token, searchParams]);
 
+  // State for OTP resending and info banners
+  const [otpInfoMessage, setOtpInfoMessage] = useState<string | null>(null);
+  const [resendStatus, setResendStatus] = useState<"IDLE" | "PENDING" | "SUCCESS" | "ERROR">("IDLE");
+
   // 2. Handle Submit Signup Form
   const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    setOtpInfoMessage(null);
 
     // Basic Validation
     if (!fullName.trim() || !phone.trim() || !email.trim() || !password || !confirmPassword) {
@@ -124,6 +129,7 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
     setIsSubmitting(true);
     try {
       // Call invite signup API
+      const targetToken = token === "volunteer" || token === "member" ? "00000000-0000-0000-0000-000000000000" : token;
       const res = await fetch("/api/v1/auth/invite-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -132,7 +138,9 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
           phone: phone.trim(),
           email: email.trim(),
           password,
-          token: token === "volunteer" || token === "member" ? "00000000-0000-0000-0000-000000000000" : token, // fallback for public links
+          token: targetToken,
+          tenantSlug: tenantSlug || undefined,
+          role: roleSelection || undefined,
         }),
       });
 
@@ -141,6 +149,14 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
         setFormError(errData.message || "Failed to submit registration.");
         setIsSubmitting(false);
         return;
+      }
+
+      const resData = await res.json();
+      if (resData.redirectVerify) {
+        setEmail(resData.email);
+        setOtpInfoMessage(resData.message);
+      } else {
+        setOtpInfoMessage("A verification code has been sent to your email address.");
       }
 
       // Transition to OTP verification step
@@ -164,14 +180,16 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
 
     setOtpLoading(true);
     try {
-      // For generic link, we bypass token accepted verification or use public registration verification
+      const targetToken = token === "volunteer" || token === "member" ? "00000000-0000-0000-0000-000000000000" : token;
       const res = await fetch("/api/v1/auth/verify-email-invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim(),
           token: otpCode.trim(),
-          invitationToken: token,
+          invitationToken: targetToken,
+          tenantSlug: tenantSlug || undefined,
+          role: roleSelection || undefined,
         }),
       });
 
@@ -190,19 +208,96 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
     }
   };
 
+  // 3b. Handle Resend OTP
+  const handleResendOtp = async () => {
+    setOtpError(null);
+    setOtpInfoMessage(null);
+    setResendStatus("PENDING");
+    try {
+      const res = await fetch("/api/v1/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOtpError(data.message || "Failed to resend verification OTP.");
+        setResendStatus("ERROR");
+      } else {
+        setResendStatus("SUCCESS");
+        setOtpInfoMessage("A new verification code has been sent to your email address.");
+      }
+    } catch (err: any) {
+      setOtpError(err.message || "An error occurred resending verification OTP.");
+      setResendStatus("ERROR");
+    }
+  };
+
   // 4. Handle Google OAuth Signup
   const handleGoogleSignup = async () => {
-    // Save metadata in sessionStorage so callback route can parse it
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("utsav_pending_invite_token", token);
-      sessionStorage.setItem("utsav_pending_invite_name", fullName.trim() || searchParams.get("name") || "");
-      sessionStorage.setItem("utsav_pending_invite_phone", phone.trim() || searchParams.get("phone") || "");
+    setFormError(null);
+    const host = window.location.host;
+    const protocol = window.location.protocol;
+    let redirectOrigin = `${protocol}//${host}`;
+    
+    if (host.includes("localhost") || host.includes("127.0.0.1")) {
+      redirectOrigin = `${protocol}//localhost:3000`;
+    } else if (host.includes("techsonance.co.in")) {
+      redirectOrigin = `${protocol}//utsav.techsonance.co.in`;
+    } else {
+      const parts = host.split(".");
+      if (parts.length > 2) {
+        redirectOrigin = `${protocol}//${parts.slice(1).join(".")}`;
+      }
     }
+    
+    const targetToken = token === "volunteer" || token === "member" ? "00000000-0000-0000-0000-000000000000" : token;
+    
+    // Set cross-subdomain cookies for PII data (name & phone) to prevent URL leaks
+    if (typeof window !== "undefined") {
+      const getBaseDomainCookieOptions = () => {
+        const hostname = window.location.hostname;
+        if (hostname.includes("localhost") || hostname.includes("127.0.0.1")) {
+          return "";
+        }
+        if (hostname.includes("techsonance.co.in")) {
+          return "; domain=.techsonance.co.in";
+        }
+        const parts = hostname.split(".");
+        if (parts.length > 2) {
+          return `; domain=.${parts.slice(1).join(".")}`;
+        }
+        return "";
+      };
+
+      const cookieDomain = getBaseDomainCookieOptions();
+      const piiName = fullName.trim() || searchParams.get("name") || "";
+      const piiPhone = phone.trim() || searchParams.get("phone") || "";
+
+      // Cookies expire in 10 minutes (600 seconds), secure & cross-subdomain shared
+      document.cookie = `utsav_pending_invite_name=${encodeURIComponent(piiName)}; path=/${cookieDomain}; max-age=600; SameSite=Lax; Secure`;
+      document.cookie = `utsav_pending_invite_phone=${encodeURIComponent(piiPhone)}; path=/${cookieDomain}; max-age=600; SameSite=Lax; Secure`;
+      
+      // SessionStorage as fallback local storage
+      sessionStorage.setItem("utsav_pending_invite_token", targetToken);
+      sessionStorage.setItem("utsav_pending_invite_name", piiName);
+      sessionStorage.setItem("utsav_pending_invite_phone", piiPhone);
+      sessionStorage.setItem("utsav_pending_invite_tenant_slug", tenantSlug || "");
+      sessionStorage.setItem("utsav_pending_invite_role", roleSelection || "");
+    }
+
+    const queryParams = new URLSearchParams({
+      invite_token: targetToken,
+      tenant_slug: tenantSlug || "",
+      role: roleSelection || "",
+    });
+
+    const redirectTo = `${redirectOrigin}/auth/callback?${queryParams.toString()}`;
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo,
       },
     });
 
@@ -412,16 +507,22 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
 
         {/* Step 2: OTP Verification Screen */}
         {step === "otp" && (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center animate-fade-in">
             <div className="w-16 h-16 mx-auto mb-6 bg-amber-50 rounded-full flex items-center justify-center text-amber-600">
               <Mail className="w-8 h-8" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Verify your Email</h2>
             <p className="text-gray-600 text-sm mb-6">
-              We have sent a 6-digit verification code to <span className="font-semibold">{email}</span>. Please enter it below.
+              We have sent a 6-digit verification code to <span className="font-semibold text-amber-700">{email}</span>. Please enter it below.
             </p>
 
             <form onSubmit={handleVerifyOtp} className="space-y-5">
+              {otpInfoMessage && (
+                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm justify-center">
+                  <span>{otpInfoMessage}</span>
+                </div>
+              )}
+
               {otpError && (
                 <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm justify-center">
                   <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -450,20 +551,32 @@ export default function CustomJoinPage({ params }: { params: { token: string } }
                   <span>Verify & Onboard</span>
                 )}
               </button>
+
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <span className="text-sm text-gray-500">Didn't receive the code?</span>
+                <button
+                  type="button"
+                  disabled={resendStatus === "PENDING"}
+                  onClick={handleResendOtp}
+                  className="text-sm text-amber-600 hover:text-amber-700 font-bold hover:underline transition disabled:opacity-50"
+                >
+                  {resendStatus === "PENDING" ? "Resending..." : "Resend OTP"}
+                </button>
+              </div>
             </form>
           </div>
         )}
 
         {/* Step 3: Onboarding Success Screen */}
         {step === "success" && (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center animate-fade-in">
             <div className="w-16 h-16 mx-auto mb-6 bg-green-50 rounded-full flex items-center justify-center text-green-600">
               <CheckCircle className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Submitted!</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Successful!</h2>
             <p className="text-gray-600 text-sm mb-8 leading-relaxed">
-              Your email is verified. Your account is now pending approval by the Mandal administrators.
-              Once your request is approved, you will be able to log in and access the dashboard.
+              Your email is verified. Your account is now active and associated with <span className="font-bold">{tenantName}</span>.
+              You can now log in to start coordinating celebrations, make collections, or manage your Mandal dashboard.
             </p>
 
             <button

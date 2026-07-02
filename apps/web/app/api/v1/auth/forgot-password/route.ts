@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "../../utils";
 import { sendEmail, getOtpEmailTemplate } from "../email-helper";
+import crypto from "crypto";
 
 function obfuscateEmail(email: string) {
   const [name, domain] = email.split("@");
@@ -61,7 +62,7 @@ export async function POST(req: Request) {
 
     if (targetUser) {
       // Generate 6-digit OTP code
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = crypto.randomInt(100000, 1000000).toString();
       const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes from now
 
       // Save OTP code in user metadata

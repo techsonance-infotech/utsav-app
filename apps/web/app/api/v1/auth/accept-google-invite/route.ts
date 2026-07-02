@@ -4,7 +4,7 @@ import { createServiceRoleClient } from "../../utils";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { userId, token: inviteToken, fullName, phone } = body;
+    const { userId, token: inviteToken, fullName, phone, tenantSlug, role } = body;
 
     if (!userId || !inviteToken) {
       return NextResponse.json({ message: "User ID and invitation token are required" }, { status: 400 });
@@ -18,42 +18,80 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: userError?.message || "User not found" }, { status: 404 });
     }
 
-    // 2. Fetch invitation and verify
-    const { data: invitation, error: inviteError } = await supabase
-      .from("invitations")
-      .select("*")
-      .eq("token", inviteToken)
-      .maybeSingle();
+    // 2. Resolve Tenant and Role
+    const isPublicLink = inviteToken === "volunteer" || inviteToken === "member" || inviteToken === "00000000-0000-0000-0000-000000000000";
+    let tenantId = null;
+    let targetRole = null;
+    let invitationId = null;
 
-    if (inviteError || !invitation) {
-      return NextResponse.json({ message: "Invitation not found or invalid" }, { status: 404 });
-    }
+    if (isPublicLink) {
+      if (!tenantSlug || !role) {
+        return NextResponse.json({ message: "Tenant slug and role are required for public links" }, { status: 400 });
+      }
 
-    if (invitation.used_at) {
-      return NextResponse.json({ message: "This invitation link has already been used" }, { status: 410 });
-    }
+      // Constrain public role options server-side to prevent privilege escalation
+      let resolvedRole = "member";
+      if (role === "volunteer") {
+        resolvedRole = "volunteer";
+      } else if (role !== "member") {
+        return NextResponse.json({ message: "Invalid role specified for public links" }, { status: 400 });
+      }
 
-    if (new Date(invitation.expires_at) < new Date()) {
-      return NextResponse.json({ message: "This invitation link has expired" }, { status: 410 });
+      const { data: tenant, error: tenantErr } = await supabase
+        .from("tenants")
+        .select("id")
+        .eq("slug", tenantSlug)
+        .maybeSingle();
+
+      if (tenantErr || !tenant) {
+        return NextResponse.json({ message: "Mandal/Tenant not found" }, { status: 404 });
+      }
+      tenantId = tenant.id;
+      targetRole = resolvedRole;
+    } else {
+      // Fetch invitation and verify
+      const { data: invitation, error: inviteError } = await supabase
+        .from("invitations")
+        .select("*")
+        .eq("token", inviteToken)
+        .maybeSingle();
+
+      if (inviteError || !invitation) {
+        return NextResponse.json({ message: "Invitation not found or invalid" }, { status: 404 });
+      }
+
+      if (invitation.used_at) {
+        return NextResponse.json({ message: "This invitation link has already been used" }, { status: 410 });
+      }
+
+      if (new Date(invitation.expires_at) < new Date()) {
+        return NextResponse.json({ message: "This invitation link has expired" }, { status: 410 });
+      }
+
+      tenantId = invitation.tenant_id;
+      targetRole = invitation.role;
+      invitationId = invitation.id;
     }
 
     // Check if they are already a member of this tenant
     const { data: existingMember } = await supabase
       .from("tenant_members")
       .select("id, status")
-      .eq("tenant_id", invitation.tenant_id)
+      .eq("tenant_id", tenantId)
       .eq("user_id", userId)
       .maybeSingle();
 
     if (existingMember) {
-      // If already active or pending, just mark invitation used and return success
-      await supabase
-        .from("invitations")
-        .update({
-          used_at: new Date().toISOString(),
-          used_by: userId,
-        })
-        .eq("id", invitation.id);
+      // If already active, just mark invitation used (if any) and return success
+      if (invitationId) {
+        await supabase
+          .from("invitations")
+          .update({
+            used_at: new Date().toISOString(),
+            used_by: userId,
+          })
+          .eq("id", invitationId);
+      }
 
       return NextResponse.json({
         success: true,
@@ -61,16 +99,16 @@ export async function POST(req: Request) {
       });
     }
 
-    // 3. Link user with tenant under "pending" status
+    // 3. Link user with tenant under "active" status
     const metadata = userData.user.user_metadata || {};
     const finalFullName = fullName || metadata.full_name || metadata.name || userData.user.email!.split("@")[0];
     const finalPhone = phone || metadata.phone || null;
 
     const { error: memberError } = await supabase.from("tenant_members").insert({
-      tenant_id: invitation.tenant_id,
+      tenant_id: tenantId,
       user_id: userId,
-      role: invitation.role,
-      status: "pending", // Pending admin/owner approval!
+      role: targetRole,
+      status: "active", // Active! Allow login immediately.
       full_name: finalFullName,
       phone: finalPhone,
     });
@@ -81,19 +119,21 @@ export async function POST(req: Request) {
     }
 
     // 4. Mark invitation as used
-    const { error: markError } = await supabase
-      .from("invitations")
-      .update({
-        used_at: new Date().toISOString(),
-        used_by: userId,
-      })
-      .eq("id", invitation.id);
+    if (invitationId) {
+      const { error: markError } = await supabase
+        .from("invitations")
+        .update({
+          used_at: new Date().toISOString(),
+          used_by: userId,
+        })
+        .eq("id", invitationId);
 
-    if (markError) {
-      console.error("Failed to mark invitation as used:", markError);
+      if (markError) {
+        console.error("Failed to mark invitation as used:", markError);
+      }
     }
 
-    // Update user metadata in Supabase to confirm name & phone if not already present
+    // Update user metadata in Supabase to confirm name & phone
     await supabase.auth.admin.updateUserById(userId, {
       user_metadata: {
         ...metadata,
@@ -105,7 +145,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Your registration is submitted and pending approval. Once approved by the administrator, you can log in.",
+      message: "Your registration is completed successfully. You can now log in to the portal.",
     });
   } catch (err: any) {
     console.error("Google invite accept error:", err);
